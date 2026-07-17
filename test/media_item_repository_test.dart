@@ -426,6 +426,12 @@ class FailingMediaItemStore implements MediaItemStore {
   Future<void> deleteItem(int id) async {}
 
   @override
+  Future<List<RecognizedTextMatch>> searchRecognizedText(
+    String normalizedQuery, {
+    required int limit,
+  }) async => const [];
+
+  @override
   Future<void> close() async {}
 }
 

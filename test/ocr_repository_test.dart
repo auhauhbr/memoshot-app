@@ -43,6 +43,7 @@ void main() {
 
     expect(result.fullText, 'Texto fictício');
     expect(persisted?.fullText, 'Texto fictício');
+    expect(persisted?.normalizedText, 'texto ficticio');
     expect(service.callCount, 1);
   });
 
@@ -58,6 +59,7 @@ void main() {
     final persisted = await repository.loadFor(item.id);
     expect(persisted, isNotNull);
     expect(persisted?.fullText, isEmpty);
+    expect(persisted?.normalizedText, isEmpty);
   });
 
   test('resultado existente é carregado sem executar OCR novamente', () async {
@@ -94,6 +96,7 @@ void main() {
 
     final persisted = await repository.loadFor(item.id);
     expect(persisted?.fullText, 'Segundo');
+    expect(persisted?.normalizedText, 'segundo');
     expect(service.callCount, 2);
   });
 

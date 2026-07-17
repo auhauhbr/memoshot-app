@@ -5,9 +5,12 @@ import 'dart:io';
 import 'package:contexto/app/contexto_app.dart';
 import 'package:contexto/core/media/screenshot_picker.dart';
 import 'package:contexto/core/theme/app_theme.dart';
+import 'package:contexto/core/text/search_snippet_builder.dart';
+import 'package:contexto/core/text/text_normalizer.dart';
 import 'package:contexto/features/library/data/media_item_repository.dart';
 import 'package:contexto/features/library/domain/media_item.dart';
 import 'package:contexto/features/library/domain/selected_screenshot.dart';
+import 'package:contexto/features/library/domain/screenshot_search_result.dart';
 import 'package:contexto/features/ocr/data/ocr_repository.dart';
 import 'package:contexto/features/ocr/domain/ocr_result.dart';
 import 'package:contexto/features/processing/data/ocr_queue_processor.dart';
@@ -49,9 +52,7 @@ void main() {
     expect(find.byType(FloatingActionButton), findsNothing);
   });
 
-  testWidgets('habilita importação e mantém pesquisa desabilitada', (
-    tester,
-  ) async {
+  testWidgets('habilita importação e pesquisa local', (tester) async {
     await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
     await tester.pump();
 
@@ -60,7 +61,8 @@ void main() {
       find.widgetWithText(OutlinedButton, 'Selecionar imagens'),
     );
 
-    expect(searchField.enabled, isFalse);
+    expect(searchField.enabled, isTrue);
+    expect(searchField.textInputAction, TextInputAction.search);
     expect(importButton.onPressed, isNotNull);
   });
 
@@ -624,6 +626,288 @@ void main() {
     recovery.complete();
   });
 
+  testWidgets('digitação pesquisa OCR e limpar restaura a biblioteca', (
+    tester,
+  ) async {
+    final first = createTestImage(temporaryDirectory, 'busca-1.png');
+    final second = createTestImage(temporaryDirectory, 'busca-2.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [
+        createMediaItem(1, first.path),
+        createMediaItem(2, second.path),
+      ],
+      recognizedTexts: const {1: 'Código local encontrado'},
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'codigo');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    expect(find.text('1 resultado para “codigo”'), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-2')), findsNothing);
+    expect(find.textContaining('Código local'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Limpar pesquisa'));
+    await tester.pump();
+
+    expect(repository.searchCallCount, 1);
+    expect(find.textContaining('resultado para'), findsNothing);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-2')), findsOneWidget);
+  });
+
+  testWidgets('pesquisa sem correspondência mostra estado vazio', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'sem-resultado.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+      recognizedTexts: const {1: 'Outro conteúdo'},
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'inexistente');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    expect(find.text('0 resultados para “inexistente”'), findsOneWidget);
+    expect(find.text('Nenhum screenshot encontrado.'), findsOneWidget);
+  });
+
+  testWidgets('erro de pesquisa mostra mensagem genérica', (tester) async {
+    final repository = FakeMediaItemRepository(
+      searchError: StateError('consulta e conteúdo privados'),
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'consulta');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    expect(find.text('Não foi possível realizar a pesquisa.'), findsOneWidget);
+    expect(find.textContaining('conteúdo privados'), findsNothing);
+  });
+
+  testWidgets('resultado abre detalhes e voltar preserva a consulta', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'abrir-busca.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+      recognizedTexts: const {1: 'Código persistido'},
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'codigo');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    await openFirstScreenshot(tester);
+    expect(find.text('Detalhes do screenshot'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 resultado para “codigo”'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      'codigo',
+    );
+  });
+
+  testWidgets('debounce evita consultas durante digitação contínua', (
+    tester,
+  ) async {
+    final repository = FakeMediaItemRepository();
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    final field = find.byType(TextField);
+
+    await tester.enterText(field, 'co');
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.enterText(field, 'codi');
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.enterText(field, 'codigo');
+    await tester.pump(const Duration(milliseconds: 299));
+    expect(repository.searchCallCount, 0);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    expect(repository.searchCallCount, 1);
+    expect(repository.searchQueries, ['codigo']);
+  });
+
+  testWidgets('resultado antigo não substitui consulta mais nova', (
+    tester,
+  ) async {
+    final firstImage = createTestImage(temporaryDirectory, 'antiga.png');
+    final secondImage = createTestImage(temporaryDirectory, 'nova.png');
+    final firstItem = createMediaItem(1, firstImage.path);
+    final secondItem = createMediaItem(2, secondImage.path);
+    final firstSearch = Completer<List<ScreenshotSearchResult>>();
+    final secondSearch = Completer<List<ScreenshotSearchResult>>();
+    final repository = FakeMediaItemRepository(
+      initialItems: [firstItem, secondItem],
+      searchCompleters: {'primeira': firstSearch, 'segunda': secondSearch},
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'primeira');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.enterText(find.byType(TextField), 'segunda');
+    await tester.pump(const Duration(milliseconds: 300));
+    secondSearch.complete([
+      ScreenshotSearchResult(mediaItem: secondItem, snippet: 'Segunda busca'),
+    ]);
+    await tester.pump();
+    firstSearch.complete([
+      ScreenshotSearchResult(mediaItem: firstItem, snippet: 'Primeira busca'),
+    ]);
+    await tester.pump();
+
+    expect(find.text('1 resultado para “segunda”'), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsNothing);
+  });
+
+  testWidgets('OCR concluído atualiza pesquisa ativa e mantém consulta', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'ocr-dinamico.png');
+    final item = createMediaItem(1, image.path);
+    final repository = FakeMediaItemRepository(initialItems: [item]);
+    final ocrRepository = FakeOcrRepository();
+    final queue = FakeOcrQueue(
+      ocrRepository,
+      initialStates: const {1: OcrItemState.pending},
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        ocrRepository: ocrRepository,
+        ocrQueue: queue,
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'local');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    expect(
+      find.text('Alguns screenshots ainda estão sendo processados.'),
+      findsOneWidget,
+    );
+    expect(find.text('Nenhum screenshot encontrado.'), findsOneWidget);
+
+    repository.setRecognizedText(1, 'Resultado local concluído');
+    queue.emitState(1, OcrItemState.completedWithText);
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('1 resultado para “local”'), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+  });
+
+  testWidgets('item importado aparece na busca somente após concluir OCR', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'importado-busca.png');
+    final picker = FakeScreenshotPicker(
+      selections: [SelectedScreenshot(path: image.path)],
+    );
+    final repository = FakeMediaItemRepository();
+    final ocrRepository = FakeOcrRepository();
+    final queue = FakeOcrQueue(ocrRepository);
+    await tester.pumpWidget(
+      buildTestApp(
+        picker,
+        repository: repository,
+        ocrRepository: ocrRepository,
+        ocrQueue: queue,
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'novo');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    await tester.tap(find.text('Selecionar imagens'));
+    await tester.pump();
+    expect(find.text('Nenhum screenshot encontrado.'), findsOneWidget);
+
+    repository.setRecognizedText(1, 'Novo resultado importado');
+    queue.emitState(1, OcrItemState.completedWithText);
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('1 resultado para “novo”'), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+  });
+
+  testWidgets('remoção atualiza resultados da pesquisa', (tester) async {
+    final image = createTestImage(temporaryDirectory, 'remover-busca.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+      recognizedTexts: const {1: 'Termo removível'},
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'termo');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    await openFirstScreenshot(tester);
+
+    await tapRemoveFromContexto(tester);
+    await tester.tap(find.text('Remover'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 resultados para “termo”'), findsOneWidget);
+    expect(find.text('Nenhum screenshot encontrado.'), findsOneWidget);
+  });
+
+  testWidgets('pesquisa não apresenta overflow em largura de 320 pixels', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final image = createTestImage(temporaryDirectory, 'busca-estreita.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+      recognizedTexts: const {1: 'Texto para busca estreita'},
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField), 'estreita');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('1 resultado para “estreita”'), findsOneWidget);
+  });
+
   testWidgets('mantém o tema claro com brilho de plataforma escuro', (
     tester,
   ) async {
@@ -701,14 +985,38 @@ Future<void> tapDetailAction(WidgetTester tester, String label) async {
 class FakeMediaItemRepository implements MediaItemRepository {
   FakeMediaItemRepository({
     List<MediaItem> initialItems = const [],
-    this.failRemoval = false,
-  }) : _items = [...initialItems];
+    bool failRemoval = false,
+    Map<int, String> recognizedTexts = const {},
+    Map<String, Completer<List<ScreenshotSearchResult>>> searchCompleters =
+        const {},
+    Object? searchError,
+  }) : this._(
+         initialItems,
+         failRemoval,
+         recognizedTexts,
+         searchCompleters,
+         searchError,
+       );
+
+  FakeMediaItemRepository._(
+    List<MediaItem> initialItems,
+    this.failRemoval,
+    Map<int, String> recognizedTexts,
+    this._searchCompleters,
+    this._searchError,
+  ) : _items = [...initialItems],
+      _recognizedTexts = {...recognizedTexts};
 
   final List<MediaItem> _items;
   final Set<String> _sourcePaths = {};
   final bool failRemoval;
+  final Map<int, String> _recognizedTexts;
+  final Map<String, Completer<List<ScreenshotSearchResult>>> _searchCompleters;
+  final Object? _searchError;
+  final List<String> searchQueries = [];
   int loadCallCount = 0;
   int removeCallCount = 0;
+  int searchCallCount = 0;
   int get itemCount => _items.length;
 
   @override
@@ -749,6 +1057,52 @@ class FakeMediaItemRepository implements MediaItemRepository {
       file.deleteSync();
     }
     _items.removeWhere((candidate) => candidate.id == item.id);
+    _recognizedTexts.remove(item.id);
+  }
+
+  @override
+  Future<List<ScreenshotSearchResult>> searchRecognizedText(
+    String query, {
+    int limit = 100,
+  }) async {
+    const normalizer = TextNormalizer();
+    const snippetBuilder = SearchSnippetBuilder();
+    final normalizedQuery = normalizer.normalize(query);
+    if (normalizedQuery.isEmpty) {
+      return const [];
+    }
+    searchCallCount++;
+    searchQueries.add(normalizedQuery);
+    if (_searchError != null) {
+      throw _searchError;
+    }
+    final controlled = _searchCompleters[normalizedQuery];
+    if (controlled != null) {
+      return controlled.future;
+    }
+    final results = <ScreenshotSearchResult>[];
+    for (final item in _items) {
+      final text = _recognizedTexts[item.id];
+      if (text != null &&
+          normalizer.normalize(text).contains(normalizedQuery) &&
+          File(item.privatePath).existsSync()) {
+        results.add(
+          ScreenshotSearchResult(
+            mediaItem: item,
+            snippet: snippetBuilder.build(text, query),
+          ),
+        );
+      }
+    }
+    results.sort(
+      (first, second) =>
+          second.mediaItem.importedAt.compareTo(first.mediaItem.importedAt),
+    );
+    return results.take(limit).toList(growable: false);
+  }
+
+  void setRecognizedText(int mediaItemId, String text) {
+    _recognizedTexts[mediaItemId] = text;
   }
 
   @override
@@ -862,6 +1216,10 @@ class FakeOcrQueue implements OcrQueue {
     if (!_changes.isClosed) {
       _changes.add(mediaItemId);
     }
+  }
+
+  void emitState(int mediaItemId, OcrItemState state) {
+    _setState(mediaItemId, state);
   }
 
   @override
