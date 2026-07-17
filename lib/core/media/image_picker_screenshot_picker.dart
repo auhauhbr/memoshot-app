@@ -13,7 +13,10 @@ class ImagePickerScreenshotPicker implements ScreenshotPicker {
   Future<List<SelectedScreenshot>> pickScreenshots() async {
     final images = await _imagePicker.pickMultiImage();
     return images
-        .map((image) => SelectedScreenshot(path: image.path))
+        .map(
+          (image) =>
+              SelectedScreenshot(path: image.path, mimeType: image.mimeType),
+        )
         .toList(growable: false);
   }
 
@@ -28,7 +31,10 @@ class ImagePickerScreenshotPicker implements ScreenshotPicker {
     }
 
     return (response.files ?? const <XFile>[])
-        .map((image) => SelectedScreenshot(path: image.path))
+        .map(
+          (image) =>
+              SelectedScreenshot(path: image.path, mimeType: image.mimeType),
+        )
         .toList(growable: false);
   }
 }
