@@ -11,6 +11,8 @@ import 'package:contexto/features/library/domain/media_item.dart';
 import 'package:contexto/features/library/domain/selected_screenshot.dart';
 import 'package:contexto/features/ocr/data/ocr_result_store.dart';
 import 'package:contexto/features/ocr/domain/ocr_result.dart';
+import 'package:contexto/features/processing/data/ocr_job_scheduler.dart';
+import 'package:contexto/features/processing/data/processing_job_store.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -69,6 +71,48 @@ void main() {
     ]);
 
     expect(await repository.loadAvailableItems(), hasLength(2));
+  });
+
+  test('nova importação cria um job e duplicata não cria outro', () async {
+    final jobStore = DriftProcessingJobStore(database);
+    repository = LocalMediaItemRepository(
+      store: store,
+      storage: storage,
+      ocrJobScheduler: LocalOcrJobScheduler(jobStore),
+    );
+    final original = createTestImage(temporaryDirectory, 'com-job.png');
+
+    final first = await repository.importScreenshots([
+      SelectedScreenshot(path: original.path),
+    ]);
+    final duplicate = await repository.importScreenshots([
+      SelectedScreenshot(path: original.path),
+    ]);
+
+    expect(first.importedItems, hasLength(1));
+    expect(duplicate.importedItems, isEmpty);
+    expect(duplicate.duplicateCount, 1);
+    expect(await jobStore.findOcrJob(first.importedItems.single.id), isNotNull);
+    final jobs = await database.select(database.processingJobs).get();
+    expect(jobs, hasLength(1));
+  });
+
+  test('falha ao criar job não desfaz a importação', () async {
+    repository = LocalMediaItemRepository(
+      store: store,
+      storage: storage,
+      ocrJobScheduler: FailingOcrJobScheduler(),
+    );
+    final original = createTestImage(temporaryDirectory, 'job-falhou.png');
+
+    final result = await repository.importScreenshots([
+      SelectedScreenshot(path: original.path),
+    ]);
+
+    expect(result.importedItems, hasLength(1));
+    expect(await store.readItems(), hasLength(1));
+    expect(File(result.importedItems.single.privatePath).existsSync(), isTrue);
+    expect(original.existsSync(), isTrue);
   });
 
   test(
@@ -383,6 +427,13 @@ class FailingMediaItemStore implements MediaItemStore {
 
   @override
   Future<void> close() async {}
+}
+
+class FailingOcrJobScheduler implements OcrJobScheduler {
+  @override
+  Future<bool> schedule(int mediaItemId) {
+    throw StateError('Falha simulada ao criar tarefa');
+  }
 }
 
 class CountingHashCalculator implements FileHashCalculator {

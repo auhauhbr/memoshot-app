@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 2 para 3 preservando media_items', () async {
+  test('migra schema 3 para 4 preservando media_items e ocr_results', () async {
     final directory = Directory.systemTemp.createTempSync(
       'contexto_migration_test_',
     );
@@ -28,6 +28,20 @@ void main() {
         'ready',
       ],
     );
+    await legacy.customStatement(
+      '''
+      INSERT INTO ocr_results (
+        media_item_id, full_text, engine, engine_version, processed_at
+      ) VALUES (?, ?, ?, ?, ?)
+    ''',
+      [
+        1,
+        'Texto fictício preservado',
+        'Teste',
+        '1',
+        DateTime(2025).millisecondsSinceEpoch ~/ 1000,
+      ],
+    );
     await legacy.close();
 
     final migrated = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
@@ -36,16 +50,19 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 3);
+    expect(version.read<int>('user_version'), 4);
     expect(rows, hasLength(1));
     expect(rows.single.internalName, 'copia.png');
     expect(rows.single.mediaHash, isNull);
-    final ocrTable = await migrated
+    final ocrRows = await migrated.select(migrated.ocrResults).get();
+    expect(ocrRows.single.fullText, 'Texto fictício preservado');
+    final jobsTable = await migrated
         .customSelect(
-          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ocr_results'",
+          "SELECT name FROM sqlite_master WHERE type = 'table' "
+          "AND name = 'processing_jobs'",
         )
         .getSingleOrNull();
-    expect(ocrTable, isNotNull);
+    expect(jobsTable, isNotNull);
 
     await (migrated.update(migrated.mediaItems)
           ..where((item) => item.id.equals(rows.single.id)))
@@ -79,7 +96,7 @@ class _LegacyDatabase extends GeneratedDatabase {
   final List<TableInfo> allTables = const [];
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -100,6 +117,16 @@ class _LegacyDatabase extends GeneratedDatabase {
         'CREATE UNIQUE INDEX media_items_media_hash_unique '
         'ON media_items (media_hash) WHERE media_hash IS NOT NULL',
       );
+      await customStatement('''
+        CREATE TABLE ocr_results (
+          media_item_id INTEGER NOT NULL PRIMARY KEY
+            REFERENCES media_items (id) ON DELETE CASCADE,
+          full_text TEXT NOT NULL,
+          engine TEXT NOT NULL,
+          engine_version TEXT NOT NULL,
+          processed_at INTEGER NOT NULL
+        )
+      ''');
     },
   );
 }

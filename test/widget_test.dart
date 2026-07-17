@@ -10,6 +10,8 @@ import 'package:contexto/features/library/domain/media_item.dart';
 import 'package:contexto/features/library/domain/selected_screenshot.dart';
 import 'package:contexto/features/ocr/data/ocr_repository.dart';
 import 'package:contexto/features/ocr/domain/ocr_result.dart';
+import 'package:contexto/features/processing/data/ocr_queue_processor.dart';
+import 'package:contexto/features/processing/domain/processing_job.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -432,7 +434,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('texto privado'), findsNothing);
-    expect(find.text('Extrair texto'), findsOneWidget);
+    expect(find.text('Tentar novamente'), findsOneWidget);
     expect(find.byType(SelectableText), findsNothing);
   });
 
@@ -495,6 +497,133 @@ void main() {
     expect(find.text('Concluído'), findsOneWidget);
   });
 
+  testWidgets('Home mostra todos os estados persistentes de OCR', (
+    tester,
+  ) async {
+    final items = <MediaItem>[];
+    for (var id = 1; id <= 5; id++) {
+      final image = createTestImage(temporaryDirectory, 'estado-$id.png');
+      items.add(createMediaItem(id, image.path));
+    }
+    final mediaRepository = FakeMediaItemRepository(initialItems: items);
+    final ocrRepository = FakeOcrRepository(
+      initialResults: {
+        3: createOcrResult(3, 'Texto fictício'),
+        4: createOcrResult(4, ''),
+      },
+    );
+    final queue = FakeOcrQueue(
+      ocrRepository,
+      initialStates: const {
+        1: OcrItemState.pending,
+        2: OcrItemState.processing,
+        3: OcrItemState.completedWithText,
+        4: OcrItemState.completedWithoutText,
+        5: OcrItemState.failed,
+      },
+    );
+
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        ocrRepository: ocrRepository,
+        ocrQueue: queue,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Aguardando'), findsOneWidget);
+    expect(find.text('Processando'), findsOneWidget);
+    expect(find.text('Texto extraído'), findsOneWidget);
+    expect(find.text('Sem texto'), findsOneWidget);
+    expect(find.text('Falha'), findsOneWidget);
+  });
+
+  testWidgets('falha oferece nova tentativa e redefine a tarefa', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'tentar-novamente.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final ocrRepository = FakeOcrRepository(texts: ['Recuperado']);
+    final queue = FakeOcrQueue(
+      ocrRepository,
+      initialStates: const {1: OcrItemState.failed},
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        ocrRepository: ocrRepository,
+        ocrQueue: queue,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+
+    await tapDetailAction(tester, 'Tentar novamente');
+    await tester.pump();
+
+    expect(queue.retryCallCount, 1);
+    expect(find.text('Recuperado'), findsOneWidget);
+    expect(find.text('Texto extraído'), findsOneWidget);
+  });
+
+  testWidgets('ações de OCR ficam desabilitadas durante processamento', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'processando.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final ocrRepository = FakeOcrRepository();
+    final queue = FakeOcrQueue(
+      ocrRepository,
+      initialStates: const {1: OcrItemState.processing},
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        ocrRepository: ocrRepository,
+        ocrQueue: queue,
+      ),
+    );
+    await tester.pump();
+    final tile = find.byKey(const ValueKey('screenshot-tile-1'));
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    final button = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Extraindo texto...'),
+    );
+    expect(button.onPressed, isNull);
+    expect(find.text('Processando'), findsWidgets);
+  });
+
+  testWidgets('Home abre sem aguardar a recuperação da fila', (tester) async {
+    final recovery = Completer<void>();
+    final ocrRepository = FakeOcrRepository();
+    final queue = FakeOcrQueue(ocrRepository, recoveryCompleter: recovery);
+
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        ocrRepository: ocrRepository,
+        ocrQueue: queue,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Biblioteca'), findsOneWidget);
+    expect(find.text('Selecionar imagens'), findsOneWidget);
+    recovery.complete();
+  });
+
   testWidgets('mantém o tema claro com brilho de plataforma escuro', (
     tester,
   ) async {
@@ -537,11 +666,14 @@ Widget buildTestApp(
   ScreenshotPicker picker, {
   FakeMediaItemRepository? repository,
   FakeOcrRepository? ocrRepository,
+  FakeOcrQueue? ocrQueue,
 }) {
+  final resolvedOcrRepository = ocrRepository ?? FakeOcrRepository();
   return ContextoApp(
     screenshotPicker: picker,
     mediaRepository: repository ?? FakeMediaItemRepository(),
-    ocrRepository: ocrRepository ?? FakeOcrRepository(),
+    ocrRepository: resolvedOcrRepository,
+    ocrQueue: ocrQueue ?? FakeOcrQueue(resolvedOcrRepository),
   );
 }
 
@@ -661,6 +793,82 @@ class FakeOcrRepository implements OcrRepository {
     _results[mediaItem.id] = result;
     return result;
   }
+}
+
+class FakeOcrQueue implements OcrQueue {
+  FakeOcrQueue(
+    this._repository, {
+    Map<int, OcrItemState> initialStates = const {},
+    this.recoveryCompleter,
+  }) : _states = {...initialStates};
+
+  final FakeOcrRepository _repository;
+  final Map<int, OcrItemState> _states;
+  final Completer<void>? recoveryCompleter;
+  final StreamController<int> _changes = StreamController<int>.broadcast();
+  int retryCallCount = 0;
+
+  @override
+  Stream<int> get changes => _changes.stream;
+
+  @override
+  Future<OcrItemState> loadState(int mediaItemId) async {
+    final explicit = _states[mediaItemId];
+    if (explicit != null) {
+      return explicit;
+    }
+    final result = await _repository.loadFor(mediaItemId);
+    if (result == null) {
+      return OcrItemState.notScheduled;
+    }
+    return result.fullText.isEmpty
+        ? OcrItemState.completedWithoutText
+        : OcrItemState.completedWithText;
+  }
+
+  @override
+  Future<void> recoverAndStart() async {
+    await recoveryCompleter?.future;
+  }
+
+  @override
+  Future<void> retry(MediaItem mediaItem) async {
+    final current = await loadState(mediaItem.id);
+    if (current == OcrItemState.pending || current == OcrItemState.processing) {
+      return;
+    }
+    retryCallCount++;
+    _setState(mediaItem.id, OcrItemState.pending);
+    unawaited(_run(mediaItem));
+  }
+
+  Future<void> _run(MediaItem mediaItem) async {
+    _setState(mediaItem.id, OcrItemState.processing);
+    try {
+      final result = await _repository.process(mediaItem);
+      _setState(
+        mediaItem.id,
+        result.fullText.isEmpty
+            ? OcrItemState.completedWithoutText
+            : OcrItemState.completedWithText,
+      );
+    } catch (_) {
+      _setState(mediaItem.id, OcrItemState.failed);
+    }
+  }
+
+  void _setState(int mediaItemId, OcrItemState state) {
+    _states[mediaItemId] = state;
+    if (!_changes.isClosed) {
+      _changes.add(mediaItemId);
+    }
+  }
+
+  @override
+  void signal() {}
+
+  @override
+  Future<void> close() => _changes.close();
 }
 
 MediaItem createMediaItem(int id, String path, {DateTime? importedAt}) {
