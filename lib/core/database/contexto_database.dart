@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import '../text/text_normalizer.dart';
+
 part 'contexto_database.g.dart';
 
 class MediaItems extends Table {
@@ -26,6 +28,8 @@ class OcrResults extends Table {
       integer().references(MediaItems, #id, onDelete: KeyAction.cascade)();
 
   TextColumn get fullText => text()();
+
+  TextColumn get normalizedText => text().withDefault(const Constant(''))();
 
   TextColumn get engine => text()();
 
@@ -70,7 +74,7 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -89,9 +93,14 @@ class ContextoDatabase extends _$ContextoDatabase {
       if (from < 4) {
         await migrator.createTable(processingJobs);
       }
+      if (from >= 3 && from < 5) {
+        await migrator.addColumn(ocrResults, ocrResults.normalizedText);
+        await _backfillNormalizedOcrText();
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
+      await _backfillNormalizedOcrText();
     },
   );
 
@@ -100,6 +109,25 @@ class ContextoDatabase extends _$ContextoDatabase {
       'CREATE UNIQUE INDEX IF NOT EXISTS media_items_media_hash_unique '
       'ON media_items (media_hash) WHERE media_hash IS NOT NULL',
     );
+  }
+
+  Future<void> _backfillNormalizedOcrText() async {
+    final rows = await customSelect(
+      'SELECT media_item_id, full_text FROM ocr_results '
+      "WHERE normalized_text = '' AND full_text <> ''",
+      readsFrom: {ocrResults},
+    ).get();
+    const normalizer = TextNormalizer();
+    for (final row in rows) {
+      await customUpdate(
+        'UPDATE ocr_results SET normalized_text = ? WHERE media_item_id = ?',
+        variables: [
+          Variable<String>(normalizer.normalize(row.read<String>('full_text'))),
+          Variable<int>(row.read<int>('media_item_id')),
+        ],
+        updates: {ocrResults},
+      );
+    }
   }
 
   static QueryExecutor _openConnection() {

@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../../core/database/contexto_database.dart';
+import '../../../core/text/text_normalizer.dart';
 import '../domain/ocr_result.dart' as domain;
 
 abstract interface class OcrResultStore {
@@ -10,9 +11,15 @@ abstract interface class OcrResultStore {
 }
 
 class DriftOcrResultStore implements OcrResultStore {
-  DriftOcrResultStore(this._database);
+  DriftOcrResultStore(
+    ContextoDatabase database, {
+    TextNormalizer normalizer = const TextNormalizer(),
+  }) : this._(database, normalizer);
+
+  DriftOcrResultStore._(this._database, this._normalizer);
 
   final ContextoDatabase _database;
+  final TextNormalizer _normalizer;
 
   @override
   Future<domain.OcrResult?> findByMediaItemId(int mediaItemId) async {
@@ -26,6 +33,7 @@ class DriftOcrResultStore implements OcrResultStore {
     return domain.OcrResult(
       mediaItemId: row.mediaItemId,
       fullText: row.fullText,
+      normalizedText: row.normalizedText,
       engine: row.engine,
       engineVersion: row.engineVersion,
       processedAt: row.processedAt,
@@ -40,6 +48,7 @@ class DriftOcrResultStore implements OcrResultStore {
           OcrResultsCompanion.insert(
             mediaItemId: Value(result.mediaItemId),
             fullText: result.fullText,
+            normalizedText: Value(_normalizer.normalize(result.fullText)),
             engine: result.engine,
             engineVersion: result.engineVersion,
             processedAt: result.processedAt,

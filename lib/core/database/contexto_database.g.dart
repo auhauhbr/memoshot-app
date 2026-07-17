@@ -550,6 +550,18 @@ class $OcrResultsTable extends OcrResults
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _normalizedTextMeta = const VerificationMeta(
+    'normalizedText',
+  );
+  @override
+  late final GeneratedColumn<String> normalizedText = GeneratedColumn<String>(
+    'normalized_text',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
   static const VerificationMeta _engineMeta = const VerificationMeta('engine');
   @override
   late final GeneratedColumn<String> engine = GeneratedColumn<String>(
@@ -585,6 +597,7 @@ class $OcrResultsTable extends OcrResults
   List<GeneratedColumn> get $columns => [
     mediaItemId,
     fullText,
+    normalizedText,
     engine,
     engineVersion,
     processedAt,
@@ -617,6 +630,15 @@ class $OcrResultsTable extends OcrResults
       );
     } else if (isInserting) {
       context.missing(_fullTextMeta);
+    }
+    if (data.containsKey('normalized_text')) {
+      context.handle(
+        _normalizedTextMeta,
+        normalizedText.isAcceptableOrUnknown(
+          data['normalized_text']!,
+          _normalizedTextMeta,
+        ),
+      );
     }
     if (data.containsKey('engine')) {
       context.handle(
@@ -665,6 +687,10 @@ class $OcrResultsTable extends OcrResults
         DriftSqlType.string,
         data['${effectivePrefix}full_text'],
       )!,
+      normalizedText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}normalized_text'],
+      )!,
       engine: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}engine'],
@@ -689,12 +715,14 @@ class $OcrResultsTable extends OcrResults
 class OcrResult extends DataClass implements Insertable<OcrResult> {
   final int mediaItemId;
   final String fullText;
+  final String normalizedText;
   final String engine;
   final String engineVersion;
   final DateTime processedAt;
   const OcrResult({
     required this.mediaItemId,
     required this.fullText,
+    required this.normalizedText,
     required this.engine,
     required this.engineVersion,
     required this.processedAt,
@@ -704,6 +732,7 @@ class OcrResult extends DataClass implements Insertable<OcrResult> {
     final map = <String, Expression>{};
     map['media_item_id'] = Variable<int>(mediaItemId);
     map['full_text'] = Variable<String>(fullText);
+    map['normalized_text'] = Variable<String>(normalizedText);
     map['engine'] = Variable<String>(engine);
     map['engine_version'] = Variable<String>(engineVersion);
     map['processed_at'] = Variable<DateTime>(processedAt);
@@ -714,6 +743,7 @@ class OcrResult extends DataClass implements Insertable<OcrResult> {
     return OcrResultsCompanion(
       mediaItemId: Value(mediaItemId),
       fullText: Value(fullText),
+      normalizedText: Value(normalizedText),
       engine: Value(engine),
       engineVersion: Value(engineVersion),
       processedAt: Value(processedAt),
@@ -728,6 +758,7 @@ class OcrResult extends DataClass implements Insertable<OcrResult> {
     return OcrResult(
       mediaItemId: serializer.fromJson<int>(json['mediaItemId']),
       fullText: serializer.fromJson<String>(json['fullText']),
+      normalizedText: serializer.fromJson<String>(json['normalizedText']),
       engine: serializer.fromJson<String>(json['engine']),
       engineVersion: serializer.fromJson<String>(json['engineVersion']),
       processedAt: serializer.fromJson<DateTime>(json['processedAt']),
@@ -739,6 +770,7 @@ class OcrResult extends DataClass implements Insertable<OcrResult> {
     return <String, dynamic>{
       'mediaItemId': serializer.toJson<int>(mediaItemId),
       'fullText': serializer.toJson<String>(fullText),
+      'normalizedText': serializer.toJson<String>(normalizedText),
       'engine': serializer.toJson<String>(engine),
       'engineVersion': serializer.toJson<String>(engineVersion),
       'processedAt': serializer.toJson<DateTime>(processedAt),
@@ -748,12 +780,14 @@ class OcrResult extends DataClass implements Insertable<OcrResult> {
   OcrResult copyWith({
     int? mediaItemId,
     String? fullText,
+    String? normalizedText,
     String? engine,
     String? engineVersion,
     DateTime? processedAt,
   }) => OcrResult(
     mediaItemId: mediaItemId ?? this.mediaItemId,
     fullText: fullText ?? this.fullText,
+    normalizedText: normalizedText ?? this.normalizedText,
     engine: engine ?? this.engine,
     engineVersion: engineVersion ?? this.engineVersion,
     processedAt: processedAt ?? this.processedAt,
@@ -764,6 +798,9 @@ class OcrResult extends DataClass implements Insertable<OcrResult> {
           ? data.mediaItemId.value
           : this.mediaItemId,
       fullText: data.fullText.present ? data.fullText.value : this.fullText,
+      normalizedText: data.normalizedText.present
+          ? data.normalizedText.value
+          : this.normalizedText,
       engine: data.engine.present ? data.engine.value : this.engine,
       engineVersion: data.engineVersion.present
           ? data.engineVersion.value
@@ -779,6 +816,7 @@ class OcrResult extends DataClass implements Insertable<OcrResult> {
     return (StringBuffer('OcrResult(')
           ..write('mediaItemId: $mediaItemId, ')
           ..write('fullText: $fullText, ')
+          ..write('normalizedText: $normalizedText, ')
           ..write('engine: $engine, ')
           ..write('engineVersion: $engineVersion, ')
           ..write('processedAt: $processedAt')
@@ -787,14 +825,21 @@ class OcrResult extends DataClass implements Insertable<OcrResult> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(mediaItemId, fullText, engine, engineVersion, processedAt);
+  int get hashCode => Object.hash(
+    mediaItemId,
+    fullText,
+    normalizedText,
+    engine,
+    engineVersion,
+    processedAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is OcrResult &&
           other.mediaItemId == this.mediaItemId &&
           other.fullText == this.fullText &&
+          other.normalizedText == this.normalizedText &&
           other.engine == this.engine &&
           other.engineVersion == this.engineVersion &&
           other.processedAt == this.processedAt);
@@ -803,12 +848,14 @@ class OcrResult extends DataClass implements Insertable<OcrResult> {
 class OcrResultsCompanion extends UpdateCompanion<OcrResult> {
   final Value<int> mediaItemId;
   final Value<String> fullText;
+  final Value<String> normalizedText;
   final Value<String> engine;
   final Value<String> engineVersion;
   final Value<DateTime> processedAt;
   const OcrResultsCompanion({
     this.mediaItemId = const Value.absent(),
     this.fullText = const Value.absent(),
+    this.normalizedText = const Value.absent(),
     this.engine = const Value.absent(),
     this.engineVersion = const Value.absent(),
     this.processedAt = const Value.absent(),
@@ -816,6 +863,7 @@ class OcrResultsCompanion extends UpdateCompanion<OcrResult> {
   OcrResultsCompanion.insert({
     this.mediaItemId = const Value.absent(),
     required String fullText,
+    this.normalizedText = const Value.absent(),
     required String engine,
     required String engineVersion,
     required DateTime processedAt,
@@ -826,6 +874,7 @@ class OcrResultsCompanion extends UpdateCompanion<OcrResult> {
   static Insertable<OcrResult> custom({
     Expression<int>? mediaItemId,
     Expression<String>? fullText,
+    Expression<String>? normalizedText,
     Expression<String>? engine,
     Expression<String>? engineVersion,
     Expression<DateTime>? processedAt,
@@ -833,6 +882,7 @@ class OcrResultsCompanion extends UpdateCompanion<OcrResult> {
     return RawValuesInsertable({
       if (mediaItemId != null) 'media_item_id': mediaItemId,
       if (fullText != null) 'full_text': fullText,
+      if (normalizedText != null) 'normalized_text': normalizedText,
       if (engine != null) 'engine': engine,
       if (engineVersion != null) 'engine_version': engineVersion,
       if (processedAt != null) 'processed_at': processedAt,
@@ -842,6 +892,7 @@ class OcrResultsCompanion extends UpdateCompanion<OcrResult> {
   OcrResultsCompanion copyWith({
     Value<int>? mediaItemId,
     Value<String>? fullText,
+    Value<String>? normalizedText,
     Value<String>? engine,
     Value<String>? engineVersion,
     Value<DateTime>? processedAt,
@@ -849,6 +900,7 @@ class OcrResultsCompanion extends UpdateCompanion<OcrResult> {
     return OcrResultsCompanion(
       mediaItemId: mediaItemId ?? this.mediaItemId,
       fullText: fullText ?? this.fullText,
+      normalizedText: normalizedText ?? this.normalizedText,
       engine: engine ?? this.engine,
       engineVersion: engineVersion ?? this.engineVersion,
       processedAt: processedAt ?? this.processedAt,
@@ -863,6 +915,9 @@ class OcrResultsCompanion extends UpdateCompanion<OcrResult> {
     }
     if (fullText.present) {
       map['full_text'] = Variable<String>(fullText.value);
+    }
+    if (normalizedText.present) {
+      map['normalized_text'] = Variable<String>(normalizedText.value);
     }
     if (engine.present) {
       map['engine'] = Variable<String>(engine.value);
@@ -881,6 +936,7 @@ class OcrResultsCompanion extends UpdateCompanion<OcrResult> {
     return (StringBuffer('OcrResultsCompanion(')
           ..write('mediaItemId: $mediaItemId, ')
           ..write('fullText: $fullText, ')
+          ..write('normalizedText: $normalizedText, ')
           ..write('engine: $engine, ')
           ..write('engineVersion: $engineVersion, ')
           ..write('processedAt: $processedAt')
@@ -1946,6 +2002,7 @@ typedef $$OcrResultsTableCreateCompanionBuilder =
     OcrResultsCompanion Function({
       Value<int> mediaItemId,
       required String fullText,
+      Value<String> normalizedText,
       required String engine,
       required String engineVersion,
       required DateTime processedAt,
@@ -1954,6 +2011,7 @@ typedef $$OcrResultsTableUpdateCompanionBuilder =
     OcrResultsCompanion Function({
       Value<int> mediaItemId,
       Value<String> fullText,
+      Value<String> normalizedText,
       Value<String> engine,
       Value<String> engineVersion,
       Value<DateTime> processedAt,
@@ -1992,6 +2050,11 @@ class $$OcrResultsTableFilterComposer
   });
   ColumnFilters<String> get fullText => $composableBuilder(
     column: $table.fullText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get normalizedText => $composableBuilder(
+    column: $table.normalizedText,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2048,6 +2111,11 @@ class $$OcrResultsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get normalizedText => $composableBuilder(
+    column: $table.normalizedText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get engine => $composableBuilder(
     column: $table.engine,
     builder: (column) => ColumnOrderings(column),
@@ -2098,6 +2166,11 @@ class $$OcrResultsTableAnnotationComposer
   });
   GeneratedColumn<String> get fullText =>
       $composableBuilder(column: $table.fullText, builder: (column) => column);
+
+  GeneratedColumn<String> get normalizedText => $composableBuilder(
+    column: $table.normalizedText,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get engine =>
       $composableBuilder(column: $table.engine, builder: (column) => column);
@@ -2166,12 +2239,14 @@ class $$OcrResultsTableTableManager
               ({
                 Value<int> mediaItemId = const Value.absent(),
                 Value<String> fullText = const Value.absent(),
+                Value<String> normalizedText = const Value.absent(),
                 Value<String> engine = const Value.absent(),
                 Value<String> engineVersion = const Value.absent(),
                 Value<DateTime> processedAt = const Value.absent(),
               }) => OcrResultsCompanion(
                 mediaItemId: mediaItemId,
                 fullText: fullText,
+                normalizedText: normalizedText,
                 engine: engine,
                 engineVersion: engineVersion,
                 processedAt: processedAt,
@@ -2180,12 +2255,14 @@ class $$OcrResultsTableTableManager
               ({
                 Value<int> mediaItemId = const Value.absent(),
                 required String fullText,
+                Value<String> normalizedText = const Value.absent(),
                 required String engine,
                 required String engineVersion,
                 required DateTime processedAt,
               }) => OcrResultsCompanion.insert(
                 mediaItemId: mediaItemId,
                 fullText: fullText,
+                normalizedText: normalizedText,
                 engine: engine,
                 engineVersion: engineVersion,
                 processedAt: processedAt,
