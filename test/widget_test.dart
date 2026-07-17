@@ -8,6 +8,8 @@ import 'package:contexto/core/theme/app_theme.dart';
 import 'package:contexto/features/library/data/media_item_repository.dart';
 import 'package:contexto/features/library/domain/media_item.dart';
 import 'package:contexto/features/library/domain/selected_screenshot.dart';
+import 'package:contexto/features/ocr/data/ocr_repository.dart';
+import 'package:contexto/features/ocr/domain/ocr_result.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -294,6 +296,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('A imagem salva não está disponível.'), findsOneWidget);
+    expect(find.text('Extrair texto'), findsNothing);
+    expect(
+      find.text('A imagem precisa estar disponível para extrair texto.'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
@@ -324,6 +331,168 @@ void main() {
     expect(repository.itemCount, 1);
     expect(image.existsSync(), isTrue);
     expect(find.text('Detalhes do screenshot'), findsOneWidget);
+  });
+
+  testWidgets('carrega texto OCR persistido como conteúdo selecionável', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'ocr-persistido.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final ocrRepository = FakeOcrRepository(
+      initialResults: {1: createOcrResult(1, 'Texto persistido fictício')},
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        ocrRepository: ocrRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+
+    expect(find.text('Texto reconhecido'), findsOneWidget);
+    expect(find.text('Texto persistido fictício'), findsOneWidget);
+    expect(find.byType(SelectableText), findsOneWidget);
+    expect(ocrRepository.processCallCount, 0);
+    expect(find.text('Processar novamente'), findsOneWidget);
+  });
+
+  testWidgets('extrai texto manualmente e atualiza a seção', (tester) async {
+    final image = createTestImage(temporaryDirectory, 'ocr-manual.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final ocrRepository = FakeOcrRepository(
+      texts: ['Resultado local fictício'],
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        ocrRepository: ocrRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tapDetailAction(tester, 'Extrair texto');
+
+    expect(ocrRepository.processCallCount, 1);
+    expect(find.text('Resultado local fictício'), findsOneWidget);
+    expect(find.byType(SelectableText), findsOneWidget);
+  });
+
+  testWidgets('resultado OCR vazio apresenta estado correto', (tester) async {
+    final image = createTestImage(temporaryDirectory, 'ocr-vazio.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final ocrRepository = FakeOcrRepository(texts: ['']);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        ocrRepository: ocrRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tapDetailAction(tester, 'Extrair texto');
+
+    expect(
+      find.text('Nenhum texto foi encontrado nesta imagem.'),
+      findsOneWidget,
+    );
+    expect(find.text('Processar novamente'), findsOneWidget);
+  });
+
+  testWidgets('erro de OCR não cria resultado falso e permite nova tentativa', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'ocr-erro.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final ocrRepository = FakeOcrRepository(error: StateError('texto privado'));
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        ocrRepository: ocrRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tapDetailAction(tester, 'Extrair texto');
+
+    expect(
+      find.text('Não foi possível extrair o texto da imagem.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('texto privado'), findsNothing);
+    expect(find.text('Extrair texto'), findsOneWidget);
+    expect(find.byType(SelectableText), findsNothing);
+  });
+
+  testWidgets('reprocessamento substitui o texto exibido', (tester) async {
+    final image = createTestImage(temporaryDirectory, 'ocr-reprocessar.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final ocrRepository = FakeOcrRepository(
+      initialResults: {1: createOcrResult(1, 'Texto anterior')},
+      texts: ['Texto atualizado'],
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        ocrRepository: ocrRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tapDetailAction(tester, 'Processar novamente');
+
+    expect(find.text('Texto anterior'), findsNothing);
+    expect(find.text('Texto atualizado'), findsOneWidget);
+  });
+
+  testWidgets('carregamento impede processamentos OCR simultâneos', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'ocr-carregando.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final completer = Completer<OcrResult>();
+    final ocrRepository = FakeOcrRepository(processCompleter: completer);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        ocrRepository: ocrRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+
+    final action = find.text('Extrair texto');
+    await tester.ensureVisible(action);
+    await tester.tap(action);
+    await tester.pump();
+
+    final processingButton = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Extraindo texto...'),
+    );
+    expect(processingButton.onPressed, isNull);
+    expect(ocrRepository.processCallCount, 1);
+
+    completer.complete(createOcrResult(1, 'Concluído'));
+    await tester.pump();
+    expect(find.text('Concluído'), findsOneWidget);
   });
 
   testWidgets('mantém o tema claro com brilho de plataforma escuro', (
@@ -367,10 +536,12 @@ void main() {
 Widget buildTestApp(
   ScreenshotPicker picker, {
   FakeMediaItemRepository? repository,
+  FakeOcrRepository? ocrRepository,
 }) {
   return ContextoApp(
     screenshotPicker: picker,
     mediaRepository: repository ?? FakeMediaItemRepository(),
+    ocrRepository: ocrRepository ?? FakeOcrRepository(),
   );
 }
 
@@ -386,6 +557,13 @@ Future<void> tapRemoveFromContexto(WidgetTester tester) async {
   await tester.ensureVisible(action);
   await tester.tap(action);
   await tester.pumpAndSettle();
+}
+
+Future<void> tapDetailAction(WidgetTester tester, String label) async {
+  final action = find.text(label);
+  await tester.ensureVisible(action);
+  await tester.tap(action);
+  await tester.pump();
 }
 
 class FakeMediaItemRepository implements MediaItemRepository {
@@ -445,6 +623,46 @@ class FakeMediaItemRepository implements MediaItemRepository {
   Future<void> close() async {}
 }
 
+class FakeOcrRepository implements OcrRepository {
+  FakeOcrRepository({
+    Map<int, OcrResult> initialResults = const {},
+    this.texts = const [],
+    this.error,
+    this.processCompleter,
+  }) : _results = {...initialResults};
+
+  final Map<int, OcrResult> _results;
+  final List<String> texts;
+  final Object? error;
+  final Completer<OcrResult>? processCompleter;
+  int processCallCount = 0;
+
+  @override
+  Future<OcrResult?> loadFor(int mediaItemId) async => _results[mediaItemId];
+
+  @override
+  Future<OcrResult> process(MediaItem mediaItem) async {
+    processCallCount++;
+    if (error != null) {
+      throw error!;
+    }
+    if (processCompleter != null) {
+      final completed = await processCompleter!.future;
+      _results[mediaItem.id] = completed;
+      return completed;
+    }
+    final result = OcrResult(
+      mediaItemId: mediaItem.id,
+      fullText: texts[processCallCount - 1],
+      engine: 'Serviço falso',
+      engineVersion: 'teste',
+      processedAt: DateTime(2026),
+    );
+    _results[mediaItem.id] = result;
+    return result;
+  }
+}
+
 MediaItem createMediaItem(int id, String path, {DateTime? importedAt}) {
   return MediaItem(
     id: id,
@@ -455,6 +673,16 @@ MediaItem createMediaItem(int id, String path, {DateTime? importedAt}) {
     importedAt: importedAt ?? DateTime(2026),
     sourceMode: 'photoPicker',
     status: 'ready',
+  );
+}
+
+OcrResult createOcrResult(int mediaItemId, String text) {
+  return OcrResult(
+    mediaItemId: mediaItemId,
+    fullText: text,
+    engine: 'Serviço falso',
+    engineVersion: 'teste',
+    processedAt: DateTime(2026),
   );
 }
 

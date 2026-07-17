@@ -1,12 +1,12 @@
 import 'dart:io';
 
 import 'package:contexto/core/database/contexto_database.dart';
-import 'package:drift/drift.dart' hide isNull;
+import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 1 para 2 preservando registros existentes', () async {
+  test('migra schema 2 para 3 preservando media_items', () async {
     final directory = Directory.systemTemp.createTempSync(
       'contexto_migration_test_',
     );
@@ -36,10 +36,16 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 2);
+    expect(version.read<int>('user_version'), 3);
     expect(rows, hasLength(1));
     expect(rows.single.internalName, 'copia.png');
     expect(rows.single.mediaHash, isNull);
+    final ocrTable = await migrated
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'ocr_results'",
+        )
+        .getSingleOrNull();
+    expect(ocrTable, isNotNull);
 
     await (migrated.update(migrated.mediaItems)
           ..where((item) => item.id.equals(rows.single.id)))
@@ -73,7 +79,7 @@ class _LegacyDatabase extends GeneratedDatabase {
   final List<TableInfo> allTables = const [];
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -84,11 +90,16 @@ class _LegacyDatabase extends GeneratedDatabase {
           private_path TEXT NOT NULL,
           internal_name TEXT NOT NULL,
           mime_type TEXT NULL,
+          media_hash TEXT NULL,
           imported_at INTEGER NOT NULL,
           source_mode TEXT NOT NULL,
           status TEXT NOT NULL
         )
       ''');
+      await customStatement(
+        'CREATE UNIQUE INDEX media_items_media_hash_unique '
+        'ON media_items (media_hash) WHERE media_hash IS NOT NULL',
+      );
     },
   );
 }

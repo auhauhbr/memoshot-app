@@ -9,6 +9,8 @@ import 'package:contexto/features/library/data/media_item_repository.dart';
 import 'package:contexto/features/library/data/media_item_store.dart';
 import 'package:contexto/features/library/domain/media_item.dart';
 import 'package:contexto/features/library/domain/selected_screenshot.dart';
+import 'package:contexto/features/ocr/data/ocr_result_store.dart';
+import 'package:contexto/features/ocr/domain/ocr_result.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -176,12 +178,23 @@ void main() {
     ]);
     final item = imported.importedItems.single;
     final privateCopy = File(item.privatePath);
+    final ocrStore = DriftOcrResultStore(database);
+    await ocrStore.save(
+      OcrResult(
+        mediaItemId: item.id,
+        fullText: 'Texto fictício',
+        engine: 'Teste',
+        engineVersion: '1',
+        processedAt: DateTime(2026),
+      ),
+    );
 
     await repository.removeItem(item);
 
     expect(await store.readItems(), isEmpty);
     expect(privateCopy.existsSync(), isFalse);
     expect(original.existsSync(), isTrue);
+    expect(await ocrStore.findByMediaItemId(item.id), isNull);
   });
 
   test('remove registro quando a cópia privada já não existe', () async {
