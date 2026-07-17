@@ -21,14 +21,30 @@ class MediaItems extends Table {
   TextColumn get status => text()();
 }
 
-@DriftDatabase(tables: [MediaItems])
+class OcrResults extends Table {
+  IntColumn get mediaItemId =>
+      integer().references(MediaItems, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get fullText => text()();
+
+  TextColumn get engine => text()();
+
+  TextColumn get engineVersion => text()();
+
+  DateTimeColumn get processedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {mediaItemId};
+}
+
+@DriftDatabase(tables: [MediaItems, OcrResults])
 class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase() : super(_openConnection());
 
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -41,6 +57,12 @@ class ContextoDatabase extends _$ContextoDatabase {
         await migrator.addColumn(mediaItems, mediaItems.mediaHash);
         await _createMediaHashIndex();
       }
+      if (from < 3) {
+        await migrator.createTable(ocrResults);
+      }
+    },
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
     },
   );
 

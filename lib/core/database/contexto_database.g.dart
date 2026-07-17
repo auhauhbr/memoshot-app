@@ -519,15 +519,396 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
   }
 }
 
+class $OcrResultsTable extends OcrResults
+    with TableInfo<$OcrResultsTable, OcrResult> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $OcrResultsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _mediaItemIdMeta = const VerificationMeta(
+    'mediaItemId',
+  );
+  @override
+  late final GeneratedColumn<int> mediaItemId = GeneratedColumn<int>(
+    'media_item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES media_items (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _fullTextMeta = const VerificationMeta(
+    'fullText',
+  );
+  @override
+  late final GeneratedColumn<String> fullText = GeneratedColumn<String>(
+    'full_text',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _engineMeta = const VerificationMeta('engine');
+  @override
+  late final GeneratedColumn<String> engine = GeneratedColumn<String>(
+    'engine',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _engineVersionMeta = const VerificationMeta(
+    'engineVersion',
+  );
+  @override
+  late final GeneratedColumn<String> engineVersion = GeneratedColumn<String>(
+    'engine_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _processedAtMeta = const VerificationMeta(
+    'processedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> processedAt = GeneratedColumn<DateTime>(
+    'processed_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    mediaItemId,
+    fullText,
+    engine,
+    engineVersion,
+    processedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'ocr_results';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<OcrResult> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('media_item_id')) {
+      context.handle(
+        _mediaItemIdMeta,
+        mediaItemId.isAcceptableOrUnknown(
+          data['media_item_id']!,
+          _mediaItemIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('full_text')) {
+      context.handle(
+        _fullTextMeta,
+        fullText.isAcceptableOrUnknown(data['full_text']!, _fullTextMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fullTextMeta);
+    }
+    if (data.containsKey('engine')) {
+      context.handle(
+        _engineMeta,
+        engine.isAcceptableOrUnknown(data['engine']!, _engineMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_engineMeta);
+    }
+    if (data.containsKey('engine_version')) {
+      context.handle(
+        _engineVersionMeta,
+        engineVersion.isAcceptableOrUnknown(
+          data['engine_version']!,
+          _engineVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_engineVersionMeta);
+    }
+    if (data.containsKey('processed_at')) {
+      context.handle(
+        _processedAtMeta,
+        processedAt.isAcceptableOrUnknown(
+          data['processed_at']!,
+          _processedAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_processedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {mediaItemId};
+  @override
+  OcrResult map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return OcrResult(
+      mediaItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}media_item_id'],
+      )!,
+      fullText: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}full_text'],
+      )!,
+      engine: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}engine'],
+      )!,
+      engineVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}engine_version'],
+      )!,
+      processedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}processed_at'],
+      )!,
+    );
+  }
+
+  @override
+  $OcrResultsTable createAlias(String alias) {
+    return $OcrResultsTable(attachedDatabase, alias);
+  }
+}
+
+class OcrResult extends DataClass implements Insertable<OcrResult> {
+  final int mediaItemId;
+  final String fullText;
+  final String engine;
+  final String engineVersion;
+  final DateTime processedAt;
+  const OcrResult({
+    required this.mediaItemId,
+    required this.fullText,
+    required this.engine,
+    required this.engineVersion,
+    required this.processedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['media_item_id'] = Variable<int>(mediaItemId);
+    map['full_text'] = Variable<String>(fullText);
+    map['engine'] = Variable<String>(engine);
+    map['engine_version'] = Variable<String>(engineVersion);
+    map['processed_at'] = Variable<DateTime>(processedAt);
+    return map;
+  }
+
+  OcrResultsCompanion toCompanion(bool nullToAbsent) {
+    return OcrResultsCompanion(
+      mediaItemId: Value(mediaItemId),
+      fullText: Value(fullText),
+      engine: Value(engine),
+      engineVersion: Value(engineVersion),
+      processedAt: Value(processedAt),
+    );
+  }
+
+  factory OcrResult.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return OcrResult(
+      mediaItemId: serializer.fromJson<int>(json['mediaItemId']),
+      fullText: serializer.fromJson<String>(json['fullText']),
+      engine: serializer.fromJson<String>(json['engine']),
+      engineVersion: serializer.fromJson<String>(json['engineVersion']),
+      processedAt: serializer.fromJson<DateTime>(json['processedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'mediaItemId': serializer.toJson<int>(mediaItemId),
+      'fullText': serializer.toJson<String>(fullText),
+      'engine': serializer.toJson<String>(engine),
+      'engineVersion': serializer.toJson<String>(engineVersion),
+      'processedAt': serializer.toJson<DateTime>(processedAt),
+    };
+  }
+
+  OcrResult copyWith({
+    int? mediaItemId,
+    String? fullText,
+    String? engine,
+    String? engineVersion,
+    DateTime? processedAt,
+  }) => OcrResult(
+    mediaItemId: mediaItemId ?? this.mediaItemId,
+    fullText: fullText ?? this.fullText,
+    engine: engine ?? this.engine,
+    engineVersion: engineVersion ?? this.engineVersion,
+    processedAt: processedAt ?? this.processedAt,
+  );
+  OcrResult copyWithCompanion(OcrResultsCompanion data) {
+    return OcrResult(
+      mediaItemId: data.mediaItemId.present
+          ? data.mediaItemId.value
+          : this.mediaItemId,
+      fullText: data.fullText.present ? data.fullText.value : this.fullText,
+      engine: data.engine.present ? data.engine.value : this.engine,
+      engineVersion: data.engineVersion.present
+          ? data.engineVersion.value
+          : this.engineVersion,
+      processedAt: data.processedAt.present
+          ? data.processedAt.value
+          : this.processedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OcrResult(')
+          ..write('mediaItemId: $mediaItemId, ')
+          ..write('fullText: $fullText, ')
+          ..write('engine: $engine, ')
+          ..write('engineVersion: $engineVersion, ')
+          ..write('processedAt: $processedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(mediaItemId, fullText, engine, engineVersion, processedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is OcrResult &&
+          other.mediaItemId == this.mediaItemId &&
+          other.fullText == this.fullText &&
+          other.engine == this.engine &&
+          other.engineVersion == this.engineVersion &&
+          other.processedAt == this.processedAt);
+}
+
+class OcrResultsCompanion extends UpdateCompanion<OcrResult> {
+  final Value<int> mediaItemId;
+  final Value<String> fullText;
+  final Value<String> engine;
+  final Value<String> engineVersion;
+  final Value<DateTime> processedAt;
+  const OcrResultsCompanion({
+    this.mediaItemId = const Value.absent(),
+    this.fullText = const Value.absent(),
+    this.engine = const Value.absent(),
+    this.engineVersion = const Value.absent(),
+    this.processedAt = const Value.absent(),
+  });
+  OcrResultsCompanion.insert({
+    this.mediaItemId = const Value.absent(),
+    required String fullText,
+    required String engine,
+    required String engineVersion,
+    required DateTime processedAt,
+  }) : fullText = Value(fullText),
+       engine = Value(engine),
+       engineVersion = Value(engineVersion),
+       processedAt = Value(processedAt);
+  static Insertable<OcrResult> custom({
+    Expression<int>? mediaItemId,
+    Expression<String>? fullText,
+    Expression<String>? engine,
+    Expression<String>? engineVersion,
+    Expression<DateTime>? processedAt,
+  }) {
+    return RawValuesInsertable({
+      if (mediaItemId != null) 'media_item_id': mediaItemId,
+      if (fullText != null) 'full_text': fullText,
+      if (engine != null) 'engine': engine,
+      if (engineVersion != null) 'engine_version': engineVersion,
+      if (processedAt != null) 'processed_at': processedAt,
+    });
+  }
+
+  OcrResultsCompanion copyWith({
+    Value<int>? mediaItemId,
+    Value<String>? fullText,
+    Value<String>? engine,
+    Value<String>? engineVersion,
+    Value<DateTime>? processedAt,
+  }) {
+    return OcrResultsCompanion(
+      mediaItemId: mediaItemId ?? this.mediaItemId,
+      fullText: fullText ?? this.fullText,
+      engine: engine ?? this.engine,
+      engineVersion: engineVersion ?? this.engineVersion,
+      processedAt: processedAt ?? this.processedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (mediaItemId.present) {
+      map['media_item_id'] = Variable<int>(mediaItemId.value);
+    }
+    if (fullText.present) {
+      map['full_text'] = Variable<String>(fullText.value);
+    }
+    if (engine.present) {
+      map['engine'] = Variable<String>(engine.value);
+    }
+    if (engineVersion.present) {
+      map['engine_version'] = Variable<String>(engineVersion.value);
+    }
+    if (processedAt.present) {
+      map['processed_at'] = Variable<DateTime>(processedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('OcrResultsCompanion(')
+          ..write('mediaItemId: $mediaItemId, ')
+          ..write('fullText: $fullText, ')
+          ..write('engine: $engine, ')
+          ..write('engineVersion: $engineVersion, ')
+          ..write('processedAt: $processedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ContextoDatabase extends GeneratedDatabase {
   _$ContextoDatabase(QueryExecutor e) : super(e);
   $ContextoDatabaseManager get managers => $ContextoDatabaseManager(this);
   late final $MediaItemsTable mediaItems = $MediaItemsTable(this);
+  late final $OcrResultsTable ocrResults = $OcrResultsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [mediaItems];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [mediaItems, ocrResults];
+  @override
+  StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'media_items',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('ocr_results', kind: UpdateKind.delete)],
+    ),
+  ]);
 }
 
 typedef $$MediaItemsTableCreateCompanionBuilder =
@@ -552,6 +933,29 @@ typedef $$MediaItemsTableUpdateCompanionBuilder =
       Value<String> sourceMode,
       Value<String> status,
     });
+
+final class $$MediaItemsTableReferences
+    extends BaseReferences<_$ContextoDatabase, $MediaItemsTable, MediaItem> {
+  $$MediaItemsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$OcrResultsTable, List<OcrResult>>
+  _ocrResultsRefsTable(_$ContextoDatabase db) => MultiTypedResultKey.fromTable(
+    db.ocrResults,
+    aliasName: 'media_items__id__ocr_results__media_item_id',
+  );
+
+  $$OcrResultsTableProcessedTableManager get ocrResultsRefs {
+    final manager = $$OcrResultsTableTableManager(
+      $_db,
+      $_db.ocrResults,
+    ).filter((f) => f.mediaItemId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_ocrResultsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
 
 class $$MediaItemsTableFilterComposer
     extends Composer<_$ContextoDatabase, $MediaItemsTable> {
@@ -601,6 +1005,31 @@ class $$MediaItemsTableFilterComposer
     column: $table.status,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> ocrResultsRefs(
+    Expression<bool> Function($$OcrResultsTableFilterComposer f) f,
+  ) {
+    final $$OcrResultsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.ocrResults,
+      getReferencedColumn: (t) => t.mediaItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$OcrResultsTableFilterComposer(
+            $db: $db,
+            $table: $db.ocrResults,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$MediaItemsTableOrderingComposer
@@ -693,6 +1122,31 @@ class $$MediaItemsTableAnnotationComposer
 
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
+
+  Expression<T> ocrResultsRefs<T extends Object>(
+    Expression<T> Function($$OcrResultsTableAnnotationComposer a) f,
+  ) {
+    final $$OcrResultsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.ocrResults,
+      getReferencedColumn: (t) => t.mediaItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$OcrResultsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.ocrResults,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$MediaItemsTableTableManager
@@ -706,12 +1160,9 @@ class $$MediaItemsTableTableManager
           $$MediaItemsTableAnnotationComposer,
           $$MediaItemsTableCreateCompanionBuilder,
           $$MediaItemsTableUpdateCompanionBuilder,
-          (
-            MediaItem,
-            BaseReferences<_$ContextoDatabase, $MediaItemsTable, MediaItem>,
-          ),
+          (MediaItem, $$MediaItemsTableReferences),
           MediaItem,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool ocrResultsRefs})
         > {
   $$MediaItemsTableTableManager(_$ContextoDatabase db, $MediaItemsTable table)
     : super(
@@ -765,9 +1216,45 @@ class $$MediaItemsTableTableManager
                 status: status,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$MediaItemsTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({ocrResultsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (ocrResultsRefs) db.ocrResults],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (ocrResultsRefs)
+                    await $_getPrefetchedData<
+                      MediaItem,
+                      $MediaItemsTable,
+                      OcrResult
+                    >(
+                      currentTable: table,
+                      referencedTable: $$MediaItemsTableReferences
+                          ._ocrResultsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$MediaItemsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).ocrResultsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where(
+                            (e) => e.mediaItemId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -782,12 +1269,324 @@ typedef $$MediaItemsTableProcessedTableManager =
       $$MediaItemsTableAnnotationComposer,
       $$MediaItemsTableCreateCompanionBuilder,
       $$MediaItemsTableUpdateCompanionBuilder,
-      (
-        MediaItem,
-        BaseReferences<_$ContextoDatabase, $MediaItemsTable, MediaItem>,
-      ),
+      (MediaItem, $$MediaItemsTableReferences),
       MediaItem,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool ocrResultsRefs})
+    >;
+typedef $$OcrResultsTableCreateCompanionBuilder =
+    OcrResultsCompanion Function({
+      Value<int> mediaItemId,
+      required String fullText,
+      required String engine,
+      required String engineVersion,
+      required DateTime processedAt,
+    });
+typedef $$OcrResultsTableUpdateCompanionBuilder =
+    OcrResultsCompanion Function({
+      Value<int> mediaItemId,
+      Value<String> fullText,
+      Value<String> engine,
+      Value<String> engineVersion,
+      Value<DateTime> processedAt,
+    });
+
+final class $$OcrResultsTableReferences
+    extends BaseReferences<_$ContextoDatabase, $OcrResultsTable, OcrResult> {
+  $$OcrResultsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $MediaItemsTable _mediaItemIdTable(_$ContextoDatabase db) =>
+      db.mediaItems.createAlias('ocr_results__media_item_id__media_items__id');
+
+  $$MediaItemsTableProcessedTableManager get mediaItemId {
+    final $_column = $_itemColumn<int>('media_item_id')!;
+
+    final manager = $$MediaItemsTableTableManager(
+      $_db,
+      $_db.mediaItems,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_mediaItemIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$OcrResultsTableFilterComposer
+    extends Composer<_$ContextoDatabase, $OcrResultsTable> {
+  $$OcrResultsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get fullText => $composableBuilder(
+    column: $table.fullText,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get engine => $composableBuilder(
+    column: $table.engine,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get processedAt => $composableBuilder(
+    column: $table.processedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$MediaItemsTableFilterComposer get mediaItemId {
+    final $$MediaItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$OcrResultsTableOrderingComposer
+    extends Composer<_$ContextoDatabase, $OcrResultsTable> {
+  $$OcrResultsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get fullText => $composableBuilder(
+    column: $table.fullText,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get engine => $composableBuilder(
+    column: $table.engine,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get processedAt => $composableBuilder(
+    column: $table.processedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$MediaItemsTableOrderingComposer get mediaItemId {
+    final $$MediaItemsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableOrderingComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$OcrResultsTableAnnotationComposer
+    extends Composer<_$ContextoDatabase, $OcrResultsTable> {
+  $$OcrResultsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get fullText =>
+      $composableBuilder(column: $table.fullText, builder: (column) => column);
+
+  GeneratedColumn<String> get engine =>
+      $composableBuilder(column: $table.engine, builder: (column) => column);
+
+  GeneratedColumn<String> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get processedAt => $composableBuilder(
+    column: $table.processedAt,
+    builder: (column) => column,
+  );
+
+  $$MediaItemsTableAnnotationComposer get mediaItemId {
+    final $$MediaItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$OcrResultsTableTableManager
+    extends
+        RootTableManager<
+          _$ContextoDatabase,
+          $OcrResultsTable,
+          OcrResult,
+          $$OcrResultsTableFilterComposer,
+          $$OcrResultsTableOrderingComposer,
+          $$OcrResultsTableAnnotationComposer,
+          $$OcrResultsTableCreateCompanionBuilder,
+          $$OcrResultsTableUpdateCompanionBuilder,
+          (OcrResult, $$OcrResultsTableReferences),
+          OcrResult,
+          PrefetchHooks Function({bool mediaItemId})
+        > {
+  $$OcrResultsTableTableManager(_$ContextoDatabase db, $OcrResultsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$OcrResultsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$OcrResultsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$OcrResultsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> mediaItemId = const Value.absent(),
+                Value<String> fullText = const Value.absent(),
+                Value<String> engine = const Value.absent(),
+                Value<String> engineVersion = const Value.absent(),
+                Value<DateTime> processedAt = const Value.absent(),
+              }) => OcrResultsCompanion(
+                mediaItemId: mediaItemId,
+                fullText: fullText,
+                engine: engine,
+                engineVersion: engineVersion,
+                processedAt: processedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> mediaItemId = const Value.absent(),
+                required String fullText,
+                required String engine,
+                required String engineVersion,
+                required DateTime processedAt,
+              }) => OcrResultsCompanion.insert(
+                mediaItemId: mediaItemId,
+                fullText: fullText,
+                engine: engine,
+                engineVersion: engineVersion,
+                processedAt: processedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$OcrResultsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({mediaItemId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (mediaItemId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.mediaItemId,
+                                referencedTable: $$OcrResultsTableReferences
+                                    ._mediaItemIdTable(db),
+                                referencedColumn: $$OcrResultsTableReferences
+                                    ._mediaItemIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$OcrResultsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ContextoDatabase,
+      $OcrResultsTable,
+      OcrResult,
+      $$OcrResultsTableFilterComposer,
+      $$OcrResultsTableOrderingComposer,
+      $$OcrResultsTableAnnotationComposer,
+      $$OcrResultsTableCreateCompanionBuilder,
+      $$OcrResultsTableUpdateCompanionBuilder,
+      (OcrResult, $$OcrResultsTableReferences),
+      OcrResult,
+      PrefetchHooks Function({bool mediaItemId})
     >;
 
 class $ContextoDatabaseManager {
@@ -795,4 +1594,6 @@ class $ContextoDatabaseManager {
   $ContextoDatabaseManager(this._db);
   $$MediaItemsTableTableManager get mediaItems =>
       $$MediaItemsTableTableManager(_db, _db.mediaItems);
+  $$OcrResultsTableTableManager get ocrResults =>
+      $$OcrResultsTableTableManager(_db, _db.ocrResults);
 }
