@@ -7,6 +7,8 @@ import 'package:contexto/core/media/screenshot_picker.dart';
 import 'package:contexto/core/theme/app_theme.dart';
 import 'package:contexto/core/text/search_snippet_builder.dart';
 import 'package:contexto/core/text/text_normalizer.dart';
+import 'package:contexto/features/categories/data/category_repository.dart';
+import 'package:contexto/features/categories/domain/category.dart';
 import 'package:contexto/features/library/data/media_item_repository.dart';
 import 'package:contexto/features/library/domain/media_item.dart';
 import 'package:contexto/features/library/domain/selected_screenshot.dart';
@@ -944,6 +946,127 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Processamento local'), findsOneWidget);
   });
+
+  testWidgets('bloco Categorias abre tela com estado vazio', (tester) async {
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
+    await tester.pump();
+
+    expect(find.text('0 categorias'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Categorias'), findsOneWidget);
+    expect(find.text('Nenhuma categoria criada.'), findsOneWidget);
+    expect(find.text('Nova categoria'), findsOneWidget);
+  });
+
+  testWidgets('criar categoria atualiza lista e contador da Home', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('new-category-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('category-name-field')),
+      'Trabalho',
+    );
+    await tester.tap(find.byKey(const Key('save-category-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Trabalho'), findsOneWidget);
+    expect(find.text('0 screenshots'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('1 categoria'), findsOneWidget);
+  });
+
+  testWidgets('nome duplicado e nome em branco mostram erros legíveis', (
+    tester,
+  ) async {
+    final categories = FakeCategoryRepository();
+    await categories.createCategory('Carrêira');
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('new-category-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), ' carreira ');
+    await tester.tap(find.byKey(const Key('save-category-button')));
+    await tester.pump();
+    expect(find.text('Essa categoria já existe.'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '   ');
+    await tester.tap(find.byKey(const Key('save-category-button')));
+    await tester.pump();
+    expect(find.text('Informe um nome para a categoria.'), findsOneWidget);
+  });
+
+  testWidgets('detalhes associam múltiplas categorias e permitem desmarcar', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'categorias.png');
+    final media = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final categories = FakeCategoryRepository();
+    final first = await categories.createCategory('Trabalho');
+    final second = await categories.createCategory('Estudos');
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: media,
+        categoryRepository: categories,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    expect(find.text('Nenhuma categoria atribuída.'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('edit-categories-button')));
+    await tester.tap(find.byKey(const Key('edit-categories-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('category-checkbox-${first.id}')));
+    await tester.tap(find.byKey(ValueKey('category-checkbox-${second.id}')));
+    await tester.tap(find.byKey(const Key('save-category-selection')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Trabalho'), findsOneWidget);
+    expect(find.text('Estudos'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('edit-categories-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('category-checkbox-${first.id}')));
+    await tester.tap(find.byKey(const Key('save-category-selection')));
+    await tester.pumpAndSettle();
+    expect(find.text('Trabalho'), findsNothing);
+    expect(find.text('Estudos'), findsOneWidget);
+    expect(media.itemCount, 1);
+  });
+
+  testWidgets('categorias e nomes longos não causam overflow em 320 pixels', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final categories = FakeCategoryRepository();
+    await categories.createCategory('Categoria com um nome bastante comprido');
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.text('Categoria com um nome bastante comprido'),
+      findsOneWidget,
+    );
+  });
 }
 
 Widget buildTestApp(
@@ -951,6 +1074,7 @@ Widget buildTestApp(
   FakeMediaItemRepository? repository,
   FakeOcrRepository? ocrRepository,
   FakeOcrQueue? ocrQueue,
+  FakeCategoryRepository? categoryRepository,
 }) {
   final resolvedOcrRepository = ocrRepository ?? FakeOcrRepository();
   return ContextoApp(
@@ -958,7 +1082,66 @@ Widget buildTestApp(
     mediaRepository: repository ?? FakeMediaItemRepository(),
     ocrRepository: resolvedOcrRepository,
     ocrQueue: ocrQueue ?? FakeOcrQueue(resolvedOcrRepository),
+    categoryRepository: categoryRepository ?? FakeCategoryRepository(),
   );
+}
+
+class FakeCategoryRepository implements CategoryRepository {
+  FakeCategoryRepository({List<Category> categories = const []})
+    : _categories = [...categories];
+
+  final List<Category> _categories;
+  final Map<int, Set<int>> _associations = {};
+
+  @override
+  Future<Category> createCategory(String name) async {
+    final visible = name.trim();
+    const normalizer = TextNormalizer();
+    final normalized = normalizer.normalize(visible);
+    if (normalized.isEmpty) {
+      throw const CategoryValidationException(CategoryValidationError.empty);
+    }
+    if (visible.length > 40) {
+      throw const CategoryValidationException(CategoryValidationError.tooLong);
+    }
+    if (_categories.any((category) => category.normalizedName == normalized)) {
+      throw const CategoryValidationException(
+        CategoryValidationError.duplicate,
+      );
+    }
+    final category = Category(
+      id: _categories.length + 1,
+      name: visible,
+      normalizedName: normalized,
+      createdAt: DateTime(2025),
+    );
+    _categories.add(category);
+    return category;
+  }
+
+  @override
+  Future<List<CategorySummary>> loadCategories() async {
+    return [
+      for (final category in _categories)
+        CategorySummary(
+          category: category,
+          mediaCount: _associations.values
+              .where((ids) => ids.contains(category.id))
+              .length,
+        ),
+    ];
+  }
+
+  @override
+  Future<List<Category>> loadForMedia(int mediaItemId) async {
+    final ids = _associations[mediaItemId] ?? const <int>{};
+    return _categories.where((category) => ids.contains(category.id)).toList();
+  }
+
+  @override
+  Future<void> replaceForMedia(int mediaItemId, Set<int> categoryIds) async {
+    _associations[mediaItemId] = {...categoryIds};
+  }
 }
 
 Future<void> openFirstScreenshot(WidgetTester tester) async {
