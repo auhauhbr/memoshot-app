@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
@@ -6,18 +7,22 @@ import '../data/media_item_repository.dart';
 import '../domain/media_item.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../../ocr/domain/ocr_result.dart';
+import '../../processing/data/ocr_queue_processor.dart';
+import '../../processing/domain/processing_job.dart';
 
 class ScreenshotDetailPage extends StatefulWidget {
   const ScreenshotDetailPage({
     required this.mediaItem,
     required this.mediaRepository,
     required this.ocrRepository,
+    required this.ocrQueue,
     super.key,
   });
 
   final MediaItem mediaItem;
   final MediaItemRepository mediaRepository;
   final OcrRepository ocrRepository;
+  final OcrQueue ocrQueue;
 
   @override
   State<ScreenshotDetailPage> createState() => _ScreenshotDetailPageState();
@@ -26,7 +31,8 @@ class ScreenshotDetailPage extends StatefulWidget {
 class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
   bool _isRemoving = false;
   bool _isLoadingOcr = true;
-  bool _isProcessingOcr = false;
+  OcrItemState _ocrState = OcrItemState.notScheduled;
+  StreamSubscription<int>? _queueSubscription;
   String? _errorMessage;
   String? _ocrErrorMessage;
   OcrResult? _ocrResult;
@@ -36,15 +42,30 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
   void initState() {
     super.initState();
     _fileExists = File(widget.mediaItem.privatePath).existsSync();
+    _queueSubscription = widget.ocrQueue.changes.listen((mediaItemId) {
+      if (mediaItemId == widget.mediaItem.id) {
+        _refreshOcrState();
+      }
+    });
     _loadOcrResult();
+  }
+
+  @override
+  void dispose() {
+    _queueSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadOcrResult() async {
     try {
-      final result = await widget.ocrRepository.loadFor(widget.mediaItem.id);
+      final values = await Future.wait<Object?>([
+        widget.ocrRepository.loadFor(widget.mediaItem.id),
+        widget.ocrQueue.loadState(widget.mediaItem.id),
+      ]);
       if (mounted) {
         setState(() {
-          _ocrResult = result;
+          _ocrResult = values[0] as OcrResult?;
+          _ocrState = values[1]! as OcrItemState;
         });
       }
     } catch (_) {
@@ -63,30 +84,49 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
   }
 
   Future<void> _processOcr() async {
-    if (!_fileExists || _isProcessingOcr) {
+    if (!_fileExists || _ocrIsActive) {
       return;
     }
     setState(() {
-      _isProcessingOcr = true;
+      _ocrState = OcrItemState.pending;
       _ocrErrorMessage = null;
     });
     try {
-      final result = await widget.ocrRepository.process(widget.mediaItem);
-      if (mounted) {
-        setState(() {
-          _ocrResult = result;
-        });
-      }
+      await widget.ocrQueue.retry(widget.mediaItem);
+      await _refreshOcrState();
     } catch (_) {
       if (mounted) {
         setState(() {
           _ocrErrorMessage = 'Não foi possível extrair o texto da imagem.';
         });
       }
-    } finally {
+    }
+  }
+
+  bool get _ocrIsActive =>
+      _ocrState == OcrItemState.pending || _ocrState == OcrItemState.processing;
+
+  Future<void> _refreshOcrState() async {
+    try {
+      final state = await widget.ocrQueue.loadState(widget.mediaItem.id);
+      OcrResult? result = _ocrResult;
+      if (state == OcrItemState.completedWithText ||
+          state == OcrItemState.completedWithoutText) {
+        result = await widget.ocrRepository.loadFor(widget.mediaItem.id);
+      }
       if (mounted) {
         setState(() {
-          _isProcessingOcr = false;
+          _ocrState = state;
+          _ocrResult = result;
+          _ocrErrorMessage = state == OcrItemState.failed
+              ? 'Não foi possível extrair o texto da imagem.'
+              : null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _ocrErrorMessage = 'Não foi possível carregar o estado do OCR.';
         });
       }
     }
@@ -184,7 +224,7 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                   _OcrSection(
                     result: _ocrResult,
                     isLoading: _isLoadingOcr,
-                    isProcessing: _isProcessingOcr,
+                    state: _ocrState,
                     fileAvailable: _fileExists,
                     errorMessage: _ocrErrorMessage,
                     onProcess: _processOcr,
@@ -221,9 +261,7 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                   ],
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: _isRemoving || _isProcessingOcr
-                        ? null
-                        : _requestRemoval,
+                    onPressed: _isRemoving ? null : _requestRemoval,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: colors.error,
                       side: BorderSide(color: colors.error),
@@ -303,7 +341,7 @@ class _OcrSection extends StatelessWidget {
   const _OcrSection({
     required this.result,
     required this.isLoading,
-    required this.isProcessing,
+    required this.state,
     required this.fileAvailable,
     required this.errorMessage,
     required this.onProcess,
@@ -311,7 +349,7 @@ class _OcrSection extends StatelessWidget {
 
   final OcrResult? result;
   final bool isLoading;
-  final bool isProcessing;
+  final OcrItemState state;
   final bool fileAvailable;
   final String? errorMessage;
   final VoidCallback onProcess;
@@ -320,6 +358,8 @@ class _OcrSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final isProcessing =
+        state == OcrItemState.pending || state == OcrItemState.processing;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -339,6 +379,10 @@ class _OcrSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
+          if (state != OcrItemState.notScheduled) ...[
+            _DetailOcrStatus(state: state),
+            const SizedBox(height: 8),
+          ],
           if (isLoading)
             const Align(
               alignment: Alignment.centerLeft,
@@ -366,9 +410,7 @@ class _OcrSection extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.document_scanner_outlined, size: 19),
-                label: Text(
-                  isProcessing ? 'Extraindo texto...' : 'Extrair texto',
-                ),
+                label: Text(_actionLabel(result: null)),
               ),
             ],
           ] else ...[
@@ -397,11 +439,7 @@ class _OcrSection extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.refresh, size: 18),
-                  label: Text(
-                    isProcessing
-                        ? 'Processando novamente...'
-                        : 'Processar novamente',
-                  ),
+                  label: Text(_actionLabel(result: result)),
                 ),
               ),
             ],
@@ -415,6 +453,71 @@ class _OcrSection extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+
+  String _actionLabel({required OcrResult? result}) {
+    if (state == OcrItemState.pending) {
+      return 'Aguardando...';
+    }
+    if (state == OcrItemState.processing) {
+      return result == null ? 'Extraindo texto...' : 'Processando novamente...';
+    }
+    if (state == OcrItemState.failed) {
+      return 'Tentar novamente';
+    }
+    return result == null ? 'Extrair texto' : 'Processar novamente';
+  }
+}
+
+class _DetailOcrStatus extends StatelessWidget {
+  const _DetailOcrStatus({required this.state});
+
+  final OcrItemState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final (label, icon) = switch (state) {
+      OcrItemState.pending => ('Aguardando', Icons.schedule_outlined),
+      OcrItemState.processing => ('Processando', null),
+      OcrItemState.completedWithText => (
+        'Texto extraído',
+        Icons.check_circle_outline,
+      ),
+      OcrItemState.completedWithoutText => (
+        'Sem texto',
+        Icons.check_circle_outline,
+      ),
+      OcrItemState.failed => ('Falha', Icons.error_outline),
+      OcrItemState.notScheduled => ('', null),
+    };
+    return Row(
+      children: [
+        if (state == OcrItemState.processing)
+          const SizedBox.square(
+            dimension: 14,
+            child: CircularProgressIndicator(strokeWidth: 1.7),
+          )
+        else
+          Icon(
+            icon,
+            size: 17,
+            color: state == OcrItemState.failed
+                ? colors.error
+                : colors.secondary,
+          ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: state == OcrItemState.failed
+                ? colors.error
+                : colors.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

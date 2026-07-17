@@ -5,6 +5,7 @@ import '../core/theme/app_theme.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/library/data/media_item_repository.dart';
 import '../features/ocr/data/ocr_repository.dart';
+import '../features/processing/data/ocr_queue_processor.dart';
 
 class ContextoApp extends StatelessWidget {
   const ContextoApp({
@@ -12,11 +13,13 @@ class ContextoApp extends StatelessWidget {
     this.screenshotPicker,
     this.mediaRepository,
     this.ocrRepository,
+    this.ocrQueue,
   });
 
   final ScreenshotPicker? screenshotPicker;
   final MediaItemRepository? mediaRepository;
   final OcrRepository? ocrRepository;
+  final OcrQueue? ocrQueue;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +32,7 @@ class ContextoApp extends StatelessWidget {
         screenshotPicker: screenshotPicker,
         mediaRepository: mediaRepository,
         ocrRepository: ocrRepository,
+        ocrQueue: ocrQueue,
       ),
     );
   }

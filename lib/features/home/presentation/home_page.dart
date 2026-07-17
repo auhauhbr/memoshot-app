@@ -15,6 +15,10 @@ import '../../library/domain/selected_screenshot.dart';
 import '../../library/presentation/screenshot_detail_page.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../../ocr/data/ocr_result_store.dart';
+import '../../processing/data/ocr_job_scheduler.dart';
+import '../../processing/data/ocr_queue_processor.dart';
+import '../../processing/data/processing_job_store.dart';
+import '../../processing/domain/processing_job.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -22,11 +26,13 @@ class HomePage extends StatefulWidget {
     this.screenshotPicker,
     this.mediaRepository,
     this.ocrRepository,
+    this.ocrQueue,
   });
 
   final ScreenshotPicker? screenshotPicker;
   final MediaItemRepository? mediaRepository;
   final OcrRepository? ocrRepository;
+  final OcrQueue? ocrQueue;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -36,9 +42,12 @@ class _HomePageState extends State<HomePage> {
   late final ScreenshotPicker _screenshotPicker;
   late final MediaItemRepository _mediaRepository;
   late final OcrRepository _ocrRepository;
+  late final OcrQueue _ocrQueue;
   late final bool _ownsMediaRepository;
-  ContextoDatabase? _ownedOcrDatabase;
+  ContextoDatabase? _ownedAuxiliaryDatabase;
+  StreamSubscription<int>? _queueSubscription;
   final List<MediaItem> _mediaItems = [];
+  final Map<int, OcrItemState> _ocrStates = {};
   bool _isLoading = true;
   String? _errorMessage;
   String? _duplicateMessage;
@@ -50,40 +59,62 @@ class _HomePageState extends State<HomePage> {
         widget.screenshotPicker ?? ImagePickerScreenshotPicker();
     _ownsMediaRepository = widget.mediaRepository == null;
     final database =
-        widget.mediaRepository == null || widget.ocrRepository == null
+        widget.mediaRepository == null ||
+            widget.ocrRepository == null ||
+            widget.ocrQueue == null
         ? ContextoDatabase()
         : null;
+    final jobStore = database == null
+        ? null
+        : DriftProcessingJobStore(database);
+    final resultStore = database == null ? null : DriftOcrResultStore(database);
     _mediaRepository =
         widget.mediaRepository ??
         LocalMediaItemRepository(
           store: DriftMediaItemStore(database!),
           storage: PrivateScreenshotStorage(),
+          ocrJobScheduler: LocalOcrJobScheduler(jobStore!),
         );
     _ocrRepository =
         widget.ocrRepository ??
         LocalOcrRepository(
-          store: DriftOcrResultStore(database!),
+          store: resultStore!,
+          recognitionService: const MlKitTextRecognitionService(),
+        );
+    _ocrQueue =
+        widget.ocrQueue ??
+        LocalOcrQueueProcessor(
+          jobStore: jobStore!,
+          resultStore: resultStore!,
           recognitionService: const MlKitTextRecognitionService(),
         );
     if (!_ownsMediaRepository) {
-      _ownedOcrDatabase = database;
+      _ownedAuxiliaryDatabase = database;
     }
+    _queueSubscription = _ocrQueue.changes.listen(_refreshOcrState);
     _initialize();
   }
 
   @override
   void dispose() {
-    if (_ownsMediaRepository) {
-      unawaited(_mediaRepository.close());
-    } else if (_ownedOcrDatabase != null) {
-      unawaited(_ownedOcrDatabase!.close());
-    }
+    unawaited(_disposeResources());
     super.dispose();
+  }
+
+  Future<void> _disposeResources() async {
+    await _queueSubscription?.cancel();
+    await _ocrQueue.close();
+    if (_ownsMediaRepository) {
+      await _mediaRepository.close();
+    } else if (_ownedAuxiliaryDatabase != null) {
+      await _ownedAuxiliaryDatabase!.close();
+    }
   }
 
   Future<void> _initialize() async {
     try {
       await _reloadItems();
+      unawaited(_ocrQueue.recoverAndStart());
       final lost = await _screenshotPicker.retrieveLostScreenshots();
       if (lost.isNotEmpty) {
         await _importSelected(lost);
@@ -134,6 +165,10 @@ class _HomePageState extends State<HomePage> {
     }
 
     final result = await _mediaRepository.importScreenshots(selected);
+    for (final item in result.importedItems) {
+      await _refreshOcrState(item.id);
+    }
+    _ocrQueue.signal();
     if (!mounted) {
       return;
     }
@@ -155,12 +190,32 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _reloadItems() async {
     final items = await _mediaRepository.loadAvailableItems();
+    final states = <int, OcrItemState>{};
+    for (final item in items) {
+      states[item.id] = await _ocrQueue.loadState(item.id);
+    }
     if (mounted) {
       setState(() {
         _mediaItems
           ..clear()
           ..addAll(items);
+        _ocrStates
+          ..clear()
+          ..addAll(states);
       });
+    }
+  }
+
+  Future<void> _refreshOcrState(int mediaItemId) async {
+    try {
+      final state = await _ocrQueue.loadState(mediaItemId);
+      if (mounted) {
+        setState(() {
+          _ocrStates[mediaItemId] = state;
+        });
+      }
+    } catch (_) {
+      // Uma falha de leitura do estado não bloqueia a biblioteca.
     }
   }
 
@@ -179,11 +234,14 @@ class _HomePageState extends State<HomePage> {
           mediaItem: item,
           mediaRepository: _mediaRepository,
           ocrRepository: _ocrRepository,
+          ocrQueue: _ocrQueue,
         ),
       ),
     );
     if (removed == true) {
       await _reloadItemsIgnoringErrors();
+    } else {
+      await _refreshOcrState(item.id);
     }
   }
 
@@ -257,6 +315,7 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 12),
                     _LibraryGrid(
                       mediaItems: _mediaItems,
+                      ocrStates: _ocrStates,
                       onItemTap: _openDetails,
                     ),
                   ],
@@ -502,9 +561,14 @@ class _ImportCard extends StatelessWidget {
 }
 
 class _LibraryGrid extends StatelessWidget {
-  const _LibraryGrid({required this.mediaItems, required this.onItemTap});
+  const _LibraryGrid({
+    required this.mediaItems,
+    required this.ocrStates,
+    required this.onItemTap,
+  });
 
   final List<MediaItem> mediaItems;
+  final Map<int, OcrItemState> ocrStates;
   final ValueChanged<MediaItem> onItemTap;
 
   @override
@@ -539,6 +603,7 @@ class _LibraryGrid extends StatelessWidget {
             crossAxisCount: 3,
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
+            childAspectRatio: 0.82,
           ),
           itemBuilder: (context, index) {
             final item = mediaItems[index];
@@ -552,36 +617,46 @@ class _LibraryGrid extends StatelessWidget {
               child: InkWell(
                 key: ValueKey('screenshot-tile-${item.id}'),
                 onTap: () => onItemTap(item),
-                child: Stack(
-                  fit: StackFit.expand,
+                child: Column(
                   children: [
-                    Image.file(
-                      File(item.privatePath),
-                      key: ValueKey(item.id),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => ColoredBox(
-                        color: colors.surfaceContainerLow,
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: colors.onSurfaceVariant,
-                        ),
+                    Expanded(
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.file(
+                            File(item.privatePath),
+                            key: ValueKey(item.id),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                ColoredBox(
+                                  color: colors.surfaceContainerLow,
+                                  child: Icon(
+                                    Icons.broken_image_outlined,
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                                ),
+                          ),
+                          Positioned(
+                            top: 5,
+                            right: 5,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: colors.surface.withValues(alpha: 0.88),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Icon(
+                                Icons.open_in_full,
+                                size: 14,
+                                color: colors.secondary,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Positioned(
-                      top: 5,
-                      right: 5,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: colors.surface.withValues(alpha: 0.88),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          Icons.open_in_full,
-                          size: 14,
-                          color: colors.secondary,
-                        ),
-                      ),
+                    _OcrStatusLabel(
+                      state: ocrStates[item.id] ?? OcrItemState.notScheduled,
                     ),
                   ],
                 ),
@@ -590,6 +665,65 @@ class _LibraryGrid extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _OcrStatusLabel extends StatelessWidget {
+  const _OcrStatusLabel({required this.state});
+
+  final OcrItemState state;
+
+  @override
+  Widget build(BuildContext context) {
+    if (state == OcrItemState.notScheduled) {
+      return const SizedBox(height: 24);
+    }
+    final colors = Theme.of(context).colorScheme;
+    final (label, icon) = switch (state) {
+      OcrItemState.pending => ('Aguardando', Icons.schedule_outlined),
+      OcrItemState.processing => ('Processando', null),
+      OcrItemState.completedWithText => (
+        'Texto extraído',
+        Icons.check_circle_outline,
+      ),
+      OcrItemState.completedWithoutText => (
+        'Sem texto',
+        Icons.check_circle_outline,
+      ),
+      OcrItemState.failed => ('Falha', Icons.error_outline),
+      OcrItemState.notScheduled => ('', null),
+    };
+    return SizedBox(
+      height: 24,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (state == OcrItemState.processing)
+              const SizedBox.square(
+                dimension: 11,
+                child: CircularProgressIndicator(strokeWidth: 1.5),
+              )
+            else
+              Icon(icon, size: 13, color: colors.secondary),
+            const SizedBox(width: 3),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: state == OcrItemState.failed
+                      ? colors.error
+                      : colors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

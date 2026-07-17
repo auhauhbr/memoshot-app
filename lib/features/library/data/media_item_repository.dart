@@ -4,6 +4,7 @@ import '../../../core/media/file_hash_calculator.dart';
 import '../../../core/media/screenshot_storage.dart';
 import '../domain/media_item.dart';
 import '../domain/selected_screenshot.dart';
+import '../../processing/data/ocr_job_scheduler.dart';
 import 'media_item_store.dart';
 
 class ImportResult {
@@ -31,13 +32,20 @@ class LocalMediaItemRepository implements MediaItemRepository {
     required MediaItemStore store,
     required ScreenshotStorage storage,
     FileHashCalculator hashCalculator = const Sha256FileHashCalculator(),
-  }) : this._(store, storage, hashCalculator);
+    OcrJobScheduler? ocrJobScheduler,
+  }) : this._(store, storage, hashCalculator, ocrJobScheduler);
 
-  LocalMediaItemRepository._(this._store, this._storage, this._hashCalculator);
+  LocalMediaItemRepository._(
+    this._store,
+    this._storage,
+    this._hashCalculator,
+    this._ocrJobScheduler,
+  );
 
   final MediaItemStore _store;
   final ScreenshotStorage _storage;
   final FileHashCalculator _hashCalculator;
+  final OcrJobScheduler? _ocrJobScheduler;
 
   @override
   Future<List<MediaItem>> loadAvailableItems() async {
@@ -124,18 +132,22 @@ class LocalMediaItemRepository implements MediaItemRepository {
           sourceMode: 'photoPicker',
           status: 'ready',
         );
-        imported.add(
-          MediaItem(
-            id: id,
-            privatePath: copy.privatePath,
-            internalName: copy.internalName,
-            mimeType: screenshot.mimeType,
-            mediaHash: hash,
-            importedAt: importedAt,
-            sourceMode: 'photoPicker',
-            status: 'ready',
-          ),
+        final item = MediaItem(
+          id: id,
+          privatePath: copy.privatePath,
+          internalName: copy.internalName,
+          mimeType: screenshot.mimeType,
+          mediaHash: hash,
+          importedAt: importedAt,
+          sourceMode: 'photoPicker',
+          status: 'ready',
         );
+        imported.add(item);
+        try {
+          await _ocrJobScheduler?.schedule(item.id);
+        } catch (_) {
+          // A importação permanece válida e o OCR manual continua disponível.
+        }
       } catch (_) {
         final duplicateCreatedConcurrently =
             await _findByHashIgnoringErrors(hash) != null;
