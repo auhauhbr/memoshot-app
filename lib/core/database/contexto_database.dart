@@ -67,14 +67,39 @@ class ProcessingJobs extends Table {
   ];
 }
 
-@DriftDatabase(tables: [MediaItems, OcrResults, ProcessingJobs])
+class Categories extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  TextColumn get name => text()();
+
+  TextColumn get normalizedName => text().unique()();
+
+  DateTimeColumn get createdAt => dateTime()();
+}
+
+class MediaCategories extends Table {
+  IntColumn get mediaItemId =>
+      integer().references(MediaItems, #id, onDelete: KeyAction.cascade)();
+
+  IntColumn get categoryId =>
+      integer().references(Categories, #id, onDelete: KeyAction.cascade)();
+
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {mediaItemId, categoryId};
+}
+
+@DriftDatabase(
+  tables: [MediaItems, OcrResults, ProcessingJobs, Categories, MediaCategories],
+)
 class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase() : super(_openConnection());
 
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -96,6 +121,10 @@ class ContextoDatabase extends _$ContextoDatabase {
       if (from >= 3 && from < 5) {
         await migrator.addColumn(ocrResults, ocrResults.normalizedText);
         await _backfillNormalizedOcrText();
+      }
+      if (from < 6) {
+        await migrator.createTable(categories);
+        await migrator.createTable(mediaCategories);
       }
     },
     beforeOpen: (details) async {
