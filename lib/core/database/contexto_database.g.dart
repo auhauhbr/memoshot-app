@@ -55,6 +55,17 @@ class $MediaItemsTable extends MediaItems
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _mediaHashMeta = const VerificationMeta(
+    'mediaHash',
+  );
+  @override
+  late final GeneratedColumn<String> mediaHash = GeneratedColumn<String>(
+    'media_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _importedAtMeta = const VerificationMeta(
     'importedAt',
   );
@@ -92,6 +103,7 @@ class $MediaItemsTable extends MediaItems
     privatePath,
     internalName,
     mimeType,
+    mediaHash,
     importedAt,
     sourceMode,
     status,
@@ -137,6 +149,12 @@ class $MediaItemsTable extends MediaItems
       context.handle(
         _mimeTypeMeta,
         mimeType.isAcceptableOrUnknown(data['mime_type']!, _mimeTypeMeta),
+      );
+    }
+    if (data.containsKey('media_hash')) {
+      context.handle(
+        _mediaHashMeta,
+        mediaHash.isAcceptableOrUnknown(data['media_hash']!, _mediaHashMeta),
       );
     }
     if (data.containsKey('imported_at')) {
@@ -188,6 +206,10 @@ class $MediaItemsTable extends MediaItems
         DriftSqlType.string,
         data['${effectivePrefix}mime_type'],
       ),
+      mediaHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}media_hash'],
+      ),
       importedAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}imported_at'],
@@ -214,6 +236,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
   final String privatePath;
   final String internalName;
   final String? mimeType;
+  final String? mediaHash;
   final DateTime importedAt;
   final String sourceMode;
   final String status;
@@ -222,6 +245,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     required this.privatePath,
     required this.internalName,
     this.mimeType,
+    this.mediaHash,
     required this.importedAt,
     required this.sourceMode,
     required this.status,
@@ -234,6 +258,9 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     map['internal_name'] = Variable<String>(internalName);
     if (!nullToAbsent || mimeType != null) {
       map['mime_type'] = Variable<String>(mimeType);
+    }
+    if (!nullToAbsent || mediaHash != null) {
+      map['media_hash'] = Variable<String>(mediaHash);
     }
     map['imported_at'] = Variable<DateTime>(importedAt);
     map['source_mode'] = Variable<String>(sourceMode);
@@ -249,6 +276,9 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       mimeType: mimeType == null && nullToAbsent
           ? const Value.absent()
           : Value(mimeType),
+      mediaHash: mediaHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mediaHash),
       importedAt: Value(importedAt),
       sourceMode: Value(sourceMode),
       status: Value(status),
@@ -265,6 +295,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       privatePath: serializer.fromJson<String>(json['privatePath']),
       internalName: serializer.fromJson<String>(json['internalName']),
       mimeType: serializer.fromJson<String?>(json['mimeType']),
+      mediaHash: serializer.fromJson<String?>(json['mediaHash']),
       importedAt: serializer.fromJson<DateTime>(json['importedAt']),
       sourceMode: serializer.fromJson<String>(json['sourceMode']),
       status: serializer.fromJson<String>(json['status']),
@@ -278,6 +309,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       'privatePath': serializer.toJson<String>(privatePath),
       'internalName': serializer.toJson<String>(internalName),
       'mimeType': serializer.toJson<String?>(mimeType),
+      'mediaHash': serializer.toJson<String?>(mediaHash),
       'importedAt': serializer.toJson<DateTime>(importedAt),
       'sourceMode': serializer.toJson<String>(sourceMode),
       'status': serializer.toJson<String>(status),
@@ -289,6 +321,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     String? privatePath,
     String? internalName,
     Value<String?> mimeType = const Value.absent(),
+    Value<String?> mediaHash = const Value.absent(),
     DateTime? importedAt,
     String? sourceMode,
     String? status,
@@ -297,6 +330,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     privatePath: privatePath ?? this.privatePath,
     internalName: internalName ?? this.internalName,
     mimeType: mimeType.present ? mimeType.value : this.mimeType,
+    mediaHash: mediaHash.present ? mediaHash.value : this.mediaHash,
     importedAt: importedAt ?? this.importedAt,
     sourceMode: sourceMode ?? this.sourceMode,
     status: status ?? this.status,
@@ -311,6 +345,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
           ? data.internalName.value
           : this.internalName,
       mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
+      mediaHash: data.mediaHash.present ? data.mediaHash.value : this.mediaHash,
       importedAt: data.importedAt.present
           ? data.importedAt.value
           : this.importedAt,
@@ -328,6 +363,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
           ..write('privatePath: $privatePath, ')
           ..write('internalName: $internalName, ')
           ..write('mimeType: $mimeType, ')
+          ..write('mediaHash: $mediaHash, ')
           ..write('importedAt: $importedAt, ')
           ..write('sourceMode: $sourceMode, ')
           ..write('status: $status')
@@ -341,6 +377,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     privatePath,
     internalName,
     mimeType,
+    mediaHash,
     importedAt,
     sourceMode,
     status,
@@ -353,6 +390,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
           other.privatePath == this.privatePath &&
           other.internalName == this.internalName &&
           other.mimeType == this.mimeType &&
+          other.mediaHash == this.mediaHash &&
           other.importedAt == this.importedAt &&
           other.sourceMode == this.sourceMode &&
           other.status == this.status);
@@ -363,6 +401,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
   final Value<String> privatePath;
   final Value<String> internalName;
   final Value<String?> mimeType;
+  final Value<String?> mediaHash;
   final Value<DateTime> importedAt;
   final Value<String> sourceMode;
   final Value<String> status;
@@ -371,6 +410,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     this.privatePath = const Value.absent(),
     this.internalName = const Value.absent(),
     this.mimeType = const Value.absent(),
+    this.mediaHash = const Value.absent(),
     this.importedAt = const Value.absent(),
     this.sourceMode = const Value.absent(),
     this.status = const Value.absent(),
@@ -380,6 +420,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     required String privatePath,
     required String internalName,
     this.mimeType = const Value.absent(),
+    this.mediaHash = const Value.absent(),
     required DateTime importedAt,
     required String sourceMode,
     required String status,
@@ -393,6 +434,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     Expression<String>? privatePath,
     Expression<String>? internalName,
     Expression<String>? mimeType,
+    Expression<String>? mediaHash,
     Expression<DateTime>? importedAt,
     Expression<String>? sourceMode,
     Expression<String>? status,
@@ -402,6 +444,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
       if (privatePath != null) 'private_path': privatePath,
       if (internalName != null) 'internal_name': internalName,
       if (mimeType != null) 'mime_type': mimeType,
+      if (mediaHash != null) 'media_hash': mediaHash,
       if (importedAt != null) 'imported_at': importedAt,
       if (sourceMode != null) 'source_mode': sourceMode,
       if (status != null) 'status': status,
@@ -413,6 +456,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     Value<String>? privatePath,
     Value<String>? internalName,
     Value<String?>? mimeType,
+    Value<String?>? mediaHash,
     Value<DateTime>? importedAt,
     Value<String>? sourceMode,
     Value<String>? status,
@@ -422,6 +466,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
       privatePath: privatePath ?? this.privatePath,
       internalName: internalName ?? this.internalName,
       mimeType: mimeType ?? this.mimeType,
+      mediaHash: mediaHash ?? this.mediaHash,
       importedAt: importedAt ?? this.importedAt,
       sourceMode: sourceMode ?? this.sourceMode,
       status: status ?? this.status,
@@ -443,6 +488,9 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     if (mimeType.present) {
       map['mime_type'] = Variable<String>(mimeType.value);
     }
+    if (mediaHash.present) {
+      map['media_hash'] = Variable<String>(mediaHash.value);
+    }
     if (importedAt.present) {
       map['imported_at'] = Variable<DateTime>(importedAt.value);
     }
@@ -462,6 +510,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
           ..write('privatePath: $privatePath, ')
           ..write('internalName: $internalName, ')
           ..write('mimeType: $mimeType, ')
+          ..write('mediaHash: $mediaHash, ')
           ..write('importedAt: $importedAt, ')
           ..write('sourceMode: $sourceMode, ')
           ..write('status: $status')
@@ -487,6 +536,7 @@ typedef $$MediaItemsTableCreateCompanionBuilder =
       required String privatePath,
       required String internalName,
       Value<String?> mimeType,
+      Value<String?> mediaHash,
       required DateTime importedAt,
       required String sourceMode,
       required String status,
@@ -497,6 +547,7 @@ typedef $$MediaItemsTableUpdateCompanionBuilder =
       Value<String> privatePath,
       Value<String> internalName,
       Value<String?> mimeType,
+      Value<String?> mediaHash,
       Value<DateTime> importedAt,
       Value<String> sourceMode,
       Value<String> status,
@@ -528,6 +579,11 @@ class $$MediaItemsTableFilterComposer
 
   ColumnFilters<String> get mimeType => $composableBuilder(
     column: $table.mimeType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mediaHash => $composableBuilder(
+    column: $table.mediaHash,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -576,6 +632,11 @@ class $$MediaItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get mediaHash => $composableBuilder(
+    column: $table.mediaHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get importedAt => $composableBuilder(
     column: $table.importedAt,
     builder: (column) => ColumnOrderings(column),
@@ -616,6 +677,9 @@ class $$MediaItemsTableAnnotationComposer
 
   GeneratedColumn<String> get mimeType =>
       $composableBuilder(column: $table.mimeType, builder: (column) => column);
+
+  GeneratedColumn<String> get mediaHash =>
+      $composableBuilder(column: $table.mediaHash, builder: (column) => column);
 
   GeneratedColumn<DateTime> get importedAt => $composableBuilder(
     column: $table.importedAt,
@@ -666,6 +730,7 @@ class $$MediaItemsTableTableManager
                 Value<String> privatePath = const Value.absent(),
                 Value<String> internalName = const Value.absent(),
                 Value<String?> mimeType = const Value.absent(),
+                Value<String?> mediaHash = const Value.absent(),
                 Value<DateTime> importedAt = const Value.absent(),
                 Value<String> sourceMode = const Value.absent(),
                 Value<String> status = const Value.absent(),
@@ -674,6 +739,7 @@ class $$MediaItemsTableTableManager
                 privatePath: privatePath,
                 internalName: internalName,
                 mimeType: mimeType,
+                mediaHash: mediaHash,
                 importedAt: importedAt,
                 sourceMode: sourceMode,
                 status: status,
@@ -684,6 +750,7 @@ class $$MediaItemsTableTableManager
                 required String privatePath,
                 required String internalName,
                 Value<String?> mimeType = const Value.absent(),
+                Value<String?> mediaHash = const Value.absent(),
                 required DateTime importedAt,
                 required String sourceMode,
                 required String status,
@@ -692,6 +759,7 @@ class $$MediaItemsTableTableManager
                 privatePath: privatePath,
                 internalName: internalName,
                 mimeType: mimeType,
+                mediaHash: mediaHash,
                 importedAt: importedAt,
                 sourceMode: sourceMode,
                 status: status,

@@ -27,9 +27,9 @@ class _HomePageState extends State<HomePage> {
   late final MediaItemRepository _mediaRepository;
   late final bool _ownsMediaRepository;
   final List<MediaItem> _mediaItems = [];
-  final Set<String> _sessionSourcePaths = {};
   bool _isLoading = true;
   String? _errorMessage;
+  String? _duplicateMessage;
 
   @override
   void initState() {
@@ -80,6 +80,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _duplicateMessage = null;
     });
 
     try {
@@ -105,25 +106,24 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    final pendingPaths = <String>{};
-    final newItems = selected.where(
-      (item) =>
-          !_sessionSourcePaths.contains(item.path) &&
-          pendingPaths.add(item.path),
-    );
-    final itemsToImport = newItems.toList(growable: false);
-    if (itemsToImport.isEmpty) {
-      return;
-    }
-
-    final imported = await _mediaRepository.importScreenshots(itemsToImport);
-    _sessionSourcePaths.addAll(itemsToImport.map((item) => item.path));
+    final result = await _mediaRepository.importScreenshots(selected);
     if (!mounted) {
       return;
     }
     setState(() {
-      _mediaItems.insertAll(0, imported.reversed);
+      _mediaItems.insertAll(0, result.importedItems.reversed);
+      _duplicateMessage = _duplicateText(result.duplicateCount);
     });
+  }
+
+  String? _duplicateText(int count) {
+    if (count == 0) {
+      return null;
+    }
+    if (count == 1) {
+      return 'Este screenshot já está na biblioteca.';
+    }
+    return '$count screenshots já estavam na biblioteca.';
   }
 
   Future<void> _reloadItems() async {
@@ -208,6 +208,7 @@ class _HomePageState extends State<HomePage> {
                   _ImportCard(
                     isLoading: _isLoading,
                     errorMessage: _errorMessage,
+                    infoMessage: _duplicateMessage,
                     onPressed: _isLoading ? null : _pickScreenshots,
                   ),
                   if (_mediaItems.isNotEmpty) ...[
@@ -353,11 +354,13 @@ class _ImportCard extends StatelessWidget {
   const _ImportCard({
     required this.isLoading,
     required this.errorMessage,
+    required this.infoMessage,
     required this.onPressed,
   });
 
   final bool isLoading;
   final String? errorMessage;
+  final String? infoMessage;
   final VoidCallback? onPressed;
 
   @override
@@ -435,6 +438,15 @@ class _ImportCard extends StatelessWidget {
               Text(
                 errorMessage!,
                 style: theme.textTheme.bodySmall?.copyWith(color: colors.error),
+              ),
+            ],
+            if (infoMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                infoMessage!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.secondary,
+                ),
               ),
             ],
           ],

@@ -1,16 +1,25 @@
 import 'dart:io';
 
+import '../../../core/media/file_hash_calculator.dart';
 import '../../../core/media/screenshot_storage.dart';
 import '../domain/media_item.dart';
 import '../domain/selected_screenshot.dart';
 import 'media_item_store.dart';
 
+class ImportResult {
+  const ImportResult({
+    required this.importedItems,
+    required this.duplicateCount,
+  });
+
+  final List<MediaItem> importedItems;
+  final int duplicateCount;
+}
+
 abstract interface class MediaItemRepository {
   Future<List<MediaItem>> loadAvailableItems();
 
-  Future<List<MediaItem>> importScreenshots(
-    List<SelectedScreenshot> screenshots,
-  );
+  Future<ImportResult> importScreenshots(List<SelectedScreenshot> screenshots);
 
   Future<void> close();
 }
@@ -19,15 +28,18 @@ class LocalMediaItemRepository implements MediaItemRepository {
   LocalMediaItemRepository({
     required MediaItemStore store,
     required ScreenshotStorage storage,
-  }) : this._(store, storage);
+    FileHashCalculator hashCalculator = const Sha256FileHashCalculator(),
+  }) : this._(store, storage, hashCalculator);
 
-  LocalMediaItemRepository._(this._store, this._storage);
+  LocalMediaItemRepository._(this._store, this._storage, this._hashCalculator);
 
   final MediaItemStore _store;
   final ScreenshotStorage _storage;
+  final FileHashCalculator _hashCalculator;
 
   @override
   Future<List<MediaItem>> loadAvailableItems() async {
+    await _repairLibrary();
     final items = await _store.readItems();
     final available = <MediaItem>[];
     for (final item in items) {
@@ -38,12 +50,66 @@ class LocalMediaItemRepository implements MediaItemRepository {
     return available;
   }
 
+  Future<void> _repairLibrary() async {
+    var items = await _store.readItems();
+
+    for (final item in items) {
+      if (!await File(item.privatePath).exists()) {
+        try {
+          await _store.deleteItem(item.id);
+        } catch (_) {
+          // Uma falha pontual de limpeza não impede a abertura da biblioteca.
+        }
+      }
+    }
+
+    items = await _store.readItems();
+    final legacyItems = items.where((item) => item.mediaHash == null).toList()
+      ..sort((a, b) {
+        final byDate = a.importedAt.compareTo(b.importedAt);
+        return byDate != 0 ? byDate : a.id.compareTo(b.id);
+      });
+
+    for (final item in legacyItems) {
+      final file = File(item.privatePath);
+      if (!await file.exists()) {
+        continue;
+      }
+
+      try {
+        final hash = await _hashCalculator.calculate(item.privatePath);
+        final existing = await _store.findByHash(hash);
+        if (existing == null || existing.id == item.id) {
+          await _store.updateHash(item.id, hash);
+        } else {
+          await _storage.deletePrivateCopy(item.privatePath);
+          await _store.deleteItem(item.id);
+        }
+      } catch (_) {
+        // Os demais registros ainda podem ser reparados com segurança.
+      }
+    }
+  }
+
   @override
-  Future<List<MediaItem>> importScreenshots(
+  Future<ImportResult> importScreenshots(
     List<SelectedScreenshot> screenshots,
   ) async {
     final imported = <MediaItem>[];
+    var duplicateCount = 0;
+
     for (final screenshot in screenshots) {
+      final source = File(screenshot.path);
+      if (!await source.exists()) {
+        throw const FileSystemException('Arquivo de origem indisponível.');
+      }
+
+      final hash = await _hashCalculator.calculate(screenshot.path);
+      if (await _store.findByHash(hash) != null) {
+        duplicateCount++;
+        continue;
+      }
+
       final copy = await _storage.copyToPrivate(screenshot.path);
       final importedAt = DateTime.now();
       try {
@@ -51,6 +117,7 @@ class LocalMediaItemRepository implements MediaItemRepository {
           privatePath: copy.privatePath,
           internalName: copy.internalName,
           mimeType: screenshot.mimeType,
+          mediaHash: hash,
           importedAt: importedAt,
           sourceMode: 'photoPicker',
           status: 'ready',
@@ -61,17 +128,36 @@ class LocalMediaItemRepository implements MediaItemRepository {
             privatePath: copy.privatePath,
             internalName: copy.internalName,
             mimeType: screenshot.mimeType,
+            mediaHash: hash,
             importedAt: importedAt,
             sourceMode: 'photoPicker',
             status: 'ready',
           ),
         );
       } catch (_) {
+        final duplicateCreatedConcurrently =
+            await _findByHashIgnoringErrors(hash) != null;
         await _storage.deletePrivateCopy(copy.privatePath);
+        if (duplicateCreatedConcurrently) {
+          duplicateCount++;
+          continue;
+        }
         rethrow;
       }
     }
-    return imported;
+
+    return ImportResult(
+      importedItems: imported,
+      duplicateCount: duplicateCount,
+    );
+  }
+
+  Future<MediaItem?> _findByHashIgnoringErrors(String hash) async {
+    try {
+      return await _store.findByHash(hash);
+    } catch (_) {
+      return null;
+    }
   }
 
   @override

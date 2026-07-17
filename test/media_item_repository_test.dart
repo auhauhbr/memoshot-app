@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:contexto/core/database/contexto_database.dart'
     show ContextoDatabase;
+import 'package:contexto/core/media/file_hash_calculator.dart';
 import 'package:contexto/core/media/screenshot_storage.dart';
 import 'package:contexto/features/library/data/media_item_repository.dart';
 import 'package:contexto/features/library/data/media_item_store.dart';
@@ -47,9 +48,9 @@ void main() {
     ]);
     final loaded = await repository.loadAvailableItems();
 
-    expect(imported, hasLength(1));
+    expect(imported.importedItems, hasLength(1));
     expect(loaded, hasLength(1));
-    expect(loaded.single.id, imported.single.id);
+    expect(loaded.single.id, imported.importedItems.single.id);
     expect(loaded.single.sourceMode, 'photoPicker');
     expect(loaded.single.status, 'ready');
     expect(loaded.single.mimeType, 'image/png');
@@ -58,7 +59,7 @@ void main() {
 
   test('persiste múltiplos itens', () async {
     final first = createTestImage(temporaryDirectory, 'primeira.png');
-    final second = createTestImage(temporaryDirectory, 'segunda.png');
+    final second = createTestImage(temporaryDirectory, 'segunda.png', 1);
 
     await repository.importScreenshots([
       SelectedScreenshot(path: first.path),
@@ -66,6 +67,89 @@ void main() {
     ]);
 
     expect(await repository.loadAvailableItems(), hasLength(2));
+  });
+
+  test(
+    'ignora duplicata na mesma seleção sem criar cópia ou registro',
+    () async {
+      final original = createTestImage(temporaryDirectory, 'duplicada.png');
+
+      final result = await repository.importScreenshots([
+        SelectedScreenshot(path: original.path),
+        SelectedScreenshot(path: original.path),
+      ]);
+
+      expect(result.importedItems, hasLength(1));
+      expect(result.duplicateCount, 1);
+      expect(await store.readItems(), hasLength(1));
+      expect(privateCopies(privateDirectory), hasLength(1));
+    },
+  );
+
+  test('ignora duplicata depois de recriar o repositório', () async {
+    final original = createTestImage(temporaryDirectory, 'nova-sessao.png');
+    await repository.importScreenshots([
+      SelectedScreenshot(path: original.path),
+    ]);
+    final newSessionRepository = LocalMediaItemRepository(
+      store: store,
+      storage: storage,
+    );
+
+    final result = await newSessionRepository.importScreenshots([
+      SelectedScreenshot(path: original.path),
+    ]);
+
+    expect(result.importedItems, isEmpty);
+    expect(result.duplicateCount, 1);
+    expect(await store.readItems(), hasLength(1));
+    expect(privateCopies(privateDirectory), hasLength(1));
+  });
+
+  test('duas importações concorrentes não criam duplicatas', () async {
+    final original = createTestImage(temporaryDirectory, 'concorrente.png');
+    final otherRepository = LocalMediaItemRepository(
+      store: store,
+      storage: storage,
+    );
+
+    final results = await Future.wait([
+      repository.importScreenshots([SelectedScreenshot(path: original.path)]),
+      otherRepository.importScreenshots([
+        SelectedScreenshot(path: original.path),
+      ]),
+    ]);
+
+    expect(
+      results.fold<int>(
+        0,
+        (total, result) => total + result.importedItems.length,
+      ),
+      1,
+    );
+    expect(
+      results.fold<int>(0, (total, result) => total + result.duplicateCount),
+      1,
+    );
+    expect(await store.readItems(), hasLength(1));
+    expect(privateCopies(privateDirectory), hasLength(1));
+  });
+
+  test('importa múltiplas imagens e ignora somente as repetidas', () async {
+    final first = createTestImage(temporaryDirectory, 'lote-a.png');
+    final sameContent = createTestImage(temporaryDirectory, 'lote-b.png');
+    final different = createTestImage(temporaryDirectory, 'lote-c.png', 2);
+
+    final result = await repository.importScreenshots([
+      SelectedScreenshot(path: first.path),
+      SelectedScreenshot(path: sameContent.path),
+      SelectedScreenshot(path: different.path),
+    ]);
+
+    expect(result.importedItems, hasLength(2));
+    expect(result.duplicateCount, 1);
+    expect(await store.readItems(), hasLength(2));
+    expect(privateCopies(privateDirectory), hasLength(2));
   });
 
   test('mantém o arquivo original intacto', () async {
@@ -78,8 +162,11 @@ void main() {
 
     expect(original.existsSync(), isTrue);
     expect(original.readAsBytesSync(), originalBytes);
-    expect(imported.single.privatePath, isNot(original.path));
-    expect(File(imported.single.privatePath).readAsBytesSync(), originalBytes);
+    expect(imported.importedItems.single.privatePath, isNot(original.path));
+    expect(
+      File(imported.importedItems.single.privatePath).readAsBytesSync(),
+      originalBytes,
+    );
   });
 
   test('não grava item quando a cópia falha', () async {
@@ -123,13 +210,76 @@ void main() {
       privatePath: missingPath,
       internalName: 'inexistente.png',
       mimeType: 'image/png',
+      mediaHash: 'hash-inexistente',
       importedAt: DateTime(2026),
       sourceMode: 'photoPicker',
       status: 'ready',
     );
 
     expect(await repository.loadAvailableItems(), isEmpty);
+    expect(await store.readItems(), isEmpty);
   });
+
+  test('preenche hash de registro antigo sem recalcular depois', () async {
+    final countingCalculator = CountingHashCalculator();
+    repository = LocalMediaItemRepository(
+      store: store,
+      storage: storage,
+      hashCalculator: countingCalculator,
+    );
+    final copy = createPrivateImage(privateDirectory, 'antiga.png');
+    await store.insertItem(
+      privatePath: copy.path,
+      internalName: 'antiga.png',
+      mimeType: 'image/png',
+      mediaHash: null,
+      importedAt: DateTime(2025),
+      sourceMode: 'photoPicker',
+      status: 'ready',
+    );
+
+    final firstLoad = await repository.loadAvailableItems();
+    final firstHash = firstLoad.single.mediaHash;
+    final secondLoad = await repository.loadAvailableItems();
+
+    expect(firstHash, isNotNull);
+    expect(secondLoad.single.mediaHash, firstHash);
+    expect(countingCalculator.callCount, 1);
+  });
+
+  test(
+    'consolida registros antigos idênticos mantendo o mais antigo',
+    () async {
+      final olderCopy = createPrivateImage(privateDirectory, 'mais-antiga.png');
+      final newerCopy = createPrivateImage(privateDirectory, 'mais-nova.png');
+      final olderId = await store.insertItem(
+        privatePath: olderCopy.path,
+        internalName: 'mais-antiga.png',
+        mimeType: 'image/png',
+        mediaHash: null,
+        importedAt: DateTime(2024),
+        sourceMode: 'photoPicker',
+        status: 'ready',
+      );
+      await store.insertItem(
+        privatePath: newerCopy.path,
+        internalName: 'mais-nova.png',
+        mimeType: 'image/png',
+        mediaHash: null,
+        importedAt: DateTime(2025),
+        sourceMode: 'photoPicker',
+        status: 'ready',
+      );
+
+      final loaded = await repository.loadAvailableItems();
+
+      expect(loaded, hasLength(1));
+      expect(loaded.single.id, olderId);
+      expect(loaded.single.mediaHash, isNotNull);
+      expect(olderCopy.existsSync(), isTrue);
+      expect(newerCopy.existsSync(), isFalse);
+    },
+  );
 }
 
 class FailingMediaItemStore implements MediaItemStore {
@@ -138,6 +288,7 @@ class FailingMediaItemStore implements MediaItemStore {
     required String privatePath,
     required String internalName,
     required String? mimeType,
+    required String? mediaHash,
     required DateTime importedAt,
     required String sourceMode,
     required String status,
@@ -149,12 +300,47 @@ class FailingMediaItemStore implements MediaItemStore {
   Future<List<MediaItem>> readItems() async => const [];
 
   @override
+  Future<MediaItem?> findByHash(String mediaHash) async => null;
+
+  @override
+  Future<void> updateHash(int id, String mediaHash) async {}
+
+  @override
+  Future<void> deleteItem(int id) async {}
+
+  @override
   Future<void> close() async {}
 }
 
-File createTestImage(Directory directory, String name) {
+class CountingHashCalculator implements FileHashCalculator {
+  final FileHashCalculator _delegate = const Sha256FileHashCalculator();
+  int callCount = 0;
+
+  @override
+  Future<String> calculate(String filePath) {
+    callCount++;
+    return _delegate.calculate(filePath);
+  }
+}
+
+File createTestImage(Directory directory, String name, [int marker = 0]) {
   const minimalPng =
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  final bytes = [...base64Decode(minimalPng), if (marker != 0) marker];
   return File('${directory.path}${Platform.pathSeparator}$name')
-    ..writeAsBytesSync(base64Decode(minimalPng));
+    ..writeAsBytesSync(bytes);
+}
+
+List<FileSystemEntity> privateCopies(Directory privateDirectory) {
+  final directory = Directory(
+    '${privateDirectory.path}${Platform.pathSeparator}screenshots',
+  );
+  return directory.existsSync() ? directory.listSync() : const [];
+}
+
+File createPrivateImage(Directory privateDirectory, String name) {
+  final directory = Directory(
+    '${privateDirectory.path}${Platform.pathSeparator}screenshots',
+  )..createSync(recursive: true);
+  return createTestImage(directory, name);
 }

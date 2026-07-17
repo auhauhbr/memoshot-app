@@ -8,12 +8,19 @@ abstract interface class MediaItemStore {
     required String privatePath,
     required String internalName,
     required String? mimeType,
+    required String? mediaHash,
     required DateTime importedAt,
     required String sourceMode,
     required String status,
   });
 
   Future<List<domain.MediaItem>> readItems();
+
+  Future<domain.MediaItem?> findByHash(String mediaHash);
+
+  Future<void> updateHash(int id, String mediaHash);
+
+  Future<void> deleteItem(int id);
 
   Future<void> close();
 }
@@ -28,6 +35,7 @@ class DriftMediaItemStore implements MediaItemStore {
     required String privatePath,
     required String internalName,
     required String? mimeType,
+    required String? mediaHash,
     required DateTime importedAt,
     required String sourceMode,
     required String status,
@@ -39,6 +47,7 @@ class DriftMediaItemStore implements MediaItemStore {
             privatePath: privatePath,
             internalName: internalName,
             mimeType: Value(mimeType),
+            mediaHash: Value(mediaHash),
             importedAt: importedAt,
             sourceMode: sourceMode,
             status: status,
@@ -58,12 +67,48 @@ class DriftMediaItemStore implements MediaItemStore {
             privatePath: row.privatePath,
             internalName: row.internalName,
             mimeType: row.mimeType,
+            mediaHash: row.mediaHash,
             importedAt: row.importedAt,
             sourceMode: row.sourceMode,
             status: row.status,
           ),
         )
         .toList(growable: false);
+  }
+
+  @override
+  Future<domain.MediaItem?> findByHash(String mediaHash) async {
+    final row = await (_database.select(
+      _database.mediaItems,
+    )..where((item) => item.mediaHash.equals(mediaHash))).getSingleOrNull();
+    return row == null ? null : _toDomain(row);
+  }
+
+  @override
+  Future<void> updateHash(int id, String mediaHash) async {
+    await (_database.update(_database.mediaItems)
+          ..where((item) => item.id.equals(id)))
+        .write(MediaItemsCompanion(mediaHash: Value(mediaHash)));
+  }
+
+  @override
+  Future<void> deleteItem(int id) async {
+    await (_database.delete(
+      _database.mediaItems,
+    )..where((item) => item.id.equals(id))).go();
+  }
+
+  domain.MediaItem _toDomain(MediaItem row) {
+    return domain.MediaItem(
+      id: row.id,
+      privatePath: row.privatePath,
+      internalName: row.internalName,
+      mimeType: row.mimeType,
+      mediaHash: row.mediaHash,
+      importedAt: row.importedAt,
+      sourceMode: row.sourceMode,
+      status: row.status,
+    );
   }
 
   @override

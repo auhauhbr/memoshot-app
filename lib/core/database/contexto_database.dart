@@ -12,6 +12,8 @@ class MediaItems extends Table {
 
   TextColumn get mimeType => text().nullable()();
 
+  TextColumn get mediaHash => text().nullable()();
+
   DateTimeColumn get importedAt => dateTime()();
 
   TextColumn get sourceMode => text()();
@@ -26,7 +28,28 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (migrator) async {
+      await migrator.createAll();
+      await _createMediaHashIndex();
+    },
+    onUpgrade: (migrator, from, to) async {
+      if (from < 2) {
+        await migrator.addColumn(mediaItems, mediaItems.mediaHash);
+        await _createMediaHashIndex();
+      }
+    },
+  );
+
+  Future<void> _createMediaHashIndex() {
+    return customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS media_items_media_hash_unique '
+      'ON media_items (media_hash) WHERE media_hash IS NOT NULL',
+    );
+  }
 
   static QueryExecutor _openConnection() {
     return driftDatabase(name: 'contexto');

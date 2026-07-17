@@ -122,11 +122,16 @@ void main() {
 
     await tester.tap(find.text('Selecionar imagens'));
     await tester.pump();
+    expect(find.text('Este screenshot já está na biblioteca.'), findsOneWidget);
     await tester.tap(find.text('Selecionar imagens'));
     await tester.pump();
 
     expect(find.text('1 item'), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
+    expect(
+      find.text('2 screenshots já estavam na biblioteca.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('exibe carregamento enquanto o seletor processa', (tester) async {
@@ -242,20 +247,28 @@ class FakeMediaItemRepository implements MediaItemRepository {
     : _items = [...initialItems];
 
   final List<MediaItem> _items;
+  final Set<String> _sourcePaths = {};
   int loadCallCount = 0;
 
   @override
-  Future<List<MediaItem>> importScreenshots(
+  Future<ImportResult> importScreenshots(
     List<SelectedScreenshot> screenshots,
   ) async {
-    final imported = screenshots
-        .map((screenshot) {
-          final item = createMediaItem(_items.length + 1, screenshot.path);
-          _items.insert(0, item);
-          return item;
-        })
-        .toList(growable: false);
-    return imported;
+    final imported = <MediaItem>[];
+    var duplicateCount = 0;
+    for (final screenshot in screenshots) {
+      if (!_sourcePaths.add(screenshot.path)) {
+        duplicateCount++;
+        continue;
+      }
+      final item = createMediaItem(_items.length + 1, screenshot.path);
+      _items.insert(0, item);
+      imported.add(item);
+    }
+    return ImportResult(
+      importedItems: imported,
+      duplicateCount: duplicateCount,
+    );
   }
 
   @override
