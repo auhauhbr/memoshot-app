@@ -21,6 +21,8 @@ abstract interface class MediaItemRepository {
 
   Future<ImportResult> importScreenshots(List<SelectedScreenshot> screenshots);
 
+  Future<void> removeItem(MediaItem item);
+
   Future<void> close();
 }
 
@@ -158,6 +160,12 @@ class LocalMediaItemRepository implements MediaItemRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  @override
+  Future<void> removeItem(MediaItem item) async {
+    await _storage.deletePrivateCopy(item.privatePath);
+    await _store.deleteItem(item.id);
   }
 
   @override

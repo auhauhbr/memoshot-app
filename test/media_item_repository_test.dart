@@ -169,6 +169,66 @@ void main() {
     );
   });
 
+  test('remove registro e cópia privada preservando o original', () async {
+    final original = createTestImage(temporaryDirectory, 'remover.png');
+    final imported = await repository.importScreenshots([
+      SelectedScreenshot(path: original.path),
+    ]);
+    final item = imported.importedItems.single;
+    final privateCopy = File(item.privatePath);
+
+    await repository.removeItem(item);
+
+    expect(await store.readItems(), isEmpty);
+    expect(privateCopy.existsSync(), isFalse);
+    expect(original.existsSync(), isTrue);
+  });
+
+  test('remove registro quando a cópia privada já não existe', () async {
+    final missingPath = '${privateDirectory.path}/screenshots/ausente.png';
+    final id = await store.insertItem(
+      privatePath: missingPath,
+      internalName: 'ausente.png',
+      mimeType: 'image/png',
+      mediaHash: 'hash-ausente-remocao',
+      importedAt: DateTime(2026),
+      sourceMode: 'photoPicker',
+      status: 'ready',
+    );
+    final item = MediaItem(
+      id: id,
+      privatePath: missingPath,
+      internalName: 'ausente.png',
+      mediaHash: 'hash-ausente-remocao',
+      mimeType: 'image/png',
+      importedAt: DateTime(2026),
+      sourceMode: 'photoPicker',
+      status: 'ready',
+    );
+
+    await repository.removeItem(item);
+
+    expect(await store.readItems(), isEmpty);
+  });
+
+  test('mantém registro quando a exclusão da cópia privada falha', () async {
+    final original = createTestImage(temporaryDirectory, 'falha-remocao.png');
+    final imported = await repository.importScreenshots([
+      SelectedScreenshot(path: original.path),
+    ]);
+    final item = imported.importedItems.single;
+    final failingRepository = LocalMediaItemRepository(
+      store: store,
+      storage: FailingDeleteStorage(storage),
+    );
+
+    await expectLater(failingRepository.removeItem(item), throwsStateError);
+
+    expect(await store.readItems(), hasLength(1));
+    expect(File(item.privatePath).existsSync(), isTrue);
+    expect(original.existsSync(), isTrue);
+  });
+
   test('não grava item quando a cópia falha', () async {
     final missingPath =
         '${temporaryDirectory.path}${Platform.pathSeparator}ausente.png';
@@ -320,6 +380,22 @@ class CountingHashCalculator implements FileHashCalculator {
   Future<String> calculate(String filePath) {
     callCount++;
     return _delegate.calculate(filePath);
+  }
+}
+
+class FailingDeleteStorage implements ScreenshotStorage {
+  FailingDeleteStorage(this._delegate);
+
+  final ScreenshotStorage _delegate;
+
+  @override
+  Future<StoredScreenshot> copyToPrivate(String sourcePath) {
+    return _delegate.copyToPrivate(sourcePath);
+  }
+
+  @override
+  Future<void> deletePrivateCopy(String privatePath) {
+    throw StateError('Falha simulada ao excluir cópia');
   }
 }
 
