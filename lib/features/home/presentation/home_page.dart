@@ -8,10 +8,12 @@ import '../../../core/media/image_picker_screenshot_picker.dart';
 import '../../../core/media/screenshot_picker.dart';
 import '../../../core/media/screenshot_storage.dart';
 import '../../../core/ocr/ml_kit_text_recognition_service.dart';
+import '../../../core/text/text_normalizer.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
 import '../../library/domain/selected_screenshot.dart';
+import '../../library/domain/screenshot_search_result.dart';
 import '../../library/presentation/screenshot_detail_page.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../../ocr/data/ocr_result_store.dart';
@@ -46,11 +48,19 @@ class _HomePageState extends State<HomePage> {
   late final bool _ownsMediaRepository;
   ContextoDatabase? _ownedAuxiliaryDatabase;
   StreamSubscription<int>? _queueSubscription;
+  final TextEditingController _searchController = TextEditingController();
+  final TextNormalizer _textNormalizer = const TextNormalizer();
+  Timer? _searchDebounce;
+  int _searchGeneration = 0;
   final List<MediaItem> _mediaItems = [];
   final Map<int, OcrItemState> _ocrStates = {};
+  List<ScreenshotSearchResult> _searchResults = const [];
   bool _isLoading = true;
+  bool _isSearching = false;
+  bool _searchActive = false;
   String? _errorMessage;
   String? _duplicateMessage;
+  String? _searchErrorMessage;
 
   @override
   void initState() {
@@ -91,12 +101,14 @@ class _HomePageState extends State<HomePage> {
     if (!_ownsMediaRepository) {
       _ownedAuxiliaryDatabase = database;
     }
-    _queueSubscription = _ocrQueue.changes.listen(_refreshOcrState);
+    _queueSubscription = _ocrQueue.changes.listen(_handleQueueChange);
     _initialize();
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
     unawaited(_disposeResources());
     super.dispose();
   }
@@ -206,7 +218,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _refreshOcrState(int mediaItemId) async {
+  Future<OcrItemState?> _refreshOcrState(int mediaItemId) async {
     try {
       final state = await _ocrQueue.loadState(mediaItemId);
       if (mounted) {
@@ -214,9 +226,111 @@ class _HomePageState extends State<HomePage> {
           _ocrStates[mediaItemId] = state;
         });
       }
+      return state;
     } catch (_) {
       // Uma falha de leitura do estado não bloqueia a biblioteca.
+      return null;
     }
+  }
+
+  Future<void> _handleQueueChange(int mediaItemId) async {
+    final state = await _refreshOcrState(mediaItemId);
+    if (_searchActive &&
+        (state == OcrItemState.completedWithText ||
+            state == OcrItemState.completedWithoutText)) {
+      await _searchNow();
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    final normalized = _textNormalizer.normalize(value);
+    final generation = ++_searchGeneration;
+    if (normalized.isEmpty) {
+      setState(() {
+        _searchActive = false;
+        _isSearching = false;
+        _searchResults = const [];
+        _searchErrorMessage = null;
+      });
+      return;
+    }
+    setState(() {
+      _searchActive = true;
+      _isSearching = true;
+      _searchErrorMessage = null;
+    });
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 300),
+      () => unawaited(_performSearch(value, generation)),
+    );
+  }
+
+  void _submitSearch(String value) {
+    _searchDebounce?.cancel();
+    if (_textNormalizer.normalize(value).isEmpty) {
+      _onSearchChanged(value);
+      return;
+    }
+    final generation = ++_searchGeneration;
+    setState(() {
+      _searchActive = true;
+      _isSearching = true;
+      _searchErrorMessage = null;
+    });
+    unawaited(_performSearch(value, generation));
+  }
+
+  Future<void> _searchNow() async {
+    final value = _searchController.text;
+    if (_textNormalizer.normalize(value).isEmpty) {
+      return;
+    }
+    final generation = ++_searchGeneration;
+    await _performSearch(value, generation, showLoading: false);
+  }
+
+  Future<void> _performSearch(
+    String query,
+    int generation, {
+    bool showLoading = true,
+  }) async {
+    if (showLoading && mounted) {
+      setState(() {
+        _isSearching = true;
+      });
+    }
+    try {
+      final results = await _mediaRepository.searchRecognizedText(query);
+      if (!mounted || generation != _searchGeneration) {
+        return;
+      }
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+        _searchErrorMessage = null;
+      });
+    } catch (_) {
+      if (!mounted || generation != _searchGeneration) {
+        return;
+      }
+      setState(() {
+        _isSearching = false;
+        _searchErrorMessage = 'Não foi possível realizar a pesquisa.';
+      });
+    }
+  }
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _searchGeneration++;
+    _searchController.clear();
+    setState(() {
+      _searchActive = false;
+      _isSearching = false;
+      _searchResults = const [];
+      _searchErrorMessage = null;
+    });
   }
 
   Future<void> _reloadItemsIgnoringErrors() async {
@@ -240,8 +354,16 @@ class _HomePageState extends State<HomePage> {
     );
     if (removed == true) {
       await _reloadItemsIgnoringErrors();
+      if (_searchActive) {
+        await _searchNow();
+      }
     } else {
-      await _refreshOcrState(item.id);
+      final state = await _refreshOcrState(item.id);
+      if (_searchActive &&
+          (state == OcrItemState.completedWithText ||
+              state == OcrItemState.completedWithoutText)) {
+        await _searchNow();
+      }
     }
   }
 
@@ -279,7 +401,13 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const _SearchField(),
+                  _SearchField(
+                    controller: _searchController,
+                    showClearAction: _searchController.text.isNotEmpty,
+                    onChanged: _onSearchChanged,
+                    onSubmitted: _submitSearch,
+                    onClear: _clearSearch,
+                  ),
                   const SizedBox(height: 18),
                   const _SectionTitle('Biblioteca'),
                   const SizedBox(height: 8),
@@ -311,7 +439,38 @@ class _HomePageState extends State<HomePage> {
                     infoMessage: _duplicateMessage,
                     onPressed: _isLoading ? null : _pickScreenshots,
                   ),
-                  if (_mediaItems.isNotEmpty) ...[
+                  if (_searchActive) ...[
+                    const SizedBox(height: 12),
+                    _SearchSummary(
+                      query: _searchController.text.trim(),
+                      resultCount: _searchResults.length,
+                      isSearching: _isSearching,
+                      errorMessage: _searchErrorMessage,
+                      hasPendingItems: _ocrStates.values.any(
+                        (state) =>
+                            state == OcrItemState.pending ||
+                            state == OcrItemState.processing,
+                      ),
+                    ),
+                    if (!_isSearching &&
+                        _searchErrorMessage == null &&
+                        _searchResults.isEmpty)
+                      const _EmptySearchState()
+                    else if (_searchResults.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _LibraryGrid(
+                        mediaItems: _searchResults
+                            .map((result) => result.mediaItem)
+                            .toList(growable: false),
+                        ocrStates: _ocrStates,
+                        snippets: {
+                          for (final result in _searchResults)
+                            result.mediaItem.id: result.snippet,
+                        },
+                        onItemTap: _openDetails,
+                      ),
+                    ],
+                  ] else if (_mediaItems.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     _LibraryGrid(
                       mediaItems: _mediaItems,
@@ -373,17 +532,47 @@ class _AppHeader extends StatelessWidget {
 }
 
 class _SearchField extends StatelessWidget {
-  const _SearchField();
+  const _SearchField({
+    required this.controller,
+    required this.showClearAction,
+    required this.onChanged,
+    required this.onSubmitted,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final bool showClearAction;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<String> onSubmitted;
+  final VoidCallback onClear;
 
   @override
   Widget build(BuildContext context) {
-    return const TextField(
-      enabled: false,
-      decoration: InputDecoration(
-        hintText: 'Pesquisar screenshots',
-        prefixIcon: Icon(Icons.search, size: 20),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        isDense: true,
+    return Semantics(
+      textField: true,
+      label: 'Pesquisar screenshots pelo texto reconhecido',
+      child: TextField(
+        controller: controller,
+        enabled: true,
+        onChanged: onChanged,
+        onSubmitted: onSubmitted,
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: 'Pesquisar screenshots',
+          prefixIcon: const Icon(Icons.search, size: 20),
+          suffixIcon: showClearAction
+              ? IconButton(
+                  onPressed: onClear,
+                  tooltip: 'Limpar pesquisa',
+                  icon: const Icon(Icons.close, size: 19),
+                )
+              : null,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 11,
+          ),
+          isDense: true,
+        ),
       ),
     );
   }
@@ -565,10 +754,12 @@ class _LibraryGrid extends StatelessWidget {
     required this.mediaItems,
     required this.ocrStates,
     required this.onItemTap,
+    this.snippets = const {},
   });
 
   final List<MediaItem> mediaItems;
   final Map<int, OcrItemState> ocrStates;
+  final Map<int, String> snippets;
   final ValueChanged<MediaItem> onItemTap;
 
   @override
@@ -599,11 +790,11 @@ class _LibraryGrid extends StatelessWidget {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: mediaItems.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             crossAxisSpacing: 8,
             mainAxisSpacing: 8,
-            childAspectRatio: 0.82,
+            childAspectRatio: snippets.isEmpty ? 0.82 : 0.62,
           ),
           itemBuilder: (context, index) {
             final item = mediaItems[index];
@@ -655,6 +846,20 @@ class _LibraryGrid extends StatelessWidget {
                         ],
                       ),
                     ),
+                    if (snippets[item.id] case final snippet?)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(5, 4, 5, 2),
+                        child: Text(
+                          snippet,
+                          key: ValueKey('search-snippet-${item.id}'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
                     _OcrStatusLabel(
                       state: ocrStates[item.id] ?? OcrItemState.notScheduled,
                     ),
@@ -665,6 +870,108 @@ class _LibraryGrid extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _SearchSummary extends StatelessWidget {
+  const _SearchSummary({
+    required this.query,
+    required this.resultCount,
+    required this.isSearching,
+    required this.errorMessage,
+    required this.hasPendingItems,
+  });
+
+  final String query;
+  final int resultCount;
+  final bool isSearching;
+  final String? errorMessage;
+  final bool hasPendingItems;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              if (isSearching)
+                const SizedBox.square(
+                  dimension: 15,
+                  child: CircularProgressIndicator(strokeWidth: 1.8),
+                )
+              else
+                Icon(Icons.search, size: 17, color: colors.secondary),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  isSearching
+                      ? 'Pesquisando…'
+                      : '$resultCount ${resultCount == 1 ? 'resultado' : 'resultados'} para “$query”',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (hasPendingItems) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Alguns screenshots ainda estão sendo processados.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ],
+          if (errorMessage != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              errorMessage!,
+              style: theme.textTheme.bodySmall?.copyWith(color: colors.error),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptySearchState extends StatelessWidget {
+  const _EmptySearchState();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 18),
+      child: Column(
+        children: [
+          Icon(
+            Icons.search_off_outlined,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 7),
+          Text(
+            'Nenhum screenshot encontrado.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
