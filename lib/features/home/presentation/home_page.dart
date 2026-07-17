@@ -1,7 +1,80 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
+import '../../../core/media/image_picker_screenshot_picker.dart';
+import '../../../core/media/screenshot_picker.dart';
+import '../../library/domain/selected_screenshot.dart';
+
+class HomePage extends StatefulWidget {
+  const HomePage({super.key, this.screenshotPicker});
+
+  final ScreenshotPicker? screenshotPicker;
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  late final ScreenshotPicker _screenshotPicker;
+  final List<SelectedScreenshot> _screenshots = [];
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _screenshotPicker =
+        widget.screenshotPicker ?? ImagePickerScreenshotPicker();
+    _retrieveLostScreenshots();
+  }
+
+  Future<void> _retrieveLostScreenshots() async {
+    try {
+      _addUnique(await _screenshotPicker.retrieveLostScreenshots());
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Não foi possível recuperar a seleção anterior.';
+        });
+      }
+    }
+  }
+
+  Future<void> _pickScreenshots() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      _addUnique(await _screenshotPicker.pickScreenshots());
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Não foi possível importar as imagens.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _addUnique(List<SelectedScreenshot> selected) {
+    if (!mounted || selected.isEmpty) {
+      return;
+    }
+
+    final knownPaths = _screenshots.map((item) => item.path).toSet();
+    final newItems = selected.where((item) => knownPaths.add(item.path));
+    setState(() {
+      _screenshots.addAll(newItems);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,13 +114,15 @@ class HomePage extends StatelessWidget {
                   const SizedBox(height: 18),
                   const _SectionTitle('Biblioteca'),
                   const SizedBox(height: 8),
-                  const Row(
+                  Row(
                     children: [
                       Expanded(
                         child: _LibrarySummary(
                           icon: Icons.access_time_outlined,
                           title: 'Recentes',
-                          count: '0 itens',
+                          count:
+                              '${_screenshots.length} '
+                              '${_screenshots.length == 1 ? 'item' : 'itens'}',
                         ),
                       ),
                       SizedBox(width: 10),
@@ -61,7 +136,15 @@ class HomePage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const _ImportCard(),
+                  _ImportCard(
+                    isLoading: _isLoading,
+                    errorMessage: _errorMessage,
+                    onPressed: _isLoading ? null : _pickScreenshots,
+                  ),
+                  if (_screenshots.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _SessionLibraryGrid(screenshots: _screenshots),
+                  ],
                   const SizedBox(height: 12),
                   const _LocalProcessingInfo(),
                 ],
@@ -198,7 +281,15 @@ class _LibrarySummary extends StatelessWidget {
 }
 
 class _ImportCard extends StatelessWidget {
-  const _ImportCard();
+  const _ImportCard({
+    required this.isLoading,
+    required this.errorMessage,
+    required this.onPressed,
+  });
+
+  final bool isLoading;
+  final String? errorMessage;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -251,7 +342,7 @@ class _ImportCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    'Em breve',
+                    'Nesta sessão',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: colors.onPrimaryContainer,
                       fontWeight: FontWeight.w700,
@@ -262,12 +353,91 @@ class _ImportCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             OutlinedButton(
-              onPressed: null,
-              child: const Text('Selecionar imagens'),
+              onPressed: onPressed,
+              child: isLoading
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Selecionar imagens'),
             ),
+            if (errorMessage != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                errorMessage!,
+                style: theme.textTheme.bodySmall?.copyWith(color: colors.error),
+              ),
+            ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SessionLibraryGrid extends StatelessWidget {
+  const _SessionLibraryGrid({required this.screenshots});
+
+  final List<SelectedScreenshot> screenshots;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.info_outline, size: 16, color: colors.secondary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Itens disponíveis somente nesta sessão; ainda não salvos.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        GridView.builder(
+          key: const Key('session-screenshot-grid'),
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: screenshots.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemBuilder: (context, index) {
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: colors.outlineVariant),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Image.file(
+                  File(screenshots[index].path),
+                  key: ValueKey(screenshots[index].path),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => ColoredBox(
+                    color: colors.surfaceContainerLow,
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
