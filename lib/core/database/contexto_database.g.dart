@@ -889,16 +889,584 @@ class OcrResultsCompanion extends UpdateCompanion<OcrResult> {
   }
 }
 
+class $ProcessingJobsTable extends ProcessingJobs
+    with TableInfo<$ProcessingJobsTable, ProcessingJob> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProcessingJobsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _mediaItemIdMeta = const VerificationMeta(
+    'mediaItemId',
+  );
+  @override
+  late final GeneratedColumn<int> mediaItemId = GeneratedColumn<int>(
+    'media_item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES media_items (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _jobTypeMeta = const VerificationMeta(
+    'jobType',
+  );
+  @override
+  late final GeneratedColumn<String> jobType = GeneratedColumn<String>(
+    'job_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attemptsMeta = const VerificationMeta(
+    'attempts',
+  );
+  @override
+  late final GeneratedColumn<int> attempts = GeneratedColumn<int>(
+    'attempts',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _errorCodeMeta = const VerificationMeta(
+    'errorCode',
+  );
+  @override
+  late final GeneratedColumn<String> errorCode = GeneratedColumn<String>(
+    'error_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _startedAtMeta = const VerificationMeta(
+    'startedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> startedAt = GeneratedColumn<DateTime>(
+    'started_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _finishedAtMeta = const VerificationMeta(
+    'finishedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> finishedAt = GeneratedColumn<DateTime>(
+    'finished_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    mediaItemId,
+    jobType,
+    status,
+    attempts,
+    errorCode,
+    createdAt,
+    startedAt,
+    finishedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'processing_jobs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ProcessingJob> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('media_item_id')) {
+      context.handle(
+        _mediaItemIdMeta,
+        mediaItemId.isAcceptableOrUnknown(
+          data['media_item_id']!,
+          _mediaItemIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_mediaItemIdMeta);
+    }
+    if (data.containsKey('job_type')) {
+      context.handle(
+        _jobTypeMeta,
+        jobType.isAcceptableOrUnknown(data['job_type']!, _jobTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_jobTypeMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('attempts')) {
+      context.handle(
+        _attemptsMeta,
+        attempts.isAcceptableOrUnknown(data['attempts']!, _attemptsMeta),
+      );
+    }
+    if (data.containsKey('error_code')) {
+      context.handle(
+        _errorCodeMeta,
+        errorCode.isAcceptableOrUnknown(data['error_code']!, _errorCodeMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('started_at')) {
+      context.handle(
+        _startedAtMeta,
+        startedAt.isAcceptableOrUnknown(data['started_at']!, _startedAtMeta),
+      );
+    }
+    if (data.containsKey('finished_at')) {
+      context.handle(
+        _finishedAtMeta,
+        finishedAt.isAcceptableOrUnknown(data['finished_at']!, _finishedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {mediaItemId, jobType},
+  ];
+  @override
+  ProcessingJob map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProcessingJob(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      mediaItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}media_item_id'],
+      )!,
+      jobType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}job_type'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      attempts: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempts'],
+      )!,
+      errorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}error_code'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      startedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}started_at'],
+      ),
+      finishedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}finished_at'],
+      ),
+    );
+  }
+
+  @override
+  $ProcessingJobsTable createAlias(String alias) {
+    return $ProcessingJobsTable(attachedDatabase, alias);
+  }
+}
+
+class ProcessingJob extends DataClass implements Insertable<ProcessingJob> {
+  final int id;
+  final int mediaItemId;
+  final String jobType;
+  final String status;
+  final int attempts;
+  final String? errorCode;
+  final DateTime createdAt;
+  final DateTime? startedAt;
+  final DateTime? finishedAt;
+  const ProcessingJob({
+    required this.id,
+    required this.mediaItemId,
+    required this.jobType,
+    required this.status,
+    required this.attempts,
+    this.errorCode,
+    required this.createdAt,
+    this.startedAt,
+    this.finishedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['media_item_id'] = Variable<int>(mediaItemId);
+    map['job_type'] = Variable<String>(jobType);
+    map['status'] = Variable<String>(status);
+    map['attempts'] = Variable<int>(attempts);
+    if (!nullToAbsent || errorCode != null) {
+      map['error_code'] = Variable<String>(errorCode);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    if (!nullToAbsent || startedAt != null) {
+      map['started_at'] = Variable<DateTime>(startedAt);
+    }
+    if (!nullToAbsent || finishedAt != null) {
+      map['finished_at'] = Variable<DateTime>(finishedAt);
+    }
+    return map;
+  }
+
+  ProcessingJobsCompanion toCompanion(bool nullToAbsent) {
+    return ProcessingJobsCompanion(
+      id: Value(id),
+      mediaItemId: Value(mediaItemId),
+      jobType: Value(jobType),
+      status: Value(status),
+      attempts: Value(attempts),
+      errorCode: errorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(errorCode),
+      createdAt: Value(createdAt),
+      startedAt: startedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(startedAt),
+      finishedAt: finishedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(finishedAt),
+    );
+  }
+
+  factory ProcessingJob.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProcessingJob(
+      id: serializer.fromJson<int>(json['id']),
+      mediaItemId: serializer.fromJson<int>(json['mediaItemId']),
+      jobType: serializer.fromJson<String>(json['jobType']),
+      status: serializer.fromJson<String>(json['status']),
+      attempts: serializer.fromJson<int>(json['attempts']),
+      errorCode: serializer.fromJson<String?>(json['errorCode']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      startedAt: serializer.fromJson<DateTime?>(json['startedAt']),
+      finishedAt: serializer.fromJson<DateTime?>(json['finishedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'mediaItemId': serializer.toJson<int>(mediaItemId),
+      'jobType': serializer.toJson<String>(jobType),
+      'status': serializer.toJson<String>(status),
+      'attempts': serializer.toJson<int>(attempts),
+      'errorCode': serializer.toJson<String?>(errorCode),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'startedAt': serializer.toJson<DateTime?>(startedAt),
+      'finishedAt': serializer.toJson<DateTime?>(finishedAt),
+    };
+  }
+
+  ProcessingJob copyWith({
+    int? id,
+    int? mediaItemId,
+    String? jobType,
+    String? status,
+    int? attempts,
+    Value<String?> errorCode = const Value.absent(),
+    DateTime? createdAt,
+    Value<DateTime?> startedAt = const Value.absent(),
+    Value<DateTime?> finishedAt = const Value.absent(),
+  }) => ProcessingJob(
+    id: id ?? this.id,
+    mediaItemId: mediaItemId ?? this.mediaItemId,
+    jobType: jobType ?? this.jobType,
+    status: status ?? this.status,
+    attempts: attempts ?? this.attempts,
+    errorCode: errorCode.present ? errorCode.value : this.errorCode,
+    createdAt: createdAt ?? this.createdAt,
+    startedAt: startedAt.present ? startedAt.value : this.startedAt,
+    finishedAt: finishedAt.present ? finishedAt.value : this.finishedAt,
+  );
+  ProcessingJob copyWithCompanion(ProcessingJobsCompanion data) {
+    return ProcessingJob(
+      id: data.id.present ? data.id.value : this.id,
+      mediaItemId: data.mediaItemId.present
+          ? data.mediaItemId.value
+          : this.mediaItemId,
+      jobType: data.jobType.present ? data.jobType.value : this.jobType,
+      status: data.status.present ? data.status.value : this.status,
+      attempts: data.attempts.present ? data.attempts.value : this.attempts,
+      errorCode: data.errorCode.present ? data.errorCode.value : this.errorCode,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
+      finishedAt: data.finishedAt.present
+          ? data.finishedAt.value
+          : this.finishedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProcessingJob(')
+          ..write('id: $id, ')
+          ..write('mediaItemId: $mediaItemId, ')
+          ..write('jobType: $jobType, ')
+          ..write('status: $status, ')
+          ..write('attempts: $attempts, ')
+          ..write('errorCode: $errorCode, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('finishedAt: $finishedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    mediaItemId,
+    jobType,
+    status,
+    attempts,
+    errorCode,
+    createdAt,
+    startedAt,
+    finishedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProcessingJob &&
+          other.id == this.id &&
+          other.mediaItemId == this.mediaItemId &&
+          other.jobType == this.jobType &&
+          other.status == this.status &&
+          other.attempts == this.attempts &&
+          other.errorCode == this.errorCode &&
+          other.createdAt == this.createdAt &&
+          other.startedAt == this.startedAt &&
+          other.finishedAt == this.finishedAt);
+}
+
+class ProcessingJobsCompanion extends UpdateCompanion<ProcessingJob> {
+  final Value<int> id;
+  final Value<int> mediaItemId;
+  final Value<String> jobType;
+  final Value<String> status;
+  final Value<int> attempts;
+  final Value<String?> errorCode;
+  final Value<DateTime> createdAt;
+  final Value<DateTime?> startedAt;
+  final Value<DateTime?> finishedAt;
+  const ProcessingJobsCompanion({
+    this.id = const Value.absent(),
+    this.mediaItemId = const Value.absent(),
+    this.jobType = const Value.absent(),
+    this.status = const Value.absent(),
+    this.attempts = const Value.absent(),
+    this.errorCode = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.startedAt = const Value.absent(),
+    this.finishedAt = const Value.absent(),
+  });
+  ProcessingJobsCompanion.insert({
+    this.id = const Value.absent(),
+    required int mediaItemId,
+    required String jobType,
+    required String status,
+    this.attempts = const Value.absent(),
+    this.errorCode = const Value.absent(),
+    required DateTime createdAt,
+    this.startedAt = const Value.absent(),
+    this.finishedAt = const Value.absent(),
+  }) : mediaItemId = Value(mediaItemId),
+       jobType = Value(jobType),
+       status = Value(status),
+       createdAt = Value(createdAt);
+  static Insertable<ProcessingJob> custom({
+    Expression<int>? id,
+    Expression<int>? mediaItemId,
+    Expression<String>? jobType,
+    Expression<String>? status,
+    Expression<int>? attempts,
+    Expression<String>? errorCode,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? startedAt,
+    Expression<DateTime>? finishedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (mediaItemId != null) 'media_item_id': mediaItemId,
+      if (jobType != null) 'job_type': jobType,
+      if (status != null) 'status': status,
+      if (attempts != null) 'attempts': attempts,
+      if (errorCode != null) 'error_code': errorCode,
+      if (createdAt != null) 'created_at': createdAt,
+      if (startedAt != null) 'started_at': startedAt,
+      if (finishedAt != null) 'finished_at': finishedAt,
+    });
+  }
+
+  ProcessingJobsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? mediaItemId,
+    Value<String>? jobType,
+    Value<String>? status,
+    Value<int>? attempts,
+    Value<String?>? errorCode,
+    Value<DateTime>? createdAt,
+    Value<DateTime?>? startedAt,
+    Value<DateTime?>? finishedAt,
+  }) {
+    return ProcessingJobsCompanion(
+      id: id ?? this.id,
+      mediaItemId: mediaItemId ?? this.mediaItemId,
+      jobType: jobType ?? this.jobType,
+      status: status ?? this.status,
+      attempts: attempts ?? this.attempts,
+      errorCode: errorCode ?? this.errorCode,
+      createdAt: createdAt ?? this.createdAt,
+      startedAt: startedAt ?? this.startedAt,
+      finishedAt: finishedAt ?? this.finishedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (mediaItemId.present) {
+      map['media_item_id'] = Variable<int>(mediaItemId.value);
+    }
+    if (jobType.present) {
+      map['job_type'] = Variable<String>(jobType.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (attempts.present) {
+      map['attempts'] = Variable<int>(attempts.value);
+    }
+    if (errorCode.present) {
+      map['error_code'] = Variable<String>(errorCode.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (startedAt.present) {
+      map['started_at'] = Variable<DateTime>(startedAt.value);
+    }
+    if (finishedAt.present) {
+      map['finished_at'] = Variable<DateTime>(finishedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProcessingJobsCompanion(')
+          ..write('id: $id, ')
+          ..write('mediaItemId: $mediaItemId, ')
+          ..write('jobType: $jobType, ')
+          ..write('status: $status, ')
+          ..write('attempts: $attempts, ')
+          ..write('errorCode: $errorCode, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('startedAt: $startedAt, ')
+          ..write('finishedAt: $finishedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ContextoDatabase extends GeneratedDatabase {
   _$ContextoDatabase(QueryExecutor e) : super(e);
   $ContextoDatabaseManager get managers => $ContextoDatabaseManager(this);
   late final $MediaItemsTable mediaItems = $MediaItemsTable(this);
   late final $OcrResultsTable ocrResults = $OcrResultsTable(this);
+  late final $ProcessingJobsTable processingJobs = $ProcessingJobsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [mediaItems, ocrResults];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    mediaItems,
+    ocrResults,
+    processingJobs,
+  ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
     WritePropagation(
@@ -907,6 +1475,13 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('ocr_results', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'media_items',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('processing_jobs', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -951,6 +1526,25 @@ final class $$MediaItemsTableReferences
     ).filter((f) => f.mediaItemId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_ocrResultsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ProcessingJobsTable, List<ProcessingJob>>
+  _processingJobsRefsTable(_$ContextoDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.processingJobs,
+        aliasName: 'media_items__id__processing_jobs__media_item_id',
+      );
+
+  $$ProcessingJobsTableProcessedTableManager get processingJobsRefs {
+    final manager = $$ProcessingJobsTableTableManager(
+      $_db,
+      $_db.processingJobs,
+    ).filter((f) => f.mediaItemId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_processingJobsRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -1022,6 +1616,31 @@ class $$MediaItemsTableFilterComposer
           }) => $$OcrResultsTableFilterComposer(
             $db: $db,
             $table: $db.ocrResults,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> processingJobsRefs(
+    Expression<bool> Function($$ProcessingJobsTableFilterComposer f) f,
+  ) {
+    final $$ProcessingJobsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.processingJobs,
+      getReferencedColumn: (t) => t.mediaItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProcessingJobsTableFilterComposer(
+            $db: $db,
+            $table: $db.processingJobs,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -1147,6 +1766,31 @@ class $$MediaItemsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> processingJobsRefs<T extends Object>(
+    Expression<T> Function($$ProcessingJobsTableAnnotationComposer a) f,
+  ) {
+    final $$ProcessingJobsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.processingJobs,
+      getReferencedColumn: (t) => t.mediaItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProcessingJobsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.processingJobs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$MediaItemsTableTableManager
@@ -1162,7 +1806,7 @@ class $$MediaItemsTableTableManager
           $$MediaItemsTableUpdateCompanionBuilder,
           (MediaItem, $$MediaItemsTableReferences),
           MediaItem,
-          PrefetchHooks Function({bool ocrResultsRefs})
+          PrefetchHooks Function({bool ocrResultsRefs, bool processingJobsRefs})
         > {
   $$MediaItemsTableTableManager(_$ContextoDatabase db, $MediaItemsTable table)
     : super(
@@ -1223,38 +1867,63 @@ class $$MediaItemsTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({ocrResultsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (ocrResultsRefs) db.ocrResults],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (ocrResultsRefs)
-                    await $_getPrefetchedData<
-                      MediaItem,
-                      $MediaItemsTable,
-                      OcrResult
-                    >(
-                      currentTable: table,
-                      referencedTable: $$MediaItemsTableReferences
-                          ._ocrResultsRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$MediaItemsTableReferences(
-                            db,
-                            table,
-                            p0,
-                          ).ocrResultsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where(
-                            (e) => e.mediaItemId == item.id,
-                          ),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({ocrResultsRefs = false, processingJobsRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (ocrResultsRefs) db.ocrResults,
+                    if (processingJobsRefs) db.processingJobs,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (ocrResultsRefs)
+                        await $_getPrefetchedData<
+                          MediaItem,
+                          $MediaItemsTable,
+                          OcrResult
+                        >(
+                          currentTable: table,
+                          referencedTable: $$MediaItemsTableReferences
+                              ._ocrResultsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$MediaItemsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).ocrResultsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.mediaItemId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (processingJobsRefs)
+                        await $_getPrefetchedData<
+                          MediaItem,
+                          $MediaItemsTable,
+                          ProcessingJob
+                        >(
+                          currentTable: table,
+                          referencedTable: $$MediaItemsTableReferences
+                              ._processingJobsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$MediaItemsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).processingJobsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.mediaItemId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -1271,7 +1940,7 @@ typedef $$MediaItemsTableProcessedTableManager =
       $$MediaItemsTableUpdateCompanionBuilder,
       (MediaItem, $$MediaItemsTableReferences),
       MediaItem,
-      PrefetchHooks Function({bool ocrResultsRefs})
+      PrefetchHooks Function({bool ocrResultsRefs, bool processingJobsRefs})
     >;
 typedef $$OcrResultsTableCreateCompanionBuilder =
     OcrResultsCompanion Function({
@@ -1588,6 +2257,408 @@ typedef $$OcrResultsTableProcessedTableManager =
       OcrResult,
       PrefetchHooks Function({bool mediaItemId})
     >;
+typedef $$ProcessingJobsTableCreateCompanionBuilder =
+    ProcessingJobsCompanion Function({
+      Value<int> id,
+      required int mediaItemId,
+      required String jobType,
+      required String status,
+      Value<int> attempts,
+      Value<String?> errorCode,
+      required DateTime createdAt,
+      Value<DateTime?> startedAt,
+      Value<DateTime?> finishedAt,
+    });
+typedef $$ProcessingJobsTableUpdateCompanionBuilder =
+    ProcessingJobsCompanion Function({
+      Value<int> id,
+      Value<int> mediaItemId,
+      Value<String> jobType,
+      Value<String> status,
+      Value<int> attempts,
+      Value<String?> errorCode,
+      Value<DateTime> createdAt,
+      Value<DateTime?> startedAt,
+      Value<DateTime?> finishedAt,
+    });
+
+final class $$ProcessingJobsTableReferences
+    extends
+        BaseReferences<
+          _$ContextoDatabase,
+          $ProcessingJobsTable,
+          ProcessingJob
+        > {
+  $$ProcessingJobsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $MediaItemsTable _mediaItemIdTable(_$ContextoDatabase db) => db
+      .mediaItems
+      .createAlias('processing_jobs__media_item_id__media_items__id');
+
+  $$MediaItemsTableProcessedTableManager get mediaItemId {
+    final $_column = $_itemColumn<int>('media_item_id')!;
+
+    final manager = $$MediaItemsTableTableManager(
+      $_db,
+      $_db.mediaItems,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_mediaItemIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ProcessingJobsTableFilterComposer
+    extends Composer<_$ContextoDatabase, $ProcessingJobsTable> {
+  $$ProcessingJobsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get jobType => $composableBuilder(
+    column: $table.jobType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errorCode => $composableBuilder(
+    column: $table.errorCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get finishedAt => $composableBuilder(
+    column: $table.finishedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$MediaItemsTableFilterComposer get mediaItemId {
+    final $$MediaItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProcessingJobsTableOrderingComposer
+    extends Composer<_$ContextoDatabase, $ProcessingJobsTable> {
+  $$ProcessingJobsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get jobType => $composableBuilder(
+    column: $table.jobType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errorCode => $composableBuilder(
+    column: $table.errorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get startedAt => $composableBuilder(
+    column: $table.startedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get finishedAt => $composableBuilder(
+    column: $table.finishedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$MediaItemsTableOrderingComposer get mediaItemId {
+    final $$MediaItemsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableOrderingComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProcessingJobsTableAnnotationComposer
+    extends Composer<_$ContextoDatabase, $ProcessingJobsTable> {
+  $$ProcessingJobsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get jobType =>
+      $composableBuilder(column: $table.jobType, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<int> get attempts =>
+      $composableBuilder(column: $table.attempts, builder: (column) => column);
+
+  GeneratedColumn<String> get errorCode =>
+      $composableBuilder(column: $table.errorCode, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get startedAt =>
+      $composableBuilder(column: $table.startedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get finishedAt => $composableBuilder(
+    column: $table.finishedAt,
+    builder: (column) => column,
+  );
+
+  $$MediaItemsTableAnnotationComposer get mediaItemId {
+    final $$MediaItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProcessingJobsTableTableManager
+    extends
+        RootTableManager<
+          _$ContextoDatabase,
+          $ProcessingJobsTable,
+          ProcessingJob,
+          $$ProcessingJobsTableFilterComposer,
+          $$ProcessingJobsTableOrderingComposer,
+          $$ProcessingJobsTableAnnotationComposer,
+          $$ProcessingJobsTableCreateCompanionBuilder,
+          $$ProcessingJobsTableUpdateCompanionBuilder,
+          (ProcessingJob, $$ProcessingJobsTableReferences),
+          ProcessingJob,
+          PrefetchHooks Function({bool mediaItemId})
+        > {
+  $$ProcessingJobsTableTableManager(
+    _$ContextoDatabase db,
+    $ProcessingJobsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProcessingJobsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProcessingJobsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProcessingJobsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> mediaItemId = const Value.absent(),
+                Value<String> jobType = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                Value<String?> errorCode = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime?> startedAt = const Value.absent(),
+                Value<DateTime?> finishedAt = const Value.absent(),
+              }) => ProcessingJobsCompanion(
+                id: id,
+                mediaItemId: mediaItemId,
+                jobType: jobType,
+                status: status,
+                attempts: attempts,
+                errorCode: errorCode,
+                createdAt: createdAt,
+                startedAt: startedAt,
+                finishedAt: finishedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int mediaItemId,
+                required String jobType,
+                required String status,
+                Value<int> attempts = const Value.absent(),
+                Value<String?> errorCode = const Value.absent(),
+                required DateTime createdAt,
+                Value<DateTime?> startedAt = const Value.absent(),
+                Value<DateTime?> finishedAt = const Value.absent(),
+              }) => ProcessingJobsCompanion.insert(
+                id: id,
+                mediaItemId: mediaItemId,
+                jobType: jobType,
+                status: status,
+                attempts: attempts,
+                errorCode: errorCode,
+                createdAt: createdAt,
+                startedAt: startedAt,
+                finishedAt: finishedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ProcessingJobsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({mediaItemId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (mediaItemId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.mediaItemId,
+                                referencedTable: $$ProcessingJobsTableReferences
+                                    ._mediaItemIdTable(db),
+                                referencedColumn:
+                                    $$ProcessingJobsTableReferences
+                                        ._mediaItemIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ProcessingJobsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ContextoDatabase,
+      $ProcessingJobsTable,
+      ProcessingJob,
+      $$ProcessingJobsTableFilterComposer,
+      $$ProcessingJobsTableOrderingComposer,
+      $$ProcessingJobsTableAnnotationComposer,
+      $$ProcessingJobsTableCreateCompanionBuilder,
+      $$ProcessingJobsTableUpdateCompanionBuilder,
+      (ProcessingJob, $$ProcessingJobsTableReferences),
+      ProcessingJob,
+      PrefetchHooks Function({bool mediaItemId})
+    >;
 
 class $ContextoDatabaseManager {
   final _$ContextoDatabase _db;
@@ -1596,4 +2667,6 @@ class $ContextoDatabaseManager {
       $$MediaItemsTableTableManager(_db, _db.mediaItems);
   $$OcrResultsTableTableManager get ocrResults =>
       $$OcrResultsTableTableManager(_db, _db.ocrResults);
+  $$ProcessingJobsTableTableManager get processingJobs =>
+      $$ProcessingJobsTableTableManager(_db, _db.processingJobs);
 }

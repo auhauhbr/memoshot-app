@@ -37,14 +37,40 @@ class OcrResults extends Table {
   Set<Column<Object>> get primaryKey => {mediaItemId};
 }
 
-@DriftDatabase(tables: [MediaItems, OcrResults])
+class ProcessingJobs extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  IntColumn get mediaItemId =>
+      integer().references(MediaItems, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get jobType => text()();
+
+  TextColumn get status => text()();
+
+  IntColumn get attempts => integer().withDefault(const Constant(0))();
+
+  TextColumn get errorCode => text().nullable()();
+
+  DateTimeColumn get createdAt => dateTime()();
+
+  DateTimeColumn get startedAt => dateTime().nullable()();
+
+  DateTimeColumn get finishedAt => dateTime().nullable()();
+
+  @override
+  List<Set<Column<Object>>> get uniqueKeys => [
+    {mediaItemId, jobType},
+  ];
+}
+
+@DriftDatabase(tables: [MediaItems, OcrResults, ProcessingJobs])
 class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase() : super(_openConnection());
 
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -59,6 +85,9 @@ class ContextoDatabase extends _$ContextoDatabase {
       }
       if (from < 3) {
         await migrator.createTable(ocrResults);
+      }
+      if (from < 4) {
+        await migrator.createTable(processingJobs);
       }
     },
     beforeOpen: (details) async {
