@@ -4,16 +4,20 @@ import 'package:flutter/material.dart';
 
 import '../data/media_item_repository.dart';
 import '../domain/media_item.dart';
+import '../../ocr/data/ocr_repository.dart';
+import '../../ocr/domain/ocr_result.dart';
 
 class ScreenshotDetailPage extends StatefulWidget {
   const ScreenshotDetailPage({
     required this.mediaItem,
     required this.mediaRepository,
+    required this.ocrRepository,
     super.key,
   });
 
   final MediaItem mediaItem;
   final MediaItemRepository mediaRepository;
+  final OcrRepository ocrRepository;
 
   @override
   State<ScreenshotDetailPage> createState() => _ScreenshotDetailPageState();
@@ -21,7 +25,72 @@ class ScreenshotDetailPage extends StatefulWidget {
 
 class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
   bool _isRemoving = false;
+  bool _isLoadingOcr = true;
+  bool _isProcessingOcr = false;
   String? _errorMessage;
+  String? _ocrErrorMessage;
+  OcrResult? _ocrResult;
+  late final bool _fileExists;
+
+  @override
+  void initState() {
+    super.initState();
+    _fileExists = File(widget.mediaItem.privatePath).existsSync();
+    _loadOcrResult();
+  }
+
+  Future<void> _loadOcrResult() async {
+    try {
+      final result = await widget.ocrRepository.loadFor(widget.mediaItem.id);
+      if (mounted) {
+        setState(() {
+          _ocrResult = result;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _ocrErrorMessage = 'Não foi possível carregar o texto reconhecido.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingOcr = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _processOcr() async {
+    if (!_fileExists || _isProcessingOcr) {
+      return;
+    }
+    setState(() {
+      _isProcessingOcr = true;
+      _ocrErrorMessage = null;
+    });
+    try {
+      final result = await widget.ocrRepository.process(widget.mediaItem);
+      if (mounted) {
+        setState(() {
+          _ocrResult = result;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _ocrErrorMessage = 'Não foi possível extrair o texto da imagem.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessingOcr = false;
+        });
+      }
+    }
+  }
 
   Future<void> _requestRemoval() async {
     final confirmed = await showDialog<bool>(
@@ -97,7 +166,7 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: File(widget.mediaItem.privatePath).existsSync()
+                    child: _fileExists
                         ? Image.file(
                             File(widget.mediaItem.privatePath),
                             key: const Key('detail-screenshot-image'),
@@ -110,6 +179,15 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                   const SizedBox(height: 14),
                   _MetadataCard(
                     importedAt: _formatImportedAt(widget.mediaItem.importedAt),
+                  ),
+                  const SizedBox(height: 12),
+                  _OcrSection(
+                    result: _ocrResult,
+                    isLoading: _isLoadingOcr,
+                    isProcessing: _isProcessingOcr,
+                    fileAvailable: _fileExists,
+                    errorMessage: _ocrErrorMessage,
+                    onProcess: _processOcr,
                   ),
                   const SizedBox(height: 12),
                   Container(
@@ -143,7 +221,9 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                   ],
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: _isRemoving ? null : _requestRemoval,
+                    onPressed: _isRemoving || _isProcessingOcr
+                        ? null
+                        : _requestRemoval,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: colors.error,
                       side: BorderSide(color: colors.error),
@@ -214,6 +294,126 @@ class _MissingImageState extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _OcrSection extends StatelessWidget {
+  const _OcrSection({
+    required this.result,
+    required this.isLoading,
+    required this.isProcessing,
+    required this.fileAvailable,
+    required this.errorMessage,
+    required this.onProcess,
+  });
+
+  final OcrResult? result;
+  final bool isLoading;
+  final bool isProcessing;
+  final bool fileAvailable;
+  final String? errorMessage;
+  final VoidCallback onProcess;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Texto reconhecido',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: colors.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (isLoading)
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (result == null) ...[
+            Text(
+              fileAvailable
+                  ? 'Extraia o texto desta imagem quando desejar.'
+                  : 'A imagem precisa estar disponível para extrair texto.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+            if (fileAvailable) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: isProcessing ? null : onProcess,
+                icon: isProcessing
+                    ? const SizedBox.square(
+                        dimension: 17,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.document_scanner_outlined, size: 19),
+                label: Text(
+                  isProcessing ? 'Extraindo texto...' : 'Extrair texto',
+                ),
+              ),
+            ],
+          ] else ...[
+            if (result!.fullText.isEmpty)
+              Text(
+                'Nenhum texto foi encontrado nesta imagem.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              )
+            else
+              SelectableText(
+                result!.fullText,
+                key: const Key('recognized-text'),
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+              ),
+            if (fileAvailable) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: isProcessing ? null : onProcess,
+                  icon: isProcessing
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh, size: 18),
+                  label: Text(
+                    isProcessing
+                        ? 'Processando novamente...'
+                        : 'Processar novamente',
+                  ),
+                ),
+              ),
+            ],
+          ],
+          if (errorMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              errorMessage!,
+              style: theme.textTheme.bodySmall?.copyWith(color: colors.error),
+            ),
+          ],
+        ],
       ),
     );
   }

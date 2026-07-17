@@ -7,17 +7,26 @@ import '../../../core/database/contexto_database.dart' show ContextoDatabase;
 import '../../../core/media/image_picker_screenshot_picker.dart';
 import '../../../core/media/screenshot_picker.dart';
 import '../../../core/media/screenshot_storage.dart';
+import '../../../core/ocr/ml_kit_text_recognition_service.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
 import '../../library/domain/selected_screenshot.dart';
 import '../../library/presentation/screenshot_detail_page.dart';
+import '../../ocr/data/ocr_repository.dart';
+import '../../ocr/data/ocr_result_store.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.screenshotPicker, this.mediaRepository});
+  const HomePage({
+    super.key,
+    this.screenshotPicker,
+    this.mediaRepository,
+    this.ocrRepository,
+  });
 
   final ScreenshotPicker? screenshotPicker;
   final MediaItemRepository? mediaRepository;
+  final OcrRepository? ocrRepository;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -26,7 +35,9 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late final ScreenshotPicker _screenshotPicker;
   late final MediaItemRepository _mediaRepository;
+  late final OcrRepository _ocrRepository;
   late final bool _ownsMediaRepository;
+  ContextoDatabase? _ownedOcrDatabase;
   final List<MediaItem> _mediaItems = [];
   bool _isLoading = true;
   String? _errorMessage;
@@ -38,12 +49,25 @@ class _HomePageState extends State<HomePage> {
     _screenshotPicker =
         widget.screenshotPicker ?? ImagePickerScreenshotPicker();
     _ownsMediaRepository = widget.mediaRepository == null;
+    final database =
+        widget.mediaRepository == null || widget.ocrRepository == null
+        ? ContextoDatabase()
+        : null;
     _mediaRepository =
         widget.mediaRepository ??
         LocalMediaItemRepository(
-          store: DriftMediaItemStore(ContextoDatabase()),
+          store: DriftMediaItemStore(database!),
           storage: PrivateScreenshotStorage(),
         );
+    _ocrRepository =
+        widget.ocrRepository ??
+        LocalOcrRepository(
+          store: DriftOcrResultStore(database!),
+          recognitionService: const MlKitTextRecognitionService(),
+        );
+    if (!_ownsMediaRepository) {
+      _ownedOcrDatabase = database;
+    }
     _initialize();
   }
 
@@ -51,6 +75,8 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     if (_ownsMediaRepository) {
       unawaited(_mediaRepository.close());
+    } else if (_ownedOcrDatabase != null) {
+      unawaited(_ownedOcrDatabase!.close());
     }
     super.dispose();
   }
@@ -152,6 +178,7 @@ class _HomePageState extends State<HomePage> {
         builder: (context) => ScreenshotDetailPage(
           mediaItem: item,
           mediaRepository: _mediaRepository,
+          ocrRepository: _ocrRepository,
         ),
       ),
     );
