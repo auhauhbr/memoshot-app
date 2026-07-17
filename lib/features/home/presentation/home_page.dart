@@ -11,6 +11,7 @@ import '../../library/data/media_item_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
 import '../../library/domain/selected_screenshot.dart';
+import '../../library/presentation/screenshot_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, this.screenshotPicker, this.mediaRepository});
@@ -145,6 +146,20 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _openDetails(MediaItem item) async {
+    final removed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => ScreenshotDetailPage(
+          mediaItem: item,
+          mediaRepository: _mediaRepository,
+        ),
+      ),
+    );
+    if (removed == true) {
+      await _reloadItemsIgnoringErrors();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -213,7 +228,10 @@ class _HomePageState extends State<HomePage> {
                   ),
                   if (_mediaItems.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    _LibraryGrid(mediaItems: _mediaItems),
+                    _LibraryGrid(
+                      mediaItems: _mediaItems,
+                      onItemTap: _openDetails,
+                    ),
                   ],
                   const SizedBox(height: 12),
                   const _LocalProcessingInfo(),
@@ -457,9 +475,10 @@ class _ImportCard extends StatelessWidget {
 }
 
 class _LibraryGrid extends StatelessWidget {
-  const _LibraryGrid({required this.mediaItems});
+  const _LibraryGrid({required this.mediaItems, required this.onItemTap});
 
   final List<MediaItem> mediaItems;
+  final ValueChanged<MediaItem> onItemTap;
 
   @override
   Widget build(BuildContext context) {
@@ -495,24 +514,49 @@ class _LibraryGrid extends StatelessWidget {
             mainAxisSpacing: 8,
           ),
           itemBuilder: (context, index) {
-            return ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  border: Border.all(color: colors.outlineVariant),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Image.file(
-                  File(mediaItems[index].privatePath),
-                  key: ValueKey(mediaItems[index].id),
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => ColoredBox(
-                    color: colors.surfaceContainerLow,
-                    child: Icon(
-                      Icons.broken_image_outlined,
-                      color: colors.onSurfaceVariant,
+            final item = mediaItems[index];
+            return Material(
+              color: colors.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: colors.outlineVariant),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                key: ValueKey('screenshot-tile-${item.id}'),
+                onTap: () => onItemTap(item),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.file(
+                      File(item.privatePath),
+                      key: ValueKey(item.id),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => ColoredBox(
+                        color: colors.surfaceContainerLow,
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
                     ),
-                  ),
+                    Positioned(
+                      top: 5,
+                      right: 5,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: colors.surface.withValues(alpha: 0.88),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.open_in_full,
+                          size: 14,
+                          color: colors.secondary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );

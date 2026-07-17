@@ -194,6 +194,138 @@ void main() {
     expect(find.byType(Image), findsOneWidget);
   });
 
+  testWidgets('tocar na miniatura abre os detalhes e voltar funciona', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'detalhe.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [
+        createMediaItem(1, image.path, importedAt: DateTime(2026, 1, 2, 3, 4)),
+      ],
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+
+    await openFirstScreenshot(tester);
+
+    expect(find.text('Detalhes do screenshot'), findsOneWidget);
+    expect(find.text('02 de janeiro de 2026, às 03:04'), findsOneWidget);
+    expect(find.text('Selecionado no dispositivo'), findsOneWidget);
+    expect(find.text('Salvo neste dispositivo'), findsOneWidget);
+    expect(
+      find.text('O arquivo original da galeria não será alterado.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining(image.path), findsNothing);
+    expect(find.textContaining('hash-secreto'), findsNothing);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Biblioteca'), findsOneWidget);
+    expect(find.text('1 item'), findsOneWidget);
+  });
+
+  testWidgets('cancelar remoção mantém item, registro e arquivo', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'cancelar.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+
+    await tapRemoveFromContexto(tester);
+    expect(find.text('Remover do Contexto?'), findsOneWidget);
+    expect(
+      find.textContaining('O arquivo original da galeria será preservado.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(repository.removeCallCount, 0);
+    expect(repository.itemCount, 1);
+    expect(image.existsSync(), isTrue);
+    expect(find.text('Detalhes do screenshot'), findsOneWidget);
+  });
+
+  testWidgets('confirmar remoção atualiza grade, contador e estado vazio', (
+    tester,
+  ) async {
+    final original = createTestImage(temporaryDirectory, 'original.png');
+    final privateCopy = createTestImage(temporaryDirectory, 'copia.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, privateCopy.path)],
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+
+    await tapRemoveFromContexto(tester);
+    await tester.tap(find.text('Remover'));
+    await tester.pumpAndSettle();
+
+    expect(repository.removeCallCount, 1);
+    expect(repository.itemCount, 0);
+    expect(privateCopy.existsSync(), isFalse);
+    expect(original.existsSync(), isTrue);
+    expect(find.text('0 itens'), findsOneWidget);
+    expect(find.byKey(const Key('persisted-screenshot-grid')), findsNothing);
+  });
+
+  testWidgets('arquivo ausente mostra erro e permite voltar', (tester) async {
+    final missingPath = '${temporaryDirectory.path}/ausente.png';
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, missingPath)],
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('A imagem salva não está disponível.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Biblioteca'), findsOneWidget);
+  });
+
+  testWidgets('falha ao excluir cópia mantém detalhe e item coerentes', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'falha.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+      failRemoval: true,
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tapRemoveFromContexto(tester);
+    await tester.tap(find.text('Remover'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Não foi possível remover este screenshot.'),
+      findsOneWidget,
+    );
+    expect(repository.itemCount, 1);
+    expect(image.existsSync(), isTrue);
+    expect(find.text('Detalhes do screenshot'), findsOneWidget);
+  });
+
   testWidgets('mantém o tema claro com brilho de plataforma escuro', (
     tester,
   ) async {
@@ -242,13 +374,32 @@ Widget buildTestApp(
   );
 }
 
+Future<void> openFirstScreenshot(WidgetTester tester) async {
+  final tile = find.byKey(const ValueKey('screenshot-tile-1'));
+  await tester.ensureVisible(tile);
+  await tester.tap(tile);
+  await tester.pumpAndSettle();
+}
+
+Future<void> tapRemoveFromContexto(WidgetTester tester) async {
+  final action = find.text('Remover do Contexto');
+  await tester.ensureVisible(action);
+  await tester.tap(action);
+  await tester.pumpAndSettle();
+}
+
 class FakeMediaItemRepository implements MediaItemRepository {
-  FakeMediaItemRepository({List<MediaItem> initialItems = const []})
-    : _items = [...initialItems];
+  FakeMediaItemRepository({
+    List<MediaItem> initialItems = const [],
+    this.failRemoval = false,
+  }) : _items = [...initialItems];
 
   final List<MediaItem> _items;
   final Set<String> _sourcePaths = {};
+  final bool failRemoval;
   int loadCallCount = 0;
+  int removeCallCount = 0;
+  int get itemCount => _items.length;
 
   @override
   Future<ImportResult> importScreenshots(
@@ -278,16 +429,30 @@ class FakeMediaItemRepository implements MediaItemRepository {
   }
 
   @override
+  Future<void> removeItem(MediaItem item) async {
+    removeCallCount++;
+    if (failRemoval) {
+      throw StateError('Falha privada simulada');
+    }
+    final file = File(item.privatePath);
+    if (file.existsSync()) {
+      file.deleteSync();
+    }
+    _items.removeWhere((candidate) => candidate.id == item.id);
+  }
+
+  @override
   Future<void> close() async {}
 }
 
-MediaItem createMediaItem(int id, String path) {
+MediaItem createMediaItem(int id, String path, {DateTime? importedAt}) {
   return MediaItem(
     id: id,
     privatePath: path,
     internalName: 'screenshot_$id.png',
     mimeType: 'image/png',
-    importedAt: DateTime(2026),
+    mediaHash: 'hash-secreto',
+    importedAt: importedAt ?? DateTime(2026),
     sourceMode: 'photoPicker',
     status: 'ready',
   );
