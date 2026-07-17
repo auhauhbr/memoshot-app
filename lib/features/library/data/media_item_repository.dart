@@ -2,8 +2,11 @@ import 'dart:io';
 
 import '../../../core/media/file_hash_calculator.dart';
 import '../../../core/media/screenshot_storage.dart';
+import '../../../core/text/search_snippet_builder.dart';
+import '../../../core/text/text_normalizer.dart';
 import '../domain/media_item.dart';
 import '../domain/selected_screenshot.dart';
+import '../domain/screenshot_search_result.dart';
 import '../../processing/data/ocr_job_scheduler.dart';
 import 'media_item_store.dart';
 
@@ -24,6 +27,11 @@ abstract interface class MediaItemRepository {
 
   Future<void> removeItem(MediaItem item);
 
+  Future<List<ScreenshotSearchResult>> searchRecognizedText(
+    String query, {
+    int limit = 100,
+  });
+
   Future<void> close();
 }
 
@@ -33,19 +41,32 @@ class LocalMediaItemRepository implements MediaItemRepository {
     required ScreenshotStorage storage,
     FileHashCalculator hashCalculator = const Sha256FileHashCalculator(),
     OcrJobScheduler? ocrJobScheduler,
-  }) : this._(store, storage, hashCalculator, ocrJobScheduler);
+    TextNormalizer normalizer = const TextNormalizer(),
+    SearchSnippetBuilder snippetBuilder = const SearchSnippetBuilder(),
+  }) : this._(
+         store,
+         storage,
+         hashCalculator,
+         ocrJobScheduler,
+         normalizer,
+         snippetBuilder,
+       );
 
   LocalMediaItemRepository._(
     this._store,
     this._storage,
     this._hashCalculator,
     this._ocrJobScheduler,
+    this._normalizer,
+    this._snippetBuilder,
   );
 
   final MediaItemStore _store;
   final ScreenshotStorage _storage;
   final FileHashCalculator _hashCalculator;
   final OcrJobScheduler? _ocrJobScheduler;
+  final TextNormalizer _normalizer;
+  final SearchSnippetBuilder _snippetBuilder;
 
   @override
   Future<List<MediaItem>> loadAvailableItems() async {
@@ -178,6 +199,33 @@ class LocalMediaItemRepository implements MediaItemRepository {
   Future<void> removeItem(MediaItem item) async {
     await _storage.deletePrivateCopy(item.privatePath);
     await _store.deleteItem(item.id);
+  }
+
+  @override
+  Future<List<ScreenshotSearchResult>> searchRecognizedText(
+    String query, {
+    int limit = 100,
+  }) async {
+    final normalizedQuery = _normalizer.normalize(query);
+    if (normalizedQuery.isEmpty) {
+      return const [];
+    }
+    final matches = await _store.searchRecognizedText(
+      normalizedQuery,
+      limit: limit.clamp(1, 100).toInt(),
+    );
+    final available = <ScreenshotSearchResult>[];
+    for (final match in matches) {
+      if (await File(match.mediaItem.privatePath).exists()) {
+        available.add(
+          ScreenshotSearchResult(
+            mediaItem: match.mediaItem,
+            snippet: _snippetBuilder.build(match.fullText, normalizedQuery),
+          ),
+        );
+      }
+    }
+    return available;
   }
 
   @override

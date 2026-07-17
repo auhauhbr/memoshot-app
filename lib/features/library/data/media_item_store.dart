@@ -22,7 +22,19 @@ abstract interface class MediaItemStore {
 
   Future<void> deleteItem(int id);
 
+  Future<List<RecognizedTextMatch>> searchRecognizedText(
+    String normalizedQuery, {
+    required int limit,
+  });
+
   Future<void> close();
+}
+
+class RecognizedTextMatch {
+  const RecognizedTextMatch({required this.mediaItem, required this.fullText});
+
+  final domain.MediaItem mediaItem;
+  final String fullText;
 }
 
 class DriftMediaItemStore implements MediaItemStore {
@@ -96,6 +108,43 @@ class DriftMediaItemStore implements MediaItemStore {
     await (_database.delete(
       _database.mediaItems,
     )..where((item) => item.id.equals(id))).go();
+  }
+
+  @override
+  Future<List<RecognizedTextMatch>> searchRecognizedText(
+    String normalizedQuery, {
+    required int limit,
+  }) async {
+    final escaped = normalizedQuery
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+    final query = _database.select(_database.mediaItems).join([
+      innerJoin(
+        _database.ocrResults,
+        _database.ocrResults.mediaItemId.equalsExp(_database.mediaItems.id),
+      ),
+    ]);
+    query
+      ..where(
+        _database.ocrResults.normalizedText.like(
+          '%$escaped%',
+          escapeChar: r'\',
+        ),
+      )
+      ..orderBy([OrderingTerm.desc(_database.mediaItems.importedAt)])
+      ..limit(limit);
+    final rows = await query.get();
+    return rows
+        .map((row) {
+          final media = row.readTable(_database.mediaItems);
+          final ocr = row.readTable(_database.ocrResults);
+          return RecognizedTextMatch(
+            mediaItem: _toDomain(media),
+            fullText: ocr.fullText,
+          );
+        })
+        .toList(growable: false);
   }
 
   domain.MediaItem _toDomain(MediaItem row) {
