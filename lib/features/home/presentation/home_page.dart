@@ -9,6 +9,9 @@ import '../../../core/media/screenshot_picker.dart';
 import '../../../core/media/screenshot_storage.dart';
 import '../../../core/ocr/ml_kit_text_recognition_service.dart';
 import '../../../core/text/text_normalizer.dart';
+import '../../categories/data/category_repository.dart';
+import '../../categories/data/category_store.dart';
+import '../../categories/presentation/categories_page.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
@@ -29,12 +32,14 @@ class HomePage extends StatefulWidget {
     this.mediaRepository,
     this.ocrRepository,
     this.ocrQueue,
+    this.categoryRepository,
   });
 
   final ScreenshotPicker? screenshotPicker;
   final MediaItemRepository? mediaRepository;
   final OcrRepository? ocrRepository;
   final OcrQueue? ocrQueue;
+  final CategoryRepository? categoryRepository;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -45,6 +50,7 @@ class _HomePageState extends State<HomePage> {
   late final MediaItemRepository _mediaRepository;
   late final OcrRepository _ocrRepository;
   late final OcrQueue _ocrQueue;
+  late final CategoryRepository _categoryRepository;
   late final bool _ownsMediaRepository;
   ContextoDatabase? _ownedAuxiliaryDatabase;
   StreamSubscription<int>? _queueSubscription;
@@ -61,6 +67,7 @@ class _HomePageState extends State<HomePage> {
   String? _errorMessage;
   String? _duplicateMessage;
   String? _searchErrorMessage;
+  int _categoryCount = 0;
 
   @override
   void initState() {
@@ -71,7 +78,8 @@ class _HomePageState extends State<HomePage> {
     final database =
         widget.mediaRepository == null ||
             widget.ocrRepository == null ||
-            widget.ocrQueue == null
+            widget.ocrQueue == null ||
+            widget.categoryRepository == null
         ? ContextoDatabase()
         : null;
     final jobStore = database == null
@@ -98,6 +106,9 @@ class _HomePageState extends State<HomePage> {
           resultStore: resultStore!,
           recognitionService: const MlKitTextRecognitionService(),
         );
+    _categoryRepository =
+        widget.categoryRepository ??
+        LocalCategoryRepository(store: DriftCategoryStore(database!));
     if (!_ownsMediaRepository) {
       _ownedAuxiliaryDatabase = database;
     }
@@ -126,6 +137,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _initialize() async {
     try {
       await _reloadItems();
+      await _reloadCategoryCount();
       unawaited(_ocrQueue.recoverAndStart());
       final lost = await _screenshotPicker.retrieveLostScreenshots();
       if (lost.isNotEmpty) {
@@ -341,6 +353,28 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _reloadCategoryCount() async {
+    final categories = await _categoryRepository.loadCategories();
+    if (mounted) setState(() => _categoryCount = categories.length);
+  }
+
+  Future<void> _reloadCategoryCountIgnoringErrors() async {
+    try {
+      await _reloadCategoryCount();
+    } catch (_) {
+      // Uma falha no contador não impede o uso da biblioteca.
+    }
+  }
+
+  Future<void> _openCategories() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => CategoriesPage(repository: _categoryRepository),
+      ),
+    );
+    await _reloadCategoryCountIgnoringErrors();
+  }
+
   Future<void> _openDetails(MediaItem item) async {
     final removed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -349,9 +383,11 @@ class _HomePageState extends State<HomePage> {
           mediaRepository: _mediaRepository,
           ocrRepository: _ocrRepository,
           ocrQueue: _ocrQueue,
+          categoryRepository: _categoryRepository,
         ),
       ),
     );
+    await _reloadCategoryCountIgnoringErrors();
     if (removed == true) {
       await _reloadItemsIgnoringErrors();
       if (_searchActive) {
@@ -425,9 +461,13 @@ class _HomePageState extends State<HomePage> {
                       SizedBox(width: 10),
                       Expanded(
                         child: _LibrarySummary(
+                          key: const Key('categories-summary'),
                           icon: Icons.folder_outlined,
                           title: 'Categorias',
-                          count: '0 categorias',
+                          count:
+                              '$_categoryCount '
+                              '${_categoryCount == 1 ? 'categoria' : 'categorias'}',
+                          onTap: _openCategories,
                         ),
                       ),
                     ],
@@ -599,14 +639,17 @@ class _SectionTitle extends StatelessWidget {
 
 class _LibrarySummary extends StatelessWidget {
   const _LibrarySummary({
+    super.key,
     required this.icon,
     required this.title,
     required this.count,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String count;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -614,29 +657,33 @@ class _LibrarySummary extends StatelessWidget {
     final colors = theme.colorScheme;
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 21, color: colors.secondary),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, size: 21, color: colors.secondary),
+              const SizedBox(height: 12),
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              count,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colors.onSurfaceVariant,
+              const SizedBox(height: 2),
+              Text(
+                count,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

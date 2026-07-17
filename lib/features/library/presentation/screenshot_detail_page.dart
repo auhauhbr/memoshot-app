@@ -3,6 +3,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../categories/data/category_repository.dart';
+import '../../categories/domain/category.dart';
+import '../../categories/presentation/category_selection_page.dart';
 import '../data/media_item_repository.dart';
 import '../domain/media_item.dart';
 import '../../ocr/data/ocr_repository.dart';
@@ -16,6 +19,7 @@ class ScreenshotDetailPage extends StatefulWidget {
     required this.mediaRepository,
     required this.ocrRepository,
     required this.ocrQueue,
+    required this.categoryRepository,
     super.key,
   });
 
@@ -23,6 +27,7 @@ class ScreenshotDetailPage extends StatefulWidget {
   final MediaItemRepository mediaRepository;
   final OcrRepository ocrRepository;
   final OcrQueue ocrQueue;
+  final CategoryRepository categoryRepository;
 
   @override
   State<ScreenshotDetailPage> createState() => _ScreenshotDetailPageState();
@@ -37,6 +42,9 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
   String? _ocrErrorMessage;
   OcrResult? _ocrResult;
   late final bool _fileExists;
+  List<Category> _categories = const [];
+  bool _isLoadingCategories = true;
+  String? _categoryError;
 
   @override
   void initState() {
@@ -48,6 +56,7 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
       }
     });
     _loadOcrResult();
+    _loadCategories();
   }
 
   @override
@@ -101,6 +110,35 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
         });
       }
     }
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await widget.categoryRepository.loadForMedia(
+        widget.mediaItem.id,
+      );
+      if (mounted) setState(() => _categories = categories);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _categoryError = 'Não foi possível carregar as categorias.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  Future<void> _editCategories() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => CategorySelectionPage(
+          repository: widget.categoryRepository,
+          mediaItemId: widget.mediaItem.id,
+        ),
+      ),
+    );
+    if (changed == true) await _loadCategories();
   }
 
   bool get _ocrIsActive =>
@@ -230,6 +268,13 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                     onProcess: _processOcr,
                   ),
                   const SizedBox(height: 12),
+                  _CategoriesSection(
+                    categories: _categories,
+                    isLoading: _isLoadingCategories,
+                    errorMessage: _categoryError,
+                    onEdit: _editCategories,
+                  ),
+                  const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -302,6 +347,87 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
     final hour = date.hour.toString().padLeft(2, '0');
     final minute = date.minute.toString().padLeft(2, '0');
     return '$day de ${months[date.month - 1]} de ${date.year}, às $hour:$minute';
+  }
+}
+
+class _CategoriesSection extends StatelessWidget {
+  const _CategoriesSection({
+    required this.categories,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.onEdit,
+  });
+
+  final List<Category> categories;
+  final bool isLoading;
+  final String? errorMessage;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Categorias',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: colors.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (isLoading)
+            const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else if (errorMessage != null)
+            Text(errorMessage!, style: TextStyle(color: colors.error))
+          else if (categories.isEmpty)
+            const Text('Nenhuma categoria atribuída.')
+          else
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final category in categories)
+                  Container(
+                    constraints: const BoxConstraints(maxWidth: 260),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colors.primaryContainer,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      category.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            key: const Key('edit-categories-button'),
+            onPressed: isLoading ? null : onEdit,
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Editar categorias'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/media/screenshot_picker.dart';
 import '../core/theme/app_theme.dart';
+import '../features/categories/data/category_repository.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/library/data/media_item_repository.dart';
 import '../features/ocr/data/ocr_repository.dart';
@@ -14,12 +15,14 @@ class ContextoApp extends StatelessWidget {
     this.mediaRepository,
     this.ocrRepository,
     this.ocrQueue,
+    this.categoryRepository,
   });
 
   final ScreenshotPicker? screenshotPicker;
   final MediaItemRepository? mediaRepository;
   final OcrRepository? ocrRepository;
   final OcrQueue? ocrQueue;
+  final CategoryRepository? categoryRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +36,7 @@ class ContextoApp extends StatelessWidget {
         mediaRepository: mediaRepository,
         ocrRepository: ocrRepository,
         ocrQueue: ocrQueue,
+        categoryRepository: categoryRepository,
       ),
     );
   }
