@@ -1,15 +1,22 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/database/contexto_database.dart' show ContextoDatabase;
 import '../../../core/media/image_picker_screenshot_picker.dart';
 import '../../../core/media/screenshot_picker.dart';
+import '../../../core/media/screenshot_storage.dart';
+import '../../library/data/media_item_repository.dart';
+import '../../library/data/media_item_store.dart';
+import '../../library/domain/media_item.dart';
 import '../../library/domain/selected_screenshot.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.screenshotPicker});
+  const HomePage({super.key, this.screenshotPicker, this.mediaRepository});
 
   final ScreenshotPicker? screenshotPicker;
+  final MediaItemRepository? mediaRepository;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -17,8 +24,11 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   late final ScreenshotPicker _screenshotPicker;
-  final List<SelectedScreenshot> _screenshots = [];
-  bool _isLoading = false;
+  late final MediaItemRepository _mediaRepository;
+  late final bool _ownsMediaRepository;
+  final List<MediaItem> _mediaItems = [];
+  final Set<String> _sessionSourcePaths = {};
+  bool _isLoading = true;
   String? _errorMessage;
 
   @override
@@ -26,16 +36,41 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _screenshotPicker =
         widget.screenshotPicker ?? ImagePickerScreenshotPicker();
-    _retrieveLostScreenshots();
+    _ownsMediaRepository = widget.mediaRepository == null;
+    _mediaRepository =
+        widget.mediaRepository ??
+        LocalMediaItemRepository(
+          store: DriftMediaItemStore(ContextoDatabase()),
+          storage: PrivateScreenshotStorage(),
+        );
+    _initialize();
   }
 
-  Future<void> _retrieveLostScreenshots() async {
+  @override
+  void dispose() {
+    if (_ownsMediaRepository) {
+      unawaited(_mediaRepository.close());
+    }
+    super.dispose();
+  }
+
+  Future<void> _initialize() async {
     try {
-      _addUnique(await _screenshotPicker.retrieveLostScreenshots());
+      await _reloadItems();
+      final lost = await _screenshotPicker.retrieveLostScreenshots();
+      if (lost.isNotEmpty) {
+        await _importSelected(lost);
+      }
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Não foi possível recuperar a seleção anterior.';
+          _errorMessage = 'Não foi possível carregar a biblioteca.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
         });
       }
     }
@@ -48,8 +83,9 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      _addUnique(await _screenshotPicker.pickScreenshots());
+      await _importSelected(await _screenshotPicker.pickScreenshots());
     } catch (_) {
+      await _reloadItemsIgnoringErrors();
       if (mounted) {
         setState(() {
           _errorMessage = 'Não foi possível importar as imagens.';
@@ -64,16 +100,49 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _addUnique(List<SelectedScreenshot> selected) {
-    if (!mounted || selected.isEmpty) {
+  Future<void> _importSelected(List<SelectedScreenshot> selected) async {
+    if (selected.isEmpty) {
       return;
     }
 
-    final knownPaths = _screenshots.map((item) => item.path).toSet();
-    final newItems = selected.where((item) => knownPaths.add(item.path));
+    final pendingPaths = <String>{};
+    final newItems = selected.where(
+      (item) =>
+          !_sessionSourcePaths.contains(item.path) &&
+          pendingPaths.add(item.path),
+    );
+    final itemsToImport = newItems.toList(growable: false);
+    if (itemsToImport.isEmpty) {
+      return;
+    }
+
+    final imported = await _mediaRepository.importScreenshots(itemsToImport);
+    _sessionSourcePaths.addAll(itemsToImport.map((item) => item.path));
+    if (!mounted) {
+      return;
+    }
     setState(() {
-      _screenshots.addAll(newItems);
+      _mediaItems.insertAll(0, imported.reversed);
     });
+  }
+
+  Future<void> _reloadItems() async {
+    final items = await _mediaRepository.loadAvailableItems();
+    if (mounted) {
+      setState(() {
+        _mediaItems
+          ..clear()
+          ..addAll(items);
+      });
+    }
+  }
+
+  Future<void> _reloadItemsIgnoringErrors() async {
+    try {
+      await _reloadItems();
+    } catch (_) {
+      // A mensagem genérica da operação original continua sendo exibida.
+    }
   }
 
   @override
@@ -121,8 +190,8 @@ class _HomePageState extends State<HomePage> {
                           icon: Icons.access_time_outlined,
                           title: 'Recentes',
                           count:
-                              '${_screenshots.length} '
-                              '${_screenshots.length == 1 ? 'item' : 'itens'}',
+                              '${_mediaItems.length} '
+                              '${_mediaItems.length == 1 ? 'item' : 'itens'}',
                         ),
                       ),
                       SizedBox(width: 10),
@@ -141,9 +210,9 @@ class _HomePageState extends State<HomePage> {
                     errorMessage: _errorMessage,
                     onPressed: _isLoading ? null : _pickScreenshots,
                   ),
-                  if (_screenshots.isNotEmpty) ...[
+                  if (_mediaItems.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    _SessionLibraryGrid(screenshots: _screenshots),
+                    _LibraryGrid(mediaItems: _mediaItems),
                   ],
                   const SizedBox(height: 12),
                   const _LocalProcessingInfo(),
@@ -342,7 +411,7 @@ class _ImportCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    'Nesta sessão',
+                    'No dispositivo',
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: colors.onPrimaryContainer,
                       fontWeight: FontWeight.w700,
@@ -375,10 +444,10 @@ class _ImportCard extends StatelessWidget {
   }
 }
 
-class _SessionLibraryGrid extends StatelessWidget {
-  const _SessionLibraryGrid({required this.screenshots});
+class _LibraryGrid extends StatelessWidget {
+  const _LibraryGrid({required this.mediaItems});
 
-  final List<SelectedScreenshot> screenshots;
+  final List<MediaItem> mediaItems;
 
   @override
   Widget build(BuildContext context) {
@@ -394,7 +463,7 @@ class _SessionLibraryGrid extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                'Itens disponíveis somente nesta sessão; ainda não salvos.',
+                'Salvo neste dispositivo.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colors.onSurfaceVariant,
                 ),
@@ -404,10 +473,10 @@ class _SessionLibraryGrid extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         GridView.builder(
-          key: const Key('session-screenshot-grid'),
+          key: const Key('persisted-screenshot-grid'),
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: screenshots.length,
+          itemCount: mediaItems.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
             crossAxisSpacing: 8,
@@ -422,8 +491,8 @@ class _SessionLibraryGrid extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Image.file(
-                  File(screenshots[index].path),
-                  key: ValueKey(screenshots[index].path),
+                  File(mediaItems[index].privatePath),
+                  key: ValueKey(mediaItems[index].id),
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => ColoredBox(
                     color: colors.surfaceContainerLow,

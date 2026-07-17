@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:contexto/app/contexto_app.dart';
 import 'package:contexto/core/media/screenshot_picker.dart';
 import 'package:contexto/core/theme/app_theme.dart';
+import 'package:contexto/features/library/data/media_item_repository.dart';
+import 'package:contexto/features/library/domain/media_item.dart';
 import 'package:contexto/features/library/domain/selected_screenshot.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,9 +28,7 @@ void main() {
   });
 
   testWidgets('exibe a tela inicial funcional do Contexto', (tester) async {
-    await tester.pumpWidget(
-      ContextoApp(screenshotPicker: FakeScreenshotPicker()),
-    );
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
     await tester.pump();
 
     expect(find.text('Contexto'), findsOneWidget);
@@ -48,9 +48,7 @@ void main() {
   testWidgets('habilita importação e mantém pesquisa desabilitada', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      ContextoApp(screenshotPicker: FakeScreenshotPicker()),
-    );
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
     await tester.pump();
 
     final searchField = tester.widget<TextField>(find.byType(TextField));
@@ -64,7 +62,7 @@ void main() {
 
   testWidgets('cancelar seleção não altera a biblioteca', (tester) async {
     final picker = FakeScreenshotPicker();
-    await tester.pumpWidget(ContextoApp(screenshotPicker: picker));
+    await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
     await tester.tap(find.text('Selecionar imagens'));
@@ -72,7 +70,7 @@ void main() {
 
     expect(picker.pickCallCount, 1);
     expect(find.text('0 itens'), findsOneWidget);
-    expect(find.byKey(const Key('session-screenshot-grid')), findsNothing);
+    expect(find.byKey(const Key('persisted-screenshot-grid')), findsNothing);
   });
 
   testWidgets('mostra uma imagem selecionada e atualiza o contador', (
@@ -82,7 +80,7 @@ void main() {
     final picker = FakeScreenshotPicker(
       selections: [SelectedScreenshot(path: image.path)],
     );
-    await tester.pumpWidget(ContextoApp(screenshotPicker: picker));
+    await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
     await tester.tap(find.text('Selecionar imagens'));
@@ -90,7 +88,7 @@ void main() {
 
     expect(find.text('1 item'), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
-    expect(find.textContaining('somente nesta sessão'), findsOneWidget);
+    expect(find.text('Salvo neste dispositivo.'), findsOneWidget);
     expect(find.text('0 categorias'), findsOneWidget);
   });
 
@@ -103,7 +101,7 @@ void main() {
         SelectedScreenshot(path: second.path),
       ],
     );
-    await tester.pumpWidget(ContextoApp(screenshotPicker: picker));
+    await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
     await tester.tap(find.text('Selecionar imagens'));
@@ -119,7 +117,7 @@ void main() {
     final image = createTestImage(temporaryDirectory, 'repetida.png');
     final selected = SelectedScreenshot(path: image.path);
     final picker = FakeScreenshotPicker(selections: [selected, selected]);
-    await tester.pumpWidget(ContextoApp(screenshotPicker: picker));
+    await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
     await tester.tap(find.text('Selecionar imagens'));
@@ -134,7 +132,7 @@ void main() {
   testWidgets('exibe carregamento enquanto o seletor processa', (tester) async {
     final completer = Completer<List<SelectedScreenshot>>();
     final picker = FakeScreenshotPicker(pickCompleter: completer);
-    await tester.pumpWidget(ContextoApp(screenshotPicker: picker));
+    await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
     await tester.tap(find.text('Selecionar imagens'));
@@ -151,7 +149,7 @@ void main() {
 
   testWidgets('exibe mensagem discreta quando a seleção falha', (tester) async {
     final picker = FakeScreenshotPicker(error: Exception('falha privada'));
-    await tester.pumpWidget(ContextoApp(screenshotPicker: picker));
+    await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
     await tester.tap(find.text('Selecionar imagens'));
@@ -167,10 +165,26 @@ void main() {
       lostSelections: [SelectedScreenshot(path: image.path)],
     );
 
-    await tester.pumpWidget(ContextoApp(screenshotPicker: picker));
+    await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
     expect(picker.retrieveCallCount, 1);
+    expect(find.text('1 item'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+  });
+
+  testWidgets('carrega itens persistidos ao abrir a HomePage', (tester) async {
+    final image = createTestImage(temporaryDirectory, 'persistida.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+
+    expect(repository.loadCallCount, 1);
     expect(find.text('1 item'), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
   });
@@ -181,9 +195,7 @@ void main() {
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
 
-    await tester.pumpWidget(
-      ContextoApp(screenshotPicker: FakeScreenshotPicker()),
-    );
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
     await tester.pump();
 
     final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
@@ -207,14 +219,65 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(320, 568));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(
-      ContextoApp(screenshotPicker: FakeScreenshotPicker()),
-    );
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
     await tester.pump();
 
     expect(tester.takeException(), isNull);
     expect(find.text('Processamento local'), findsOneWidget);
   });
+}
+
+Widget buildTestApp(
+  ScreenshotPicker picker, {
+  FakeMediaItemRepository? repository,
+}) {
+  return ContextoApp(
+    screenshotPicker: picker,
+    mediaRepository: repository ?? FakeMediaItemRepository(),
+  );
+}
+
+class FakeMediaItemRepository implements MediaItemRepository {
+  FakeMediaItemRepository({List<MediaItem> initialItems = const []})
+    : _items = [...initialItems];
+
+  final List<MediaItem> _items;
+  int loadCallCount = 0;
+
+  @override
+  Future<List<MediaItem>> importScreenshots(
+    List<SelectedScreenshot> screenshots,
+  ) async {
+    final imported = screenshots
+        .map((screenshot) {
+          final item = createMediaItem(_items.length + 1, screenshot.path);
+          _items.insert(0, item);
+          return item;
+        })
+        .toList(growable: false);
+    return imported;
+  }
+
+  @override
+  Future<List<MediaItem>> loadAvailableItems() async {
+    loadCallCount++;
+    return [..._items];
+  }
+
+  @override
+  Future<void> close() async {}
+}
+
+MediaItem createMediaItem(int id, String path) {
+  return MediaItem(
+    id: id,
+    privatePath: path,
+    internalName: 'screenshot_$id.png',
+    mimeType: 'image/png',
+    importedAt: DateTime(2026),
+    sourceMode: 'photoPicker',
+    status: 'ready',
+  );
 }
 
 class FakeScreenshotPicker implements ScreenshotPicker {
