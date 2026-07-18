@@ -31,6 +31,8 @@ import '../../processing/domain/processing_job.dart';
 import '../../sharing/shared_image_import_coordinator.dart';
 import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
 import '../../automatic_import/data/automatic_import_settings_repository.dart';
+import '../../tags/data/tag_repository.dart';
+import '../../tags/data/tag_store.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -40,6 +42,7 @@ class HomePage extends StatefulWidget {
     this.ocrRepository,
     this.ocrQueue,
     this.categoryRepository,
+    this.tagRepository,
     this.incomingShareSource,
     this.automaticScreenshotSource,
     this.automaticImportSettingsRepository,
@@ -50,6 +53,7 @@ class HomePage extends StatefulWidget {
   final OcrRepository? ocrRepository;
   final OcrQueue? ocrQueue;
   final CategoryRepository? categoryRepository;
+  final TagRepository? tagRepository;
   final IncomingShareSource? incomingShareSource;
   final AutomaticScreenshotSource? automaticScreenshotSource;
   final AutomaticImportSettingsRepository? automaticImportSettingsRepository;
@@ -64,6 +68,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final OcrRepository _ocrRepository;
   late final OcrQueue _ocrQueue;
   late final CategoryRepository _categoryRepository;
+  late final TagRepository _tagRepository;
   late final bool _ownsMediaRepository;
   ContextoDatabase? _ownedAuxiliaryDatabase;
   StreamSubscription<int>? _queueSubscription;
@@ -98,6 +103,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             widget.ocrRepository == null ||
             widget.ocrQueue == null ||
             widget.categoryRepository == null ||
+            widget.tagRepository == null ||
             widget.automaticImportSettingsRepository == null
         ? ContextoDatabase()
         : null;
@@ -128,6 +134,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _categoryRepository =
         widget.categoryRepository ??
         LocalCategoryRepository(store: DriftCategoryStore(database!));
+    _tagRepository =
+        widget.tagRepository ??
+        LocalTagRepository(store: DriftTagStore(database!));
     final automaticSettingsRepository =
         widget.automaticImportSettingsRepository ??
         DriftAutomaticImportSettingsRepository(database!);
@@ -556,6 +565,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           mediaRepository: _mediaRepository,
           ocrRepository: _ocrRepository,
           ocrQueue: _ocrQueue,
+          tagRepository: _tagRepository,
         ),
       ),
     );
@@ -571,6 +581,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ocrRepository: _ocrRepository,
           ocrQueue: _ocrQueue,
           categoryRepository: _categoryRepository,
+          tagRepository: _tagRepository,
         ),
       ),
     );

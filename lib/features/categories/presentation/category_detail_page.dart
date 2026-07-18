@@ -7,6 +7,7 @@ import '../../library/presentation/screenshot_grid.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../../processing/data/ocr_queue_processor.dart';
 import '../../processing/domain/processing_job.dart';
+import '../../tags/data/tag_repository.dart';
 import '../data/category_repository.dart';
 import '../domain/category.dart';
 import 'categories_page.dart';
@@ -18,6 +19,7 @@ class CategoryDetailPage extends StatefulWidget {
     required this.mediaRepository,
     required this.ocrRepository,
     required this.ocrQueue,
+    required this.tagRepository,
     super.key,
   });
 
@@ -26,6 +28,7 @@ class CategoryDetailPage extends StatefulWidget {
   final MediaItemRepository mediaRepository;
   final OcrRepository ocrRepository;
   final OcrQueue ocrQueue;
+  final TagRepository tagRepository;
 
   @override
   State<CategoryDetailPage> createState() => _CategoryDetailPageState();
@@ -86,6 +89,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
           ocrRepository: widget.ocrRepository,
           ocrQueue: widget.ocrQueue,
           categoryRepository: widget.categoryRepository,
+          tagRepository: widget.tagRepository,
         ),
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../../processing/data/ocr_queue_processor.dart';
+import '../../tags/data/tag_repository.dart';
 import '../data/category_repository.dart';
 import '../domain/category.dart';
 import 'category_detail_page.dart';
@@ -13,6 +14,7 @@ class CategoriesPage extends StatefulWidget {
     required this.mediaRepository,
     required this.ocrRepository,
     required this.ocrQueue,
+    required this.tagRepository,
     super.key,
   });
 
@@ -20,6 +22,7 @@ class CategoriesPage extends StatefulWidget {
   final MediaItemRepository mediaRepository;
   final OcrRepository ocrRepository;
   final OcrQueue ocrQueue;
+  final TagRepository tagRepository;
 
   @override
   State<CategoriesPage> createState() => _CategoriesPageState();
@@ -68,6 +71,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
           mediaRepository: widget.mediaRepository,
           ocrRepository: widget.ocrRepository,
           ocrQueue: widget.ocrQueue,
+          tagRepository: widget.tagRepository,
         ),
       ),
     );

@@ -12,6 +12,9 @@ import '../../ocr/data/ocr_repository.dart';
 import '../../ocr/domain/ocr_result.dart';
 import '../../processing/data/ocr_queue_processor.dart';
 import '../../processing/domain/processing_job.dart';
+import '../../tags/data/tag_repository.dart';
+import '../../tags/domain/tag.dart';
+import '../../tags/presentation/add_tag_dialog.dart';
 
 class ScreenshotDetailPage extends StatefulWidget {
   const ScreenshotDetailPage({
@@ -20,6 +23,7 @@ class ScreenshotDetailPage extends StatefulWidget {
     required this.ocrRepository,
     required this.ocrQueue,
     required this.categoryRepository,
+    required this.tagRepository,
     super.key,
   });
 
@@ -28,6 +32,7 @@ class ScreenshotDetailPage extends StatefulWidget {
   final OcrRepository ocrRepository;
   final OcrQueue ocrQueue;
   final CategoryRepository categoryRepository;
+  final TagRepository tagRepository;
 
   @override
   State<ScreenshotDetailPage> createState() => _ScreenshotDetailPageState();
@@ -45,6 +50,10 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
   List<Category> _categories = const [];
   bool _isLoadingCategories = true;
   String? _categoryError;
+  List<Tag> _tags = const [];
+  bool _isLoadingTags = true;
+  bool _isChangingTags = false;
+  String? _tagError;
 
   @override
   void initState() {
@@ -57,6 +66,7 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
     });
     _loadOcrResult();
     _loadCategories();
+    _loadTags();
   }
 
   @override
@@ -139,6 +149,99 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
       ),
     );
     if (changed == true) await _loadCategories();
+  }
+
+  Future<void> _loadTags() async {
+    try {
+      final tags = await widget.tagRepository.loadForMedia(widget.mediaItem.id);
+      if (mounted) {
+        setState(() {
+          _tags = tags;
+          _tagError = null;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _tagError = 'Não foi possível carregar as etiquetas.');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingTags = false);
+    }
+  }
+
+  Future<void> _addTag() async {
+    if (_isLoadingTags || _isChangingTags) return;
+    final tag = await showAddTagDialog(
+      context,
+      repository: widget.tagRepository,
+      associatedTagIds: _tags.map((tag) => tag.id).toSet(),
+    );
+    if (tag == null || !mounted || _isChangingTags) return;
+
+    setState(() {
+      _isChangingTags = true;
+      _tagError = null;
+    });
+    try {
+      final alreadyAssociated =
+          _tags.any((item) => item.id == tag.id) ||
+          await widget.tagRepository.isAssociated(
+            tagId: tag.id,
+            mediaItemId: widget.mediaItem.id,
+          );
+      if (alreadyAssociated) {
+        if (mounted) {
+          setState(() => _tagError = 'Esta etiqueta já está associada.');
+        }
+        return;
+      }
+      await widget.tagRepository.addToMedia(
+        tagId: tag.id,
+        mediaItemId: widget.mediaItem.id,
+      );
+      if (mounted) {
+        setState(() {
+          _tags = [..._tags, tag]
+            ..sort((first, second) {
+              final byName = first.normalizedName.compareTo(
+                second.normalizedName,
+              );
+              return byName != 0 ? byName : first.id.compareTo(second.id);
+            });
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _tagError = 'Não foi possível adicionar a etiqueta.');
+      }
+    } finally {
+      if (mounted) setState(() => _isChangingTags = false);
+    }
+  }
+
+  Future<void> _removeTag(Tag tag) async {
+    if (_isChangingTags) return;
+    setState(() {
+      _isChangingTags = true;
+      _tagError = null;
+    });
+    try {
+      await widget.tagRepository.removeFromMedia(
+        tagId: tag.id,
+        mediaItemId: widget.mediaItem.id,
+      );
+      if (mounted) {
+        setState(
+          () => _tags = _tags.where((item) => item.id != tag.id).toList(),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _tagError = 'Não foi possível remover a etiqueta.');
+      }
+    } finally {
+      if (mounted) setState(() => _isChangingTags = false);
+    }
   }
 
   bool get _ocrIsActive =>
@@ -278,6 +381,15 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                     onEdit: _editCategories,
                   ),
                   const SizedBox(height: 12),
+                  _TagsSection(
+                    tags: _tags,
+                    isLoading: _isLoadingTags,
+                    isChanging: _isChangingTags,
+                    errorMessage: _tagError,
+                    onAdd: _addTag,
+                    onRemove: _removeTag,
+                  ),
+                  const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -350,6 +462,97 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
     final hour = date.hour.toString().padLeft(2, '0');
     final minute = date.minute.toString().padLeft(2, '0');
     return '$day de ${months[date.month - 1]} de ${date.year}, às $hour:$minute';
+  }
+}
+
+class _TagsSection extends StatelessWidget {
+  const _TagsSection({
+    required this.tags,
+    required this.isLoading,
+    required this.isChanging,
+    required this.errorMessage,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final List<Tag> tags;
+  final bool isLoading;
+  final bool isChanging;
+  final String? errorMessage;
+  final VoidCallback onAdd;
+  final ValueChanged<Tag> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Container(
+      key: const Key('tags-section'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Etiquetas',
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: colors.primary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (isLoading)
+            const SizedBox.square(
+              key: Key('tags-loading-indicator'),
+              dimension: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else if (tags.isEmpty && errorMessage == null)
+            const Text('Nenhuma etiqueta adicionada.')
+          else
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final tag in tags)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 260),
+                    child: InputChip(
+                      key: ValueKey('tag-chip-${tag.id}'),
+                      label: Text(
+                        tag.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      deleteIcon: const Icon(Icons.close, size: 18),
+                      deleteButtonTooltipMessage:
+                          'Remover etiqueta ${tag.name}',
+                      onDeleted: isChanging ? null : () => onRemove(tag),
+                    ),
+                  ),
+              ],
+            ),
+          if (errorMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              errorMessage!,
+              style: theme.textTheme.bodySmall?.copyWith(color: colors.error),
+            ),
+          ],
+          const SizedBox(height: 8),
+          TextButton.icon(
+            key: const Key('add-tag-button'),
+            onPressed: isLoading || isChanging ? null : onAdd,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Adicionar etiqueta'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

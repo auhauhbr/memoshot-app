@@ -22,6 +22,8 @@ import 'package:contexto/features/ocr/data/ocr_repository.dart';
 import 'package:contexto/features/ocr/domain/ocr_result.dart';
 import 'package:contexto/features/processing/data/ocr_queue_processor.dart';
 import 'package:contexto/features/processing/domain/processing_job.dart';
+import 'package:contexto/features/tags/data/tag_repository.dart';
+import 'package:contexto/features/tags/domain/tag.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -246,6 +248,368 @@ void main() {
     expect(find.text('Biblioteca'), findsOneWidget);
     expect(find.text('1 item'), findsOneWidget);
   });
+
+  testWidgets('detalhes carregam e exibem estado vazio de etiquetas', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'sem-etiquetas.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final tagRepository = FakeTagRepository();
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: tagRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tester.ensureVisible(find.byKey(const Key('tags-section')));
+
+    expect(find.text('Etiquetas'), findsOneWidget);
+    expect(find.text('Nenhuma etiqueta adicionada.'), findsOneWidget);
+    expect(find.text('Texto reconhecido'), findsOneWidget);
+    expect(tagRepository.loadForMediaCallCount, 1);
+  });
+
+  testWidgets('detalhes exibem uma e várias etiquetas preservando os nomes', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'com-etiquetas.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final tagRepository = FakeTagRepository();
+    final first = await tagRepository.createTag('Atenção Máxima');
+    final second = await tagRepository.createTag('Precisa responder');
+    await tagRepository.addToMedia(tagId: first.id, mediaItemId: 1);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: tagRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tester.ensureVisible(find.byKey(const Key('tags-section')));
+
+    expect(find.text('Atenção Máxima'), findsOneWidget);
+    expect(find.byKey(ValueKey('tag-chip-${first.id}')), findsOneWidget);
+
+    await tagRepository.addToMedia(tagId: second.id, mediaItemId: 1);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await openFirstScreenshot(tester);
+    await tester.ensureVisible(find.byKey(const Key('tags-section')));
+
+    expect(find.byKey(ValueKey('tag-chip-${first.id}')), findsOneWidget);
+    expect(find.byKey(ValueKey('tag-chip-${second.id}')), findsOneWidget);
+  });
+
+  testWidgets('carregamento de etiquetas não bloqueia o restante do detalhe', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'tags-loading.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final completer = Completer<List<Tag>>();
+    final tagRepository = FakeTagRepository(loadForMediaCompleter: completer);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: tagRepository,
+      ),
+    );
+    await tester.pump();
+    final tile = find.byKey(const ValueKey('screenshot-tile-1'));
+    await tester.ensureVisible(tile);
+    await tester.tap(tile);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('Detalhes do screenshot'), findsOneWidget);
+    expect(find.text('Texto reconhecido'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('tags-section')));
+    expect(find.byKey(const Key('tags-loading-indicator')), findsOneWidget);
+
+    completer.complete(const []);
+    await tester.pump();
+    expect(find.text('Nenhuma etiqueta adicionada.'), findsOneWidget);
+  });
+
+  testWidgets('interface de adição pesquisa e lista etiquetas disponíveis', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'listar-tags.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final tagRepository = FakeTagRepository();
+    final associated = await tagRepository.createTag('Associada');
+    final studies = await tagRepository.createTag('Estudos');
+    final work = await tagRepository.createTag('Trabalho');
+    await tagRepository.addToMedia(tagId: associated.id, mediaItemId: 1);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: tagRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await openAddTagDialog(tester);
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('available-tag-${associated.id}')),
+      findsNothing,
+    );
+    expect(find.byKey(ValueKey('available-tag-${studies.id}')), findsOneWidget);
+    expect(find.byKey(ValueKey('available-tag-${work.id}')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('tag-search-field')), 'estu');
+    await tester.pump();
+    expect(find.byKey(ValueKey('available-tag-${studies.id}')), findsOneWidget);
+    expect(find.byKey(ValueKey('available-tag-${work.id}')), findsNothing);
+  });
+
+  testWidgets('associa etiqueta existente e atualiza a tela imediatamente', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'associar-tag.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final tagRepository = FakeTagRepository();
+    final tag = await tagRepository.createTag('Importante');
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: tagRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await openAddTagDialog(tester);
+    await tester.tap(find.byKey(ValueKey('available-tag-${tag.id}')));
+    await tester.pump();
+
+    expect(find.byKey(ValueKey('tag-chip-${tag.id}')), findsOneWidget);
+    expect(
+      await tagRepository.isAssociated(tagId: tag.id, mediaItemId: 1),
+      isTrue,
+    );
+    expect(tagRepository.addCallCount, 1);
+  });
+
+  testWidgets('cria e associa nova etiqueta removendo espaços externos', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'criar-tag.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final tagRepository = FakeTagRepository();
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: tagRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await openAddTagDialog(tester);
+    await tester.enterText(
+      find.byKey(const Key('tag-search-field')),
+      '  Próxima ação  ',
+    );
+    await tester.tap(find.byKey(const Key('create-and-add-tag-button')));
+    await tester.pump();
+
+    expect(find.text('Próxima ação'), findsOneWidget);
+    expect((await tagRepository.loadTags()).single.name, 'Próxima ação');
+    expect(tagRepository.createCallCount, 1);
+    expect(tagRepository.addCallCount, 1);
+  });
+
+  testWidgets('reutiliza etiqueta equivalente sem criar duplicata', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'reusar-tag.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final tagRepository = FakeTagRepository();
+    final existing = await tagRepository.createTag('Urgente');
+    tagRepository.createCallCount = 0;
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: tagRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await openAddTagDialog(tester);
+    await tester.enterText(
+      find.byKey(const Key('tag-search-field')),
+      ' URGÉNTE ',
+    );
+    await tester.tap(find.byKey(const Key('create-and-add-tag-button')));
+    await tester.pump();
+
+    expect(await tagRepository.loadTags(), hasLength(1));
+    expect(find.byKey(ValueKey('tag-chip-${existing.id}')), findsOneWidget);
+    expect(tagRepository.addCallCount, 1);
+  });
+
+  testWidgets('rejeita nome vazio sem fechar a interface de adição', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'tag-vazia.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final tagRepository = FakeTagRepository();
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: tagRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await openAddTagDialog(tester);
+    await tester.enterText(find.byKey(const Key('tag-search-field')), '   ');
+    await tester.tap(find.byKey(const Key('create-and-add-tag-button')));
+    await tester.pump();
+
+    expect(find.text('Digite um nome para a etiqueta.'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(tagRepository.createCallCount, 0);
+  });
+
+  testWidgets('remove apenas associação e preserva etiqueta e screenshot', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'remover-tag.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final tagRepository = FakeTagRepository();
+    final tag = await tagRepository.createTag('Manter cadastro');
+    await tagRepository.addToMedia(tagId: tag.id, mediaItemId: 1);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: tagRepository,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tester.ensureVisible(find.byKey(ValueKey('tag-chip-${tag.id}')));
+    await tester.tap(find.byTooltip('Remover etiqueta Manter cadastro'));
+    await tester.pump();
+
+    expect(find.text('Nenhuma etiqueta adicionada.'), findsOneWidget);
+    expect(await tagRepository.findById(tag.id), isNotNull);
+    expect(tagRepository.deleteCallCount, 0);
+    expect(mediaRepository.itemCount, 1);
+    expect(mediaRepository.removeCallCount, 0);
+    expect(image.existsSync(), isTrue);
+  });
+
+  testWidgets('exibe erros ao carregar, associar e remover etiquetas', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'erros-tags.png');
+    final mediaRepository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final loadFailure = FakeTagRepository(failLoadForMedia: true);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: loadFailure,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tester.ensureVisible(find.byKey(const Key('tags-section')));
+    expect(
+      find.text('Não foi possível carregar as etiquetas.'),
+      findsOneWidget,
+    );
+
+    final operationFailure = FakeTagRepository(failAdd: true, failRemove: true);
+    final available = await operationFailure.createTag('Falha ao adicionar');
+    final associated = await operationFailure.createTag('Falha ao remover');
+    operationFailure.seedAssociation(tagId: associated.id, mediaItemId: 1);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: mediaRepository,
+        tagRepository: operationFailure,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await openAddTagDialog(tester);
+    await tester.tap(find.byKey(ValueKey('available-tag-${available.id}')));
+    await tester.pump();
+    expect(find.text('Não foi possível adicionar a etiqueta.'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Remover etiqueta Falha ao remover'));
+    await tester.pump();
+    expect(find.text('Não foi possível remover a etiqueta.'), findsOneWidget);
+    expect(find.byKey(ValueKey('tag-chip-${associated.id}')), findsOneWidget);
+  });
+
+  testWidgets(
+    'descarte durante associação pendente não atualiza tela fechada',
+    (tester) async {
+      final image = createTestImage(temporaryDirectory, 'tag-pendente.png');
+      final mediaRepository = FakeMediaItemRepository(
+        initialItems: [createMediaItem(1, image.path)],
+      );
+      final addCompleter = Completer<void>();
+      final tagRepository = FakeTagRepository(addCompleter: addCompleter);
+      final tag = await tagRepository.createTag('Pendente');
+      await tester.pumpWidget(
+        buildTestApp(
+          FakeScreenshotPicker(),
+          repository: mediaRepository,
+          tagRepository: tagRepository,
+        ),
+      );
+      await tester.pump();
+      await openFirstScreenshot(tester);
+      await openAddTagDialog(tester);
+      await tester.tap(find.byKey(ValueKey('available-tag-${tag.id}')));
+      await tester.pump();
+      expect(tagRepository.addCallCount, 1);
+
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pump();
+      addCompleter.complete();
+      await tester.pump();
+
+      expect(find.text('Biblioteca'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('cancelar remoção mantém item, registro e arquivo', (
     tester,
@@ -1717,6 +2081,7 @@ Widget buildTestApp(
   FakeOcrRepository? ocrRepository,
   FakeOcrQueue? ocrQueue,
   FakeCategoryRepository? categoryRepository,
+  FakeTagRepository? tagRepository,
   IncomingShareSource? incomingShareSource,
   FakeAutomaticScreenshotSource? automaticScreenshotSource,
   FakeAutomaticImportSettingsRepository? automaticSettingsRepository,
@@ -1727,17 +2092,144 @@ Widget buildTestApp(
       categoryRepository ?? FakeCategoryRepository();
   resolvedCategoryRepository.mediaItems = resolvedMediaRepository._items;
   return ContextoApp(
+    key: UniqueKey(),
     screenshotPicker: picker,
     mediaRepository: resolvedMediaRepository,
     ocrRepository: resolvedOcrRepository,
     ocrQueue: ocrQueue ?? FakeOcrQueue(resolvedOcrRepository),
     categoryRepository: resolvedCategoryRepository,
+    tagRepository: tagRepository ?? FakeTagRepository(),
     incomingShareSource: incomingShareSource ?? FakeIncomingShareSource(),
     automaticScreenshotSource:
         automaticScreenshotSource ?? FakeAutomaticScreenshotSource(),
     automaticImportSettingsRepository:
         automaticSettingsRepository ?? FakeAutomaticImportSettingsRepository(),
   );
+}
+
+class FakeTagRepository implements TagRepository {
+  FakeTagRepository({
+    this.failLoadForMedia = false,
+    this.failAdd = false,
+    this.failRemove = false,
+    this.loadForMediaCompleter,
+    this.addCompleter,
+  });
+
+  final List<Tag> _tags = [];
+  final Map<int, Set<int>> _associations = {};
+  final bool failLoadForMedia;
+  final bool failAdd;
+  final bool failRemove;
+  final Completer<List<Tag>>? loadForMediaCompleter;
+  final Completer<void>? addCompleter;
+  int createCallCount = 0;
+  int addCallCount = 0;
+  int removeCallCount = 0;
+  int deleteCallCount = 0;
+  int loadForMediaCallCount = 0;
+
+  @override
+  Future<Tag> createTag(String name) async {
+    createCallCount++;
+    final visibleName = name.trim();
+    const normalizer = TextNormalizer();
+    final normalizedName = normalizer.normalize(visibleName);
+    if (normalizedName.isEmpty) {
+      throw const TagValidationException(TagValidationError.empty);
+    }
+    if (visibleName.length > 40) {
+      throw const TagValidationException(TagValidationError.tooLong);
+    }
+    if (_tags.any((tag) => tag.normalizedName == normalizedName)) {
+      throw const TagValidationException(TagValidationError.duplicate);
+    }
+    final tag = Tag(
+      id: _tags.length + 1,
+      name: visibleName,
+      normalizedName: normalizedName,
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+    _tags.add(tag);
+    return tag;
+  }
+
+  @override
+  Future<List<Tag>> loadTags() async => [..._tags]
+    ..sort(
+      (first, second) => first.normalizedName.compareTo(second.normalizedName),
+    );
+
+  @override
+  Future<Tag?> findById(int id) async {
+    final matches = _tags.where((tag) => tag.id == id);
+    return matches.isEmpty ? null : matches.single;
+  }
+
+  @override
+  Future<Tag?> findByNormalizedName(String normalizedName) async {
+    const normalizer = TextNormalizer();
+    final normalized = normalizer.normalize(normalizedName);
+    final matches = _tags.where((tag) => tag.normalizedName == normalized);
+    return matches.isEmpty ? null : matches.single;
+  }
+
+  @override
+  Future<Tag> renameTag(Tag tag, String name) => throw UnimplementedError();
+
+  @override
+  Future<void> deleteTag(int tagId) async {
+    deleteCallCount++;
+    _tags.removeWhere((tag) => tag.id == tagId);
+  }
+
+  @override
+  Future<void> addToMedia({
+    required int tagId,
+    required int mediaItemId,
+  }) async {
+    addCallCount++;
+    if (failAdd) throw StateError('Falha privada ao associar');
+    if (addCompleter != null) await addCompleter!.future;
+    (_associations[mediaItemId] ??= {}).add(tagId);
+  }
+
+  @override
+  Future<void> removeFromMedia({
+    required int tagId,
+    required int mediaItemId,
+  }) async {
+    removeCallCount++;
+    if (failRemove) throw StateError('Falha privada ao remover');
+    _associations[mediaItemId]?.remove(tagId);
+  }
+
+  @override
+  Future<bool> isAssociated({
+    required int tagId,
+    required int mediaItemId,
+  }) async {
+    return _associations[mediaItemId]?.contains(tagId) ?? false;
+  }
+
+  @override
+  Future<List<Tag>> loadForMedia(int mediaItemId) async {
+    loadForMediaCallCount++;
+    if (failLoadForMedia) throw StateError('Falha privada ao carregar');
+    if (loadForMediaCompleter != null) return loadForMediaCompleter!.future;
+    final ids = _associations[mediaItemId] ?? const <int>{};
+    return _tags.where((tag) => ids.contains(tag.id)).toList()..sort(
+      (first, second) => first.normalizedName.compareTo(second.normalizedName),
+    );
+  }
+
+  @override
+  Future<List<MediaItem>> loadMediaForTag(int tagId) async => const [];
+
+  void seedAssociation({required int tagId, required int mediaItemId}) {
+    (_associations[mediaItemId] ??= {}).add(tagId);
+  }
 }
 
 class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
@@ -2007,6 +2499,13 @@ Future<void> openFirstScreenshot(WidgetTester tester) async {
   final tile = find.byKey(const ValueKey('screenshot-tile-1'));
   await tester.ensureVisible(tile);
   await tester.tap(tile);
+  await tester.pumpAndSettle();
+}
+
+Future<void> openAddTagDialog(WidgetTester tester) async {
+  final action = find.byKey(const Key('add-tag-button'));
+  await tester.ensureVisible(action);
+  await tester.tap(action);
   await tester.pumpAndSettle();
 }
 

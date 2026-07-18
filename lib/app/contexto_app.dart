@@ -10,6 +10,7 @@ import '../features/home/presentation/home_page.dart';
 import '../features/library/data/media_item_repository.dart';
 import '../features/ocr/data/ocr_repository.dart';
 import '../features/processing/data/ocr_queue_processor.dart';
+import '../features/tags/data/tag_repository.dart';
 
 class ContextoApp extends StatelessWidget {
   const ContextoApp({
@@ -19,6 +20,7 @@ class ContextoApp extends StatelessWidget {
     this.ocrRepository,
     this.ocrQueue,
     this.categoryRepository,
+    this.tagRepository,
     this.incomingShareSource,
     this.automaticScreenshotSource,
     this.automaticImportSettingsRepository,
@@ -29,6 +31,7 @@ class ContextoApp extends StatelessWidget {
   final OcrRepository? ocrRepository;
   final OcrQueue? ocrQueue;
   final CategoryRepository? categoryRepository;
+  final TagRepository? tagRepository;
   final IncomingShareSource? incomingShareSource;
   final AutomaticScreenshotSource? automaticScreenshotSource;
   final AutomaticImportSettingsRepository? automaticImportSettingsRepository;
@@ -46,6 +49,7 @@ class ContextoApp extends StatelessWidget {
         ocrRepository: ocrRepository,
         ocrQueue: ocrQueue,
         categoryRepository: categoryRepository,
+        tagRepository: tagRepository,
         incomingShareSource: incomingShareSource,
         automaticScreenshotSource: automaticScreenshotSource,
         automaticImportSettingsRepository: automaticImportSettingsRepository,
