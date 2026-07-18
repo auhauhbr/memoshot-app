@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../../core/database/contexto_database.dart';
+import '../../library/domain/media_item.dart' as media_domain;
 import '../domain/category.dart' as domain;
 
 abstract interface class CategoryStore {
@@ -17,6 +18,16 @@ abstract interface class CategoryStore {
   Future<List<domain.Category>> listForMedia(int mediaItemId);
 
   Future<void> replaceForMedia(int mediaItemId, Set<int> categoryIds);
+
+  Future<void> updateCategory({
+    required int id,
+    required String name,
+    required String normalizedName,
+  });
+
+  Future<void> deleteCategory(int id);
+
+  Future<List<media_domain.MediaItem>> listMediaForCategory(int categoryId);
 }
 
 class DriftCategoryStore implements CategoryStore {
@@ -116,12 +127,71 @@ class DriftCategoryStore implements CategoryStore {
     });
   }
 
+  @override
+  Future<void> updateCategory({
+    required int id,
+    required String name,
+    required String normalizedName,
+  }) async {
+    await (_database.update(
+      _database.categories,
+    )..where((category) => category.id.equals(id))).write(
+      CategoriesCompanion(
+        name: Value(name),
+        normalizedName: Value(normalizedName),
+      ),
+    );
+  }
+
+  @override
+  Future<void> deleteCategory(int id) {
+    return _database.transaction(() async {
+      await (_database.delete(
+        _database.categories,
+      )..where((category) => category.id.equals(id))).go();
+    });
+  }
+
+  @override
+  Future<List<media_domain.MediaItem>> listMediaForCategory(
+    int categoryId,
+  ) async {
+    final query = _database.select(_database.mediaItems).join([
+      innerJoin(
+        _database.mediaCategories,
+        _database.mediaCategories.mediaItemId.equalsExp(
+          _database.mediaItems.id,
+        ),
+      ),
+    ]);
+    query
+      ..where(_database.mediaCategories.categoryId.equals(categoryId))
+      ..orderBy([OrderingTerm.desc(_database.mediaItems.importedAt)]);
+    final rows = await query.get();
+    return rows
+        .map((row) => _mediaToDomain(row.readTable(_database.mediaItems)))
+        .toList(growable: false);
+  }
+
   domain.Category _toDomain(Category row) {
     return domain.Category(
       id: row.id,
       name: row.name,
       normalizedName: row.normalizedName,
       createdAt: row.createdAt,
+    );
+  }
+
+  media_domain.MediaItem _mediaToDomain(MediaItem row) {
+    return media_domain.MediaItem(
+      id: row.id,
+      privatePath: row.privatePath,
+      internalName: row.internalName,
+      mimeType: row.mimeType,
+      mediaHash: row.mediaHash,
+      importedAt: row.importedAt,
+      sourceMode: row.sourceMode,
+      status: row.status,
     );
   }
 }
