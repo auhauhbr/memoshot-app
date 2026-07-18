@@ -246,6 +246,7 @@ class DriftProcessingJobStore implements ProcessingJobStore {
       importedAt: row.importedAt,
       sourceMode: row.sourceMode,
       status: row.status,
+      importOrigin: domain_media.ImportOrigin.fromDatabase(row.importOrigin),
     );
   }
 

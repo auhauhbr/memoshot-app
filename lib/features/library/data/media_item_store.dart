@@ -12,6 +12,7 @@ abstract interface class MediaItemStore {
     required DateTime importedAt,
     required String sourceMode,
     required String status,
+    domain.ImportOrigin importOrigin = domain.ImportOrigin.picker,
   });
 
   Future<List<domain.MediaItem>> readItems();
@@ -51,6 +52,7 @@ class DriftMediaItemStore implements MediaItemStore {
     required DateTime importedAt,
     required String sourceMode,
     required String status,
+    domain.ImportOrigin importOrigin = domain.ImportOrigin.picker,
   }) {
     return _database
         .into(_database.mediaItems)
@@ -63,6 +65,7 @@ class DriftMediaItemStore implements MediaItemStore {
             importedAt: importedAt,
             sourceMode: sourceMode,
             status: status,
+            importOrigin: Value(importOrigin.databaseValue),
           ),
         );
   }
@@ -83,6 +86,7 @@ class DriftMediaItemStore implements MediaItemStore {
             importedAt: row.importedAt,
             sourceMode: row.sourceMode,
             status: row.status,
+            importOrigin: domain.ImportOrigin.fromDatabase(row.importOrigin),
           ),
         )
         .toList(growable: false);
@@ -157,6 +161,7 @@ class DriftMediaItemStore implements MediaItemStore {
       importedAt: row.importedAt,
       sourceMode: row.sourceMode,
       status: row.status,
+      importOrigin: domain.ImportOrigin.fromDatabase(row.importOrigin),
     );
   }
 

@@ -20,6 +20,8 @@ class MediaItems extends Table {
 
   TextColumn get sourceMode => text()();
 
+  TextColumn get importOrigin => text().withDefault(const Constant('picker'))();
+
   TextColumn get status => text()();
 }
 
@@ -99,7 +101,7 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -125,6 +127,9 @@ class ContextoDatabase extends _$ContextoDatabase {
       if (from < 6) {
         await migrator.createTable(categories);
         await migrator.createTable(mediaCategories);
+      }
+      if (from < 7) {
+        await migrator.addColumn(mediaItems, mediaItems.importOrigin);
       }
     },
     beforeOpen: (details) async {

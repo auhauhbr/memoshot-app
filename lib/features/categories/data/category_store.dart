@@ -192,6 +192,7 @@ class DriftCategoryStore implements CategoryStore {
       importedAt: row.importedAt,
       sourceMode: row.sourceMode,
       status: row.status,
+      importOrigin: media_domain.ImportOrigin.fromDatabase(row.importOrigin),
     );
   }
 }

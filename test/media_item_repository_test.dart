@@ -56,9 +56,33 @@ void main() {
     expect(loaded, hasLength(1));
     expect(loaded.single.id, imported.importedItems.single.id);
     expect(loaded.single.sourceMode, 'photoPicker');
+    expect(loaded.single.importOrigin, ImportOrigin.picker);
     expect(loaded.single.status, 'ready');
     expect(loaded.single.mimeType, 'image/png');
     expect(File(loaded.single.privatePath).existsSync(), isTrue);
+  });
+
+  test('imagem compartilhada persiste origem shared e cria job OCR', () async {
+    final jobStore = DriftProcessingJobStore(database);
+    repository = LocalMediaItemRepository(
+      store: store,
+      storage: storage,
+      ocrJobScheduler: LocalOcrJobScheduler(jobStore),
+    );
+    final original = createTestImage(temporaryDirectory, 'shared.png');
+
+    final result = await repository.importScreenshots([
+      SelectedScreenshot(path: original.path, mimeType: 'image/png'),
+    ], origin: ImportOrigin.shared);
+    final item = result.importedItems.single;
+
+    expect(item.importOrigin, ImportOrigin.shared);
+    expect(
+      (await repository.loadAvailableItems()).single.importOrigin,
+      ImportOrigin.shared,
+    );
+    expect(await jobStore.findOcrJob(item.id), isNotNull);
+    expect(original.existsSync(), isTrue);
   });
 
   test('persiste múltiplos itens', () async {
@@ -87,7 +111,7 @@ void main() {
     ]);
     final duplicate = await repository.importScreenshots([
       SelectedScreenshot(path: original.path),
-    ]);
+    ], origin: ImportOrigin.shared);
 
     expect(first.importedItems, hasLength(1));
     expect(duplicate.importedItems, isEmpty);
@@ -95,6 +119,29 @@ void main() {
     expect(await jobStore.findOcrJob(first.importedItems.single.id), isNotNull);
     final jobs = await database.select(database.processingJobs).get();
     expect(jobs, hasLength(1));
+    expect(
+      (await repository.loadAvailableItems()).single.importOrigin,
+      ImportOrigin.picker,
+    );
+  });
+
+  test('múltiplas imagens compartilhadas criam seus jobs', () async {
+    final jobStore = DriftProcessingJobStore(database);
+    repository = LocalMediaItemRepository(
+      store: store,
+      storage: storage,
+      ocrJobScheduler: LocalOcrJobScheduler(jobStore),
+    );
+    final first = createTestImage(temporaryDirectory, 'shared-job-a.png');
+    final second = createTestImage(temporaryDirectory, 'shared-job-b.png', 1);
+
+    final result = await repository.importScreenshots([
+      SelectedScreenshot(path: first.path),
+      SelectedScreenshot(path: second.path),
+    ], origin: ImportOrigin.shared);
+
+    expect(result.importedItems, hasLength(2));
+    expect(await database.select(database.processingJobs).get(), hasLength(2));
   });
 
   test('falha ao criar job não desfaz a importação', () async {
@@ -290,12 +337,26 @@ void main() {
     final missingPath =
         '${temporaryDirectory.path}${Platform.pathSeparator}ausente.png';
 
-    await expectLater(
-      repository.importScreenshots([SelectedScreenshot(path: missingPath)]),
-      throwsA(isA<FileSystemException>()),
-    );
+    final result = await repository.importScreenshots([
+      SelectedScreenshot(path: missingPath),
+    ]);
 
+    expect(result.rejectedCount, 1);
     expect(await store.readItems(), isEmpty);
+  });
+
+  test('falha em um arquivo não impede os demais do lote', () async {
+    final valid = createTestImage(temporaryDirectory, 'valida.png');
+    final missing = '${temporaryDirectory.path}/inexistente.png';
+
+    final result = await repository.importScreenshots([
+      SelectedScreenshot(path: missing),
+      SelectedScreenshot(path: valid.path),
+    ], origin: ImportOrigin.shared);
+
+    expect(result.importedItems, hasLength(1));
+    expect(result.rejectedCount, 1);
+    expect(result.importedItems.single.importOrigin, ImportOrigin.shared);
   });
 
   test('remove a cópia privada quando a gravação no banco falha', () async {
@@ -305,13 +366,11 @@ void main() {
       storage: storage,
     );
 
-    await expectLater(
-      failingRepository.importScreenshots([
-        SelectedScreenshot(path: original.path),
-      ]),
-      throwsStateError,
-    );
+    final result = await failingRepository.importScreenshots([
+      SelectedScreenshot(path: original.path),
+    ]);
 
+    expect(result.rejectedCount, 1);
     final screenshotsDirectory = Directory(
       '${privateDirectory.path}${Platform.pathSeparator}screenshots',
     );
@@ -409,6 +468,7 @@ class FailingMediaItemStore implements MediaItemStore {
     required DateTime importedAt,
     required String sourceMode,
     required String status,
+    ImportOrigin importOrigin = ImportOrigin.picker,
   }) {
     throw StateError('Falha simulada no banco');
   }

@@ -14,16 +14,21 @@ class ImportResult {
   const ImportResult({
     required this.importedItems,
     required this.duplicateCount,
+    this.rejectedCount = 0,
   });
 
   final List<MediaItem> importedItems;
   final int duplicateCount;
+  final int rejectedCount;
 }
 
 abstract interface class MediaItemRepository {
   Future<List<MediaItem>> loadAvailableItems();
 
-  Future<ImportResult> importScreenshots(List<SelectedScreenshot> screenshots);
+  Future<ImportResult> importScreenshots(
+    List<SelectedScreenshot> screenshots, {
+    ImportOrigin origin = ImportOrigin.picker,
+  });
 
   Future<void> removeItem(MediaItem item);
 
@@ -124,66 +129,76 @@ class LocalMediaItemRepository implements MediaItemRepository {
 
   @override
   Future<ImportResult> importScreenshots(
-    List<SelectedScreenshot> screenshots,
-  ) async {
+    List<SelectedScreenshot> screenshots, {
+    ImportOrigin origin = ImportOrigin.picker,
+  }) async {
     final imported = <MediaItem>[];
     var duplicateCount = 0;
+    var rejectedCount = 0;
 
     for (final screenshot in screenshots) {
-      final source = File(screenshot.path);
-      if (!await source.exists()) {
-        throw const FileSystemException('Arquivo de origem indisponível.');
-      }
-
-      final hash = await _hashCalculator.calculate(screenshot.path);
-      if (await _store.findByHash(hash) != null) {
-        duplicateCount++;
-        continue;
-      }
-
-      final copy = await _storage.copyToPrivate(screenshot.path);
-      final importedAt = DateTime.now();
       try {
-        final id = await _store.insertItem(
-          privatePath: copy.privatePath,
-          internalName: copy.internalName,
-          mimeType: screenshot.mimeType,
-          mediaHash: hash,
-          importedAt: importedAt,
-          sourceMode: 'photoPicker',
-          status: 'ready',
-        );
-        final item = MediaItem(
-          id: id,
-          privatePath: copy.privatePath,
-          internalName: copy.internalName,
-          mimeType: screenshot.mimeType,
-          mediaHash: hash,
-          importedAt: importedAt,
-          sourceMode: 'photoPicker',
-          status: 'ready',
-        );
-        imported.add(item);
-        try {
-          await _ocrJobScheduler?.schedule(item.id);
-        } catch (_) {
-          // A importação permanece válida e o OCR manual continua disponível.
+        final source = File(screenshot.path);
+        if (!await source.exists()) {
+          rejectedCount++;
+          continue;
         }
-      } catch (_) {
-        final duplicateCreatedConcurrently =
-            await _findByHashIgnoringErrors(hash) != null;
-        await _storage.deletePrivateCopy(copy.privatePath);
-        if (duplicateCreatedConcurrently) {
+
+        final hash = await _hashCalculator.calculate(screenshot.path);
+        if (await _store.findByHash(hash) != null) {
           duplicateCount++;
           continue;
         }
-        rethrow;
+
+        final copy = await _storage.copyToPrivate(screenshot.path);
+        final importedAt = DateTime.now();
+        try {
+          final id = await _store.insertItem(
+            privatePath: copy.privatePath,
+            internalName: copy.internalName,
+            mimeType: screenshot.mimeType,
+            mediaHash: hash,
+            importedAt: importedAt,
+            sourceMode: 'photoPicker',
+            status: 'ready',
+            importOrigin: origin,
+          );
+          final item = MediaItem(
+            id: id,
+            privatePath: copy.privatePath,
+            internalName: copy.internalName,
+            mimeType: screenshot.mimeType,
+            mediaHash: hash,
+            importedAt: importedAt,
+            sourceMode: 'photoPicker',
+            status: 'ready',
+            importOrigin: origin,
+          );
+          imported.add(item);
+          try {
+            await _ocrJobScheduler?.schedule(item.id);
+          } catch (_) {
+            // A importação permanece válida e o OCR manual continua disponível.
+          }
+        } catch (_) {
+          final duplicateCreatedConcurrently =
+              await _findByHashIgnoringErrors(hash) != null;
+          await _storage.deletePrivateCopy(copy.privatePath);
+          if (duplicateCreatedConcurrently) {
+            duplicateCount++;
+            continue;
+          }
+          rejectedCount++;
+        }
+      } catch (_) {
+        rejectedCount++;
       }
     }
 
     return ImportResult(
       importedItems: imported,
       duplicateCount: duplicateCount,
+      rejectedCount: rejectedCount,
     );
   }
 

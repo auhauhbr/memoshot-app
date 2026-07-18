@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 5 para 6 preservando as tabelas existentes', () async {
+  test('migra schema 6 para 7 preservando as tabelas existentes', () async {
     final directory = Directory.systemTemp.createTempSync(
       'contexto_migration_test_',
     );
@@ -27,6 +27,14 @@ void main() {
         'photoPicker',
         'ready',
       ],
+    );
+    await legacy.customStatement(
+      "INSERT INTO categories (name, normalized_name, created_at) VALUES ('Teste', 'teste', ?)",
+      [DateTime(2025).millisecondsSinceEpoch ~/ 1000],
+    );
+    await legacy.customStatement(
+      'INSERT INTO media_categories (media_item_id, category_id, created_at) VALUES (1, 1, ?)',
+      [DateTime(2025).millisecondsSinceEpoch ~/ 1000],
     );
     await legacy.customStatement(
       '''
@@ -60,16 +68,17 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 6);
+    expect(version.read<int>('user_version'), 7);
     expect(rows, hasLength(1));
     expect(rows.single.internalName, 'copia.png');
     expect(rows.single.mediaHash, isNull);
+    expect(rows.single.importOrigin, 'picker');
     final ocrRows = await migrated.select(migrated.ocrResults).get();
     expect(ocrRows.single.fullText, 'Texto fictício preservado');
     expect(ocrRows.single.normalizedText, 'texto ficticio preservado');
     expect(await migrated.select(migrated.processingJobs).get(), hasLength(1));
-    expect(await migrated.select(migrated.categories).get(), isEmpty);
-    expect(await migrated.select(migrated.mediaCategories).get(), isEmpty);
+    expect(await migrated.select(migrated.categories).get(), hasLength(1));
+    expect(await migrated.select(migrated.mediaCategories).get(), hasLength(1));
 
     await (migrated.update(migrated.mediaItems)
           ..where((item) => item.id.equals(rows.single.id)))
@@ -86,9 +95,28 @@ void main() {
               importedAt: DateTime(2026),
               sourceMode: 'photoPicker',
               status: 'ready',
+              importOrigin: const Value('shared'),
             ),
           ),
       throwsA(anything),
+    );
+    final sharedId = await migrated
+        .into(migrated.mediaItems)
+        .insert(
+          MediaItemsCompanion.insert(
+            privatePath: '${directory.path}/compartilhada.png',
+            internalName: 'compartilhada.png',
+            importedAt: DateTime(2026),
+            sourceMode: 'photoPicker',
+            status: 'ready',
+            importOrigin: const Value('shared'),
+          ),
+        );
+    expect(
+      (await (migrated.select(
+        migrated.mediaItems,
+      )..where((item) => item.id.equals(sharedId))).getSingle()).importOrigin,
+      'shared',
     );
 
     await migrated.close();
@@ -96,7 +124,7 @@ void main() {
     final reopened = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
     final reopenedOcr = await reopened.select(reopened.ocrResults).getSingle();
     expect(reopenedOcr.normalizedText, 'texto ficticio preservado');
-    expect(await reopened.select(reopened.mediaItems).get(), hasLength(1));
+    expect(await reopened.select(reopened.mediaItems).get(), hasLength(2));
     expect(await reopened.select(reopened.processingJobs).get(), hasLength(1));
     await reopened.close();
     directory.deleteSync(recursive: true);
@@ -110,7 +138,7 @@ class _LegacyDatabase extends GeneratedDatabase {
   final List<TableInfo> allTables = const [];
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -125,6 +153,24 @@ class _LegacyDatabase extends GeneratedDatabase {
           imported_at INTEGER NOT NULL,
           source_mode TEXT NOT NULL,
           status TEXT NOT NULL
+        )
+      ''');
+      await customStatement('''
+        CREATE TABLE categories (
+          id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          normalized_name TEXT NOT NULL UNIQUE,
+          created_at INTEGER NOT NULL
+        )
+      ''');
+      await customStatement('''
+        CREATE TABLE media_categories (
+          media_item_id INTEGER NOT NULL
+            REFERENCES media_items (id) ON DELETE CASCADE,
+          category_id INTEGER NOT NULL
+            REFERENCES categories (id) ON DELETE CASCADE,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (media_item_id, category_id)
         )
       ''');
       await customStatement('''

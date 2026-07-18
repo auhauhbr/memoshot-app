@@ -88,6 +88,18 @@ class $MediaItemsTable extends MediaItems
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _importOriginMeta = const VerificationMeta(
+    'importOrigin',
+  );
+  @override
+  late final GeneratedColumn<String> importOrigin = GeneratedColumn<String>(
+    'import_origin',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('picker'),
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
@@ -106,6 +118,7 @@ class $MediaItemsTable extends MediaItems
     mediaHash,
     importedAt,
     sourceMode,
+    importOrigin,
     status,
   ];
   @override
@@ -173,6 +186,15 @@ class $MediaItemsTable extends MediaItems
     } else if (isInserting) {
       context.missing(_sourceModeMeta);
     }
+    if (data.containsKey('import_origin')) {
+      context.handle(
+        _importOriginMeta,
+        importOrigin.isAcceptableOrUnknown(
+          data['import_origin']!,
+          _importOriginMeta,
+        ),
+      );
+    }
     if (data.containsKey('status')) {
       context.handle(
         _statusMeta,
@@ -218,6 +240,10 @@ class $MediaItemsTable extends MediaItems
         DriftSqlType.string,
         data['${effectivePrefix}source_mode'],
       )!,
+      importOrigin: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}import_origin'],
+      )!,
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
@@ -239,6 +265,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
   final String? mediaHash;
   final DateTime importedAt;
   final String sourceMode;
+  final String importOrigin;
   final String status;
   const MediaItem({
     required this.id,
@@ -248,6 +275,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     this.mediaHash,
     required this.importedAt,
     required this.sourceMode,
+    required this.importOrigin,
     required this.status,
   });
   @override
@@ -264,6 +292,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     }
     map['imported_at'] = Variable<DateTime>(importedAt);
     map['source_mode'] = Variable<String>(sourceMode);
+    map['import_origin'] = Variable<String>(importOrigin);
     map['status'] = Variable<String>(status);
     return map;
   }
@@ -281,6 +310,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
           : Value(mediaHash),
       importedAt: Value(importedAt),
       sourceMode: Value(sourceMode),
+      importOrigin: Value(importOrigin),
       status: Value(status),
     );
   }
@@ -298,6 +328,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       mediaHash: serializer.fromJson<String?>(json['mediaHash']),
       importedAt: serializer.fromJson<DateTime>(json['importedAt']),
       sourceMode: serializer.fromJson<String>(json['sourceMode']),
+      importOrigin: serializer.fromJson<String>(json['importOrigin']),
       status: serializer.fromJson<String>(json['status']),
     );
   }
@@ -312,6 +343,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       'mediaHash': serializer.toJson<String?>(mediaHash),
       'importedAt': serializer.toJson<DateTime>(importedAt),
       'sourceMode': serializer.toJson<String>(sourceMode),
+      'importOrigin': serializer.toJson<String>(importOrigin),
       'status': serializer.toJson<String>(status),
     };
   }
@@ -324,6 +356,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     Value<String?> mediaHash = const Value.absent(),
     DateTime? importedAt,
     String? sourceMode,
+    String? importOrigin,
     String? status,
   }) => MediaItem(
     id: id ?? this.id,
@@ -333,6 +366,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     mediaHash: mediaHash.present ? mediaHash.value : this.mediaHash,
     importedAt: importedAt ?? this.importedAt,
     sourceMode: sourceMode ?? this.sourceMode,
+    importOrigin: importOrigin ?? this.importOrigin,
     status: status ?? this.status,
   );
   MediaItem copyWithCompanion(MediaItemsCompanion data) {
@@ -352,6 +386,9 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       sourceMode: data.sourceMode.present
           ? data.sourceMode.value
           : this.sourceMode,
+      importOrigin: data.importOrigin.present
+          ? data.importOrigin.value
+          : this.importOrigin,
       status: data.status.present ? data.status.value : this.status,
     );
   }
@@ -366,6 +403,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
           ..write('mediaHash: $mediaHash, ')
           ..write('importedAt: $importedAt, ')
           ..write('sourceMode: $sourceMode, ')
+          ..write('importOrigin: $importOrigin, ')
           ..write('status: $status')
           ..write(')'))
         .toString();
@@ -380,6 +418,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     mediaHash,
     importedAt,
     sourceMode,
+    importOrigin,
     status,
   );
   @override
@@ -393,6 +432,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
           other.mediaHash == this.mediaHash &&
           other.importedAt == this.importedAt &&
           other.sourceMode == this.sourceMode &&
+          other.importOrigin == this.importOrigin &&
           other.status == this.status);
 }
 
@@ -404,6 +444,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
   final Value<String?> mediaHash;
   final Value<DateTime> importedAt;
   final Value<String> sourceMode;
+  final Value<String> importOrigin;
   final Value<String> status;
   const MediaItemsCompanion({
     this.id = const Value.absent(),
@@ -413,6 +454,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     this.mediaHash = const Value.absent(),
     this.importedAt = const Value.absent(),
     this.sourceMode = const Value.absent(),
+    this.importOrigin = const Value.absent(),
     this.status = const Value.absent(),
   });
   MediaItemsCompanion.insert({
@@ -423,6 +465,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     this.mediaHash = const Value.absent(),
     required DateTime importedAt,
     required String sourceMode,
+    this.importOrigin = const Value.absent(),
     required String status,
   }) : privatePath = Value(privatePath),
        internalName = Value(internalName),
@@ -437,6 +480,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     Expression<String>? mediaHash,
     Expression<DateTime>? importedAt,
     Expression<String>? sourceMode,
+    Expression<String>? importOrigin,
     Expression<String>? status,
   }) {
     return RawValuesInsertable({
@@ -447,6 +491,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
       if (mediaHash != null) 'media_hash': mediaHash,
       if (importedAt != null) 'imported_at': importedAt,
       if (sourceMode != null) 'source_mode': sourceMode,
+      if (importOrigin != null) 'import_origin': importOrigin,
       if (status != null) 'status': status,
     });
   }
@@ -459,6 +504,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     Value<String?>? mediaHash,
     Value<DateTime>? importedAt,
     Value<String>? sourceMode,
+    Value<String>? importOrigin,
     Value<String>? status,
   }) {
     return MediaItemsCompanion(
@@ -469,6 +515,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
       mediaHash: mediaHash ?? this.mediaHash,
       importedAt: importedAt ?? this.importedAt,
       sourceMode: sourceMode ?? this.sourceMode,
+      importOrigin: importOrigin ?? this.importOrigin,
       status: status ?? this.status,
     );
   }
@@ -497,6 +544,9 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     if (sourceMode.present) {
       map['source_mode'] = Variable<String>(sourceMode.value);
     }
+    if (importOrigin.present) {
+      map['import_origin'] = Variable<String>(importOrigin.value);
+    }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
     }
@@ -513,6 +563,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
           ..write('mediaHash: $mediaHash, ')
           ..write('importedAt: $importedAt, ')
           ..write('sourceMode: $sourceMode, ')
+          ..write('importOrigin: $importOrigin, ')
           ..write('status: $status')
           ..write(')'))
         .toString();
@@ -2157,6 +2208,7 @@ typedef $$MediaItemsTableCreateCompanionBuilder =
       Value<String?> mediaHash,
       required DateTime importedAt,
       required String sourceMode,
+      Value<String> importOrigin,
       required String status,
     });
 typedef $$MediaItemsTableUpdateCompanionBuilder =
@@ -2168,6 +2220,7 @@ typedef $$MediaItemsTableUpdateCompanionBuilder =
       Value<String?> mediaHash,
       Value<DateTime> importedAt,
       Value<String> sourceMode,
+      Value<String> importOrigin,
       Value<String> status,
     });
 
@@ -2275,6 +2328,11 @@ class $$MediaItemsTableFilterComposer
 
   ColumnFilters<String> get sourceMode => $composableBuilder(
     column: $table.sourceMode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get importOrigin => $composableBuilder(
+    column: $table.importOrigin,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2403,6 +2461,11 @@ class $$MediaItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get importOrigin => $composableBuilder(
+    column: $table.importOrigin,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -2444,6 +2507,11 @@ class $$MediaItemsTableAnnotationComposer
 
   GeneratedColumn<String> get sourceMode => $composableBuilder(
     column: $table.sourceMode,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get importOrigin => $composableBuilder(
+    column: $table.importOrigin,
     builder: (column) => column,
   );
 
@@ -2565,6 +2633,7 @@ class $$MediaItemsTableTableManager
                 Value<String?> mediaHash = const Value.absent(),
                 Value<DateTime> importedAt = const Value.absent(),
                 Value<String> sourceMode = const Value.absent(),
+                Value<String> importOrigin = const Value.absent(),
                 Value<String> status = const Value.absent(),
               }) => MediaItemsCompanion(
                 id: id,
@@ -2574,6 +2643,7 @@ class $$MediaItemsTableTableManager
                 mediaHash: mediaHash,
                 importedAt: importedAt,
                 sourceMode: sourceMode,
+                importOrigin: importOrigin,
                 status: status,
               ),
           createCompanionCallback:
@@ -2585,6 +2655,7 @@ class $$MediaItemsTableTableManager
                 Value<String?> mediaHash = const Value.absent(),
                 required DateTime importedAt,
                 required String sourceMode,
+                Value<String> importOrigin = const Value.absent(),
                 required String status,
               }) => MediaItemsCompanion.insert(
                 id: id,
@@ -2594,6 +2665,7 @@ class $$MediaItemsTableTableManager
                 mediaHash: mediaHash,
                 importedAt: importedAt,
                 sourceMode: sourceMode,
+                importOrigin: importOrigin,
                 status: status,
               ),
           withReferenceMapper: (p0) => p0
