@@ -11,6 +11,11 @@ abstract interface class ClassificationSuggestionStore {
 
   Future<StoredClassificationSuggestion?> loadByMediaItemId(int mediaItemId);
 
+  Future<StoredClassificationSuggestion> saveAutomaticSuggestion(
+    StoredClassificationSuggestion suggestion, {
+    required DateTime ocrProcessedAt,
+  });
+
   Future<void> deleteForMediaItem(int mediaItemId);
 
   Future<List<StoredClassificationSuggestion>> loadPendingReview();
@@ -61,6 +66,42 @@ class DriftClassificationSuggestionStore
               createdAt: existing.createdAt,
               updatedAt: suggestion.updatedAt,
             );
+      await _database
+          .into(_database.classificationSuggestions)
+          .insert(_toCompanion(value), mode: InsertMode.insertOrReplace);
+      return value;
+    });
+  }
+
+  @override
+  Future<StoredClassificationSuggestion> saveAutomaticSuggestion(
+    StoredClassificationSuggestion suggestion, {
+    required DateTime ocrProcessedAt,
+  }) {
+    return _database.transaction(() async {
+      final existing = await loadByMediaItemId(suggestion.mediaItemId);
+      if (existing != null) {
+        final isResolved =
+            existing.status != ClassificationSuggestionStatus.pendingReview;
+        final isCurrent =
+            existing.engineVersion == suggestion.engineVersion &&
+            !ocrProcessedAt.isAfter(existing.updatedAt);
+        if (isResolved || isCurrent) return existing;
+      }
+
+      final value = StoredClassificationSuggestion(
+        mediaItemId: suggestion.mediaItemId,
+        suggestedCategoryName: suggestion.suggestedCategoryName,
+        confidence: suggestion.confidence,
+        hasSuggestion: suggestion.hasSuggestion,
+        suggestedTags: suggestion.suggestedTags,
+        evidence: suggestion.evidence,
+        status: ClassificationSuggestionStatus.pendingReview,
+        reviewReason: suggestion.reviewReason,
+        engineVersion: suggestion.engineVersion,
+        createdAt: existing?.createdAt ?? suggestion.createdAt,
+        updatedAt: suggestion.updatedAt,
+      );
       await _database
           .into(_database.classificationSuggestions)
           .insert(_toCompanion(value), mode: InsertMode.insertOrReplace);

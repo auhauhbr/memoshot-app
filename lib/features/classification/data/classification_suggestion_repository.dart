@@ -10,6 +10,11 @@ abstract interface class ClassificationSuggestionRepository {
     StoredClassificationSuggestion suggestion,
   );
 
+  Future<StoredClassificationSuggestion> saveAutomaticSuggestion(
+    StoredClassificationSuggestion suggestion, {
+    required DateTime ocrProcessedAt,
+  });
+
   Future<StoredClassificationSuggestion?> loadByMediaItemId(int mediaItemId);
 
   Future<void> deleteForMediaItem(int mediaItemId);
@@ -52,6 +57,17 @@ class LocalClassificationSuggestionRepository
     StoredClassificationSuggestion suggestion,
   ) {
     return _store.saveSuggestion(suggestion);
+  }
+
+  @override
+  Future<StoredClassificationSuggestion> saveAutomaticSuggestion(
+    StoredClassificationSuggestion suggestion, {
+    required DateTime ocrProcessedAt,
+  }) {
+    return _store.saveAutomaticSuggestion(
+      suggestion,
+      ocrProcessedAt: ocrProcessedAt,
+    );
   }
 
   @override

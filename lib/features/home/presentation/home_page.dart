@@ -17,6 +17,7 @@ import '../../categories/data/category_store.dart';
 import '../../categories/domain/category.dart';
 import '../../categories/presentation/categories_page.dart';
 import '../../categories/presentation/category_detail_page.dart';
+import '../../classification/application/classification_composition.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
@@ -142,6 +143,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           jobStore: jobStore!,
           resultStore: resultStore!,
           recognitionService: const MlKitTextRecognitionService(),
+          classificationProcessor: createLocalClassificationProcessor(
+            database!,
+          ),
         );
     _categoryRepository =
         widget.categoryRepository ??

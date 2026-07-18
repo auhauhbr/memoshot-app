@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:memoshot/core/database/contexto_database.dart'
     show ContextoDatabase;
 import 'package:memoshot/core/ocr/text_recognition_service.dart';
+import 'package:memoshot/features/classification/application/classification_processor.dart';
+import 'package:memoshot/features/classification/domain/classification_models.dart';
+import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
 import 'package:memoshot/features/library/data/media_item_store.dart';
 import 'package:memoshot/features/library/domain/media_item.dart';
 import 'package:memoshot/features/ocr/data/ocr_result_store.dart';
@@ -153,6 +156,67 @@ void main() {
     expect((await resultStore.findByMediaItemId(item.id))?.fullText, isEmpty);
   });
 
+  test('classifica uma vez e somente depois de persistir o OCR', () async {
+    final item = await createMediaItem(mediaStore, temporaryDirectory, 16);
+    await scheduler.schedule(item.id);
+    final classification = FakeClassificationProcessor(
+      onProcess: (mediaItem, ocrResult) async {
+        expect(
+          (await resultStore.findByMediaItemId(mediaItem.id))?.fullText,
+          ocrResult.fullText,
+        );
+      },
+    );
+    final queue = createQueue(
+      jobStore,
+      resultStore,
+      FakeRecognitionService(texts: ['Vaga entrevista']),
+      classificationProcessor: classification,
+    );
+    addTearDown(queue.close);
+
+    queue.signal();
+    await waitForState(queue, item.id, OcrItemState.completedWithText);
+
+    expect(classification.calls, 1);
+  });
+
+  test(
+    'origens manual, compartilhada e automática convergem para classificação',
+    () async {
+      final items = <MediaItem>[];
+      var marker = 20;
+      for (final origin in ImportOrigin.values) {
+        final item = await createMediaItem(
+          mediaStore,
+          temporaryDirectory,
+          marker++,
+          origin: origin,
+        );
+        items.add(item);
+        await scheduler.schedule(item.id);
+      }
+      final classification = FakeClassificationProcessor();
+      final queue = createQueue(
+        jobStore,
+        resultStore,
+        FakeRecognitionService(
+          texts: ['Manual', 'Compartilhada', 'Automática'],
+        ),
+        classificationProcessor: classification,
+      );
+      addTearDown(queue.close);
+
+      queue.signal();
+      for (final item in items) {
+        await waitForState(queue, item.id, OcrItemState.completedWithText);
+      }
+
+      expect(classification.mediaItemIds, items.map((item) => item.id));
+      expect(classification.calls, 3);
+    },
+  );
+
   test('falha marca job como failed sem criar resultado falso', () async {
     final item = await createMediaItem(mediaStore, temporaryDirectory, 7);
     await scheduler.schedule(item.id);
@@ -169,6 +233,50 @@ void main() {
     expect(await resultStore.findByMediaItemId(item.id), isNull);
     expect((await jobStore.findOcrJob(item.id))?.errorCode, 'ocr_failed');
   });
+
+  test('falha no OCR não executa classificação', () async {
+    final item = await createMediaItem(mediaStore, temporaryDirectory, 17);
+    await scheduler.schedule(item.id);
+    final classification = FakeClassificationProcessor();
+    final queue = createQueue(
+      jobStore,
+      resultStore,
+      FakeRecognitionService(error: StateError('conteúdo privado')),
+      classificationProcessor: classification,
+    );
+    addTearDown(queue.close);
+
+    queue.signal();
+    await waitForState(queue, item.id, OcrItemState.failed);
+
+    expect(classification.calls, 0);
+  });
+
+  test(
+    'falha na classificação preserva OCR e não bloqueia próximo item',
+    () async {
+      final first = await createMediaItem(mediaStore, temporaryDirectory, 18);
+      final second = await createMediaItem(mediaStore, temporaryDirectory, 19);
+      await scheduler.schedule(first.id);
+      await scheduler.schedule(second.id);
+      final classification = FakeClassificationProcessor(failFirst: true);
+      final queue = createQueue(
+        jobStore,
+        resultStore,
+        FakeRecognitionService(texts: ['Primeiro privado', 'Segundo privado']),
+        classificationProcessor: classification,
+      );
+      addTearDown(queue.close);
+
+      queue.signal();
+      await waitForState(queue, first.id, OcrItemState.completedWithText);
+      await waitForState(queue, second.id, OcrItemState.completedWithText);
+
+      expect(await resultStore.findByMediaItemId(first.id), isNotNull);
+      expect(await resultStore.findByMediaItemId(second.id), isNotNull);
+      expect(classification.calls, 2);
+    },
+  );
 
   test(
     'resultado existente impede processamento automático desnecessário',
@@ -188,6 +296,32 @@ void main() {
         (await resultStore.findByMediaItemId(item.id))?.fullText,
         'Persistido',
       );
+    },
+  );
+
+  test(
+    'retomada classifica OCR já persistido sem reconhecê-lo novamente',
+    () async {
+      final item = await createMediaItem(mediaStore, temporaryDirectory, 31);
+      await scheduler.schedule(item.id);
+      await resultStore.save(
+        createOcrResult(item.id, 'Persistido antes da pausa'),
+      );
+      final service = FakeRecognitionService(texts: ['não deve executar']);
+      final classification = FakeClassificationProcessor();
+      final queue = createQueue(
+        jobStore,
+        resultStore,
+        service,
+        classificationProcessor: classification,
+      );
+      addTearDown(queue.close);
+
+      queue.signal();
+      await waitForState(queue, item.id, OcrItemState.completedWithText);
+
+      expect(service.callCount, 0);
+      expect(classification.calls, 1);
     },
   );
 
@@ -259,17 +393,51 @@ void main() {
     expect(await jobStore.findOcrJob(item.id), isNull);
     expect(await resultStore.findByMediaItemId(item.id), isNull);
   });
+
+  test(
+    'remoção antes de persistir classificação é tratada com segurança',
+    () async {
+      final item = await createMediaItem(mediaStore, temporaryDirectory, 30);
+      await scheduler.schedule(item.id);
+      final classification = FakeClassificationProcessor(
+        onProcess: (mediaItem, _) => mediaStore.deleteItem(mediaItem.id),
+      );
+      final queue = createQueue(
+        jobStore,
+        resultStore,
+        FakeRecognitionService(texts: ['Texto concluído']),
+        classificationProcessor: classification,
+      );
+      addTearDown(queue.close);
+
+      queue.signal();
+      for (
+        var attempt = 0;
+        attempt < 100 && classification.calls == 0;
+        attempt++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+
+      expect(classification.calls, 1);
+      expect(await jobStore.findMediaItem(item.id), isNull);
+      expect(await jobStore.findOcrJob(item.id), isNull);
+      expect(await resultStore.findByMediaItemId(item.id), isNull);
+    },
+  );
 }
 
 LocalOcrQueueProcessor createQueue(
   ProcessingJobStore jobStore,
   OcrResultStore resultStore,
-  TextRecognitionService service,
-) {
+  TextRecognitionService service, {
+  ClassificationProcessor? classificationProcessor,
+}) {
   return LocalOcrQueueProcessor(
     jobStore: jobStore,
     resultStore: resultStore,
     recognitionService: service,
+    classificationProcessor: classificationProcessor,
   );
 }
 
@@ -333,6 +501,32 @@ class FakeRecognitionService implements TextRecognitionService {
   }
 }
 
+class FakeClassificationProcessor implements ClassificationProcessor {
+  FakeClassificationProcessor({this.onProcess, this.failFirst = false});
+
+  final Future<void> Function(MediaItem, OcrResult)? onProcess;
+  final bool failFirst;
+  int calls = 0;
+  final List<int> mediaItemIds = [];
+
+  @override
+  Future<StoredClassificationSuggestion> process({
+    required MediaItem mediaItem,
+    required OcrResult ocrResult,
+  }) async {
+    calls++;
+    mediaItemIds.add(mediaItem.id);
+    await onProcess?.call(mediaItem, ocrResult);
+    if (failFirst && calls == 1) throw StateError('falha técnica sanitizada');
+    return StoredClassificationSuggestion.fromEngine(
+      mediaItemId: mediaItem.id,
+      suggestion: ClassificationSuggestion.empty(),
+      reviewReason: ClassificationReviewReason.noSuggestion,
+      createdAt: DateTime(2026),
+    );
+  }
+}
+
 TextRecognitionOutput output(String text) {
   return TextRecognitionOutput(
     fullText: text,
@@ -354,8 +548,9 @@ OcrResult createOcrResult(int mediaItemId, String text) {
 Future<MediaItem> createMediaItem(
   DriftMediaItemStore store,
   Directory directory,
-  int marker,
-) async {
+  int marker, {
+  ImportOrigin origin = ImportOrigin.picker,
+}) async {
   final file = File('${directory.path}/imagem-$marker.png')
     ..writeAsBytesSync([1, 2, marker]);
   final id = await store.insertItem(
@@ -366,6 +561,7 @@ Future<MediaItem> createMediaItem(
     importedAt: DateTime(2026, 1, 1, 0, marker),
     sourceMode: 'photoPicker',
     status: 'ready',
+    importOrigin: origin,
   );
   return MediaItem(
     id: id,
@@ -376,5 +572,6 @@ Future<MediaItem> createMediaItem(
     importedAt: DateTime(2026, 1, 1, 0, marker),
     sourceMode: 'photoPicker',
     status: 'ready',
+    importOrigin: origin,
   );
 }

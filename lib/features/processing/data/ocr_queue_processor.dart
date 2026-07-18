@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import '../../../core/ocr/text_recognition_service.dart';
+import '../../classification/application/classification_processor.dart';
 import '../../library/domain/media_item.dart';
 import '../../ocr/data/ocr_result_store.dart';
 import '../../ocr/domain/ocr_result.dart';
@@ -27,17 +28,25 @@ class LocalOcrQueueProcessor implements OcrQueue {
     required ProcessingJobStore jobStore,
     required OcrResultStore resultStore,
     required TextRecognitionService recognitionService,
-  }) : this._(jobStore, resultStore, recognitionService);
+    ClassificationProcessor? classificationProcessor,
+  }) : this._(
+         jobStore,
+         resultStore,
+         recognitionService,
+         classificationProcessor,
+       );
 
   LocalOcrQueueProcessor._(
     this._jobStore,
     this._resultStore,
     this._recognitionService,
+    this._classificationProcessor,
   );
 
   final ProcessingJobStore _jobStore;
   final OcrResultStore _resultStore;
   final TextRecognitionService _recognitionService;
+  final ClassificationProcessor? _classificationProcessor;
   final StreamController<int> _changes = StreamController<int>.broadcast();
   Future<void>? _draining;
   bool _signalRequested = false;
@@ -127,6 +136,10 @@ class LocalOcrQueueProcessor implements OcrQueue {
     try {
       final existing = await _resultStore.findByMediaItemId(job.mediaItemId);
       if (existing != null && job.errorCode != 'manual_retry') {
+        final mediaItem = await _jobStore.findMediaItem(job.mediaItemId);
+        if (mediaItem == null) return;
+        await _classifySafely(mediaItem, existing);
+        if (!await _jobStore.mediaItemExists(job.mediaItemId)) return;
         await _jobStore.markCompleted(job.id);
         _notify(job.mediaItemId);
         return;
@@ -146,15 +159,18 @@ class LocalOcrQueueProcessor implements OcrQueue {
       if (!await _jobStore.mediaItemExists(job.mediaItemId)) {
         return;
       }
-      await _resultStore.save(
-        OcrResult(
-          mediaItemId: job.mediaItemId,
-          fullText: output.fullText,
-          engine: output.engine,
-          engineVersion: output.engineVersion,
-          processedAt: DateTime.now(),
-        ),
+      final ocrResult = OcrResult(
+        mediaItemId: job.mediaItemId,
+        fullText: output.fullText,
+        engine: output.engine,
+        engineVersion: output.engineVersion,
+        processedAt: DateTime.now(),
       );
+      await _resultStore.save(ocrResult);
+      if (!await _jobStore.mediaItemExists(job.mediaItemId)) {
+        return;
+      }
+      await _classifySafely(mediaItem, ocrResult);
       if (!await _jobStore.mediaItemExists(job.mediaItemId)) {
         return;
       }
@@ -167,6 +183,17 @@ class LocalOcrQueueProcessor implements OcrQueue {
       } catch (_) {
         // O item pode ter sido removido durante o processamento.
       }
+    }
+  }
+
+  Future<void> _classifySafely(MediaItem mediaItem, OcrResult ocrResult) async {
+    try {
+      await _classificationProcessor?.process(
+        mediaItem: mediaItem,
+        ocrResult: ocrResult,
+      );
+    } catch (_) {
+      // A classificação é isolada: OCR concluído e fila seguem preservados.
     }
   }
 
