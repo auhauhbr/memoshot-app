@@ -252,7 +252,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       builder: (context) => AlertDialog(
         title: const Text('Ativar importação automática?'),
         content: const Text(
-          'O Contexto precisará acessar suas imagens para identificar novos '
+          'O MemoShot precisará acessar suas imagens para identificar novos '
           'screenshots. Somente capturas novas serão importadas; imagens antigas '
           'não serão adicionadas. Todo o processamento permanece neste dispositivo '
           'e o recurso pode ser desligado a qualquer momento.',
@@ -308,20 +308,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     if (imported == 0) {
       return duplicates == 1
-          ? 'Esta imagem já estava no Contexto.'
-          : '$duplicates imagens já estavam no Contexto.';
+          ? 'Esta imagem já estava no MemoShot.'
+          : '$duplicates imagens já estavam no MemoShot.';
     }
     if (duplicates == 0 && rejected == 0) {
       return imported == 1
-          ? 'Screenshot adicionado ao Contexto.'
-          : '$imported screenshots adicionados ao Contexto.';
+          ? 'Screenshot adicionado ao MemoShot.'
+          : '$imported screenshots adicionados ao MemoShot.';
     }
     final addedText =
         '$imported ${imported == 1 ? 'imagem adicionada' : 'imagens adicionadas'}';
     final parts = <String>[addedText];
     if (duplicates > 0) {
       parts.add(
-        '$duplicates ${duplicates == 1 ? 'já estava' : 'já estavam'} no Contexto',
+        '$duplicates ${duplicates == 1 ? 'já estava' : 'já estavam'} no MemoShot',
       );
     }
     if (rejected > 0) {
@@ -944,7 +944,7 @@ class _AppHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Contexto',
+                'MemoShot',
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: colors.primary,
                   fontWeight: FontWeight.w700,
@@ -1256,7 +1256,7 @@ class _AutomaticImportCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Adicione novos screenshots ao Contexto automaticamente.',
+                        'Adicione novos screenshots ao MemoShot automaticamente.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colors.onSurfaceVariant,
                         ),
@@ -1312,7 +1312,7 @@ class _AutomaticImportCard extends StatelessWidget {
             const SizedBox(height: 5),
             Text(
               'Com o app fechado, o Android pode capturar novos screenshots em '
-              'segundo plano. O processamento será concluído quando o Contexto '
+              'segundo plano. O processamento será concluído quando o MemoShot '
               'estiver disponível.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colors.onSurfaceVariant,

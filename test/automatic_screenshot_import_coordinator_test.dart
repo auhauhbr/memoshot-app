@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:contexto/core/automatic_import/automatic_screenshot_source.dart';
-import 'package:contexto/features/automatic_import/automatic_screenshot_import_coordinator.dart';
-import 'package:contexto/features/automatic_import/data/automatic_import_settings_repository.dart';
-import 'package:contexto/features/automatic_import/domain/automatic_import_settings.dart';
-import 'package:contexto/features/library/data/media_item_repository.dart';
-import 'package:contexto/features/library/domain/media_item.dart';
-import 'package:contexto/features/library/domain/selected_screenshot.dart';
-import 'package:contexto/features/library/domain/screenshot_search_result.dart';
+import 'package:memoshot/core/automatic_import/automatic_screenshot_source.dart';
+import 'package:memoshot/features/automatic_import/automatic_screenshot_import_coordinator.dart';
+import 'package:memoshot/features/automatic_import/data/automatic_import_settings_repository.dart';
+import 'package:memoshot/features/automatic_import/domain/automatic_import_settings.dart';
+import 'package:memoshot/features/library/data/media_item_repository.dart';
+import 'package:memoshot/features/library/domain/media_item.dart';
+import 'package:memoshot/features/library/domain/selected_screenshot.dart';
+import 'package:memoshot/features/library/domain/screenshot_search_result.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -189,7 +189,7 @@ void main() {
   );
 
   test('entrada durável usa pipeline automático e é confirmada', () async {
-    final directory = Directory.systemTemp.createTempSync('contexto_inbox_');
+    final directory = Directory.systemTemp.createTempSync('memoshot_inbox_');
     final image = File('${directory.path}/entrada.png')..writeAsBytesSync([1]);
     final capturedAt = DateTime(2025, 12, 20, 8);
     final source = _FakeSource()
@@ -219,7 +219,7 @@ void main() {
   test(
     'duplicata confirma entrada e falha transitória mantém entrada',
     () async {
-      final directory = Directory.systemTemp.createTempSync('contexto_inbox_');
+      final directory = Directory.systemTemp.createTempSync('memoshot_inbox_');
       final image = File('${directory.path}/entrada.png')
         ..writeAsBytesSync([1]);
       final duplicateSource = _FakeSource()

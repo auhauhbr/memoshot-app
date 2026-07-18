@@ -1,18 +1,18 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:contexto/core/database/contexto_database.dart'
+import 'package:memoshot/core/database/contexto_database.dart'
     show ContextoDatabase;
-import 'package:contexto/core/media/file_hash_calculator.dart';
-import 'package:contexto/core/media/screenshot_storage.dart';
-import 'package:contexto/features/library/data/media_item_repository.dart';
-import 'package:contexto/features/library/data/media_item_store.dart';
-import 'package:contexto/features/library/domain/media_item.dart';
-import 'package:contexto/features/library/domain/selected_screenshot.dart';
-import 'package:contexto/features/ocr/data/ocr_result_store.dart';
-import 'package:contexto/features/ocr/domain/ocr_result.dart';
-import 'package:contexto/features/processing/data/ocr_job_scheduler.dart';
-import 'package:contexto/features/processing/data/processing_job_store.dart';
+import 'package:memoshot/core/media/file_hash_calculator.dart';
+import 'package:memoshot/core/media/screenshot_storage.dart';
+import 'package:memoshot/features/library/data/media_item_repository.dart';
+import 'package:memoshot/features/library/data/media_item_store.dart';
+import 'package:memoshot/features/library/domain/media_item.dart';
+import 'package:memoshot/features/library/domain/selected_screenshot.dart';
+import 'package:memoshot/features/ocr/data/ocr_result_store.dart';
+import 'package:memoshot/features/ocr/domain/ocr_result.dart';
+import 'package:memoshot/features/processing/data/ocr_job_scheduler.dart';
+import 'package:memoshot/features/processing/data/processing_job_store.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -26,7 +26,7 @@ void main() {
 
   setUp(() {
     temporaryDirectory = Directory.systemTemp.createTempSync(
-      'contexto_repository_test_',
+      'memoshot_repository_test_',
     );
     privateDirectory = Directory(
       '${temporaryDirectory.path}${Platform.pathSeparator}private',

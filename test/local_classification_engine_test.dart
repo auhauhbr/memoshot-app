@@ -1,5 +1,5 @@
-import 'package:contexto/features/classification/domain/classification_models.dart';
-import 'package:contexto/features/classification/domain/local_classification_engine.dart';
+import 'package:memoshot/features/classification/domain/classification_models.dart';
+import 'package:memoshot/features/classification/domain/local_classification_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -160,7 +160,7 @@ void main() {
     });
 
     test('etiqueta pode ser sugerida sem categoria', () {
-      final result = classify(engine, 'Acesse https://contexto.exemplo/app');
+      final result = classify(engine, 'Acesse https://memoshot.exemplo/app');
 
       expect(result.suggestedCategoryName, isNull);
       expect(tagNames(result), ['Link']);

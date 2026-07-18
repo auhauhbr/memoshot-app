@@ -12,8 +12,8 @@ import '../features/ocr/data/ocr_repository.dart';
 import '../features/processing/data/ocr_queue_processor.dart';
 import '../features/tags/data/tag_repository.dart';
 
-class ContextoApp extends StatelessWidget {
-  const ContextoApp({
+class MemoShotApp extends StatelessWidget {
+  const MemoShotApp({
     super.key,
     this.screenshotPicker,
     this.mediaRepository,
@@ -39,7 +39,7 @@ class ContextoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Contexto',
+      title: 'MemoShot',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       themeMode: ThemeMode.light,

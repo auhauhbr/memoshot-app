@@ -62,6 +62,7 @@ não fazem parte do repositório.
 
 ## Nota de migração
 
-MemoShot foi anteriormente chamado **Contexto**. Package Dart, identificadores
-Android, banco, classes e diretórios ainda mantêm o nome técnico anterior até o
-checkpoint específico de rebranding.
+MemoShot foi anteriormente chamado **Contexto**. O package Dart atual é
+`memoshot`, e a identidade Android é `br.com.jeffersont.memoshot`. A troca do
+identificador Android cria um novo sandbox: uma instalação antiga do Contexto
+permanece separada até ser desinstalada, sem migração automática de dados.

@@ -2,28 +2,28 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:contexto/app/contexto_app.dart';
-import 'package:contexto/core/automatic_import/automatic_screenshot_source.dart';
-import 'package:contexto/core/media/screenshot_picker.dart';
-import 'package:contexto/core/sharing/incoming_share_source.dart';
-import 'package:contexto/core/theme/app_theme.dart';
-import 'package:contexto/core/text/search_snippet_builder.dart';
-import 'package:contexto/core/text/text_normalizer.dart';
-import 'package:contexto/features/categories/data/category_repository.dart';
-import 'package:contexto/features/categories/domain/category.dart';
-import 'package:contexto/features/automatic_import/data/automatic_import_settings_repository.dart';
-import 'package:contexto/features/automatic_import/domain/automatic_import_settings.dart';
-import 'package:contexto/features/library/data/media_item_repository.dart';
-import 'package:contexto/features/library/domain/media_item.dart';
-import 'package:contexto/features/library/domain/selected_screenshot.dart';
-import 'package:contexto/features/library/domain/screenshot_search_result.dart';
-import 'package:contexto/features/library/presentation/screenshot_grid.dart';
-import 'package:contexto/features/ocr/data/ocr_repository.dart';
-import 'package:contexto/features/ocr/domain/ocr_result.dart';
-import 'package:contexto/features/processing/data/ocr_queue_processor.dart';
-import 'package:contexto/features/processing/domain/processing_job.dart';
-import 'package:contexto/features/tags/data/tag_repository.dart';
-import 'package:contexto/features/tags/domain/tag.dart';
+import 'package:memoshot/app/memoshot_app.dart';
+import 'package:memoshot/core/automatic_import/automatic_screenshot_source.dart';
+import 'package:memoshot/core/media/screenshot_picker.dart';
+import 'package:memoshot/core/sharing/incoming_share_source.dart';
+import 'package:memoshot/core/theme/app_theme.dart';
+import 'package:memoshot/core/text/search_snippet_builder.dart';
+import 'package:memoshot/core/text/text_normalizer.dart';
+import 'package:memoshot/features/categories/data/category_repository.dart';
+import 'package:memoshot/features/categories/domain/category.dart';
+import 'package:memoshot/features/automatic_import/data/automatic_import_settings_repository.dart';
+import 'package:memoshot/features/automatic_import/domain/automatic_import_settings.dart';
+import 'package:memoshot/features/library/data/media_item_repository.dart';
+import 'package:memoshot/features/library/domain/media_item.dart';
+import 'package:memoshot/features/library/domain/selected_screenshot.dart';
+import 'package:memoshot/features/library/domain/screenshot_search_result.dart';
+import 'package:memoshot/features/library/presentation/screenshot_grid.dart';
+import 'package:memoshot/features/ocr/data/ocr_repository.dart';
+import 'package:memoshot/features/ocr/domain/ocr_result.dart';
+import 'package:memoshot/features/processing/data/ocr_queue_processor.dart';
+import 'package:memoshot/features/processing/domain/processing_job.dart';
+import 'package:memoshot/features/tags/data/tag_repository.dart';
+import 'package:memoshot/features/tags/domain/tag.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -32,7 +32,7 @@ void main() {
 
   setUp(() async {
     temporaryDirectory = await Directory.systemTemp.createTemp(
-      'contexto_widget_test_',
+      'memoshot_widget_test_',
     );
   });
 
@@ -43,11 +43,14 @@ void main() {
     temporaryDirectory.deleteSync(recursive: true);
   });
 
-  testWidgets('exibe a tela inicial funcional do Contexto', (tester) async {
+  testWidgets('exibe a tela inicial funcional do MemoShot', (tester) async {
     await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
     await tester.pump();
 
-    expect(find.text('Contexto'), findsOneWidget);
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.title, 'MemoShot');
+    expect(find.text('MemoShot'), findsOneWidget);
+    expect(find.textContaining('Contexto'), findsNothing);
     expect(find.text('Organização inteligente'), findsOneWidget);
     expect(find.text('Organize e encontre seus prints'), findsOneWidget);
     expect(find.text('Pesquisar screenshots'), findsOneWidget);
@@ -626,8 +629,8 @@ void main() {
     await tester.pump();
     await openFirstScreenshot(tester);
 
-    await tapRemoveFromContexto(tester);
-    expect(find.text('Remover do Contexto?'), findsOneWidget);
+    await tapRemoveFromMemoShot(tester);
+    expect(find.text('Remover do MemoShot?'), findsOneWidget);
     expect(
       find.textContaining('O arquivo original da galeria será preservado.'),
       findsOneWidget,
@@ -655,7 +658,7 @@ void main() {
     await tester.pump();
     await openFirstScreenshot(tester);
 
-    await tapRemoveFromContexto(tester);
+    await tapRemoveFromMemoShot(tester);
     await tester.tap(find.text('Remover'));
     await tester.pumpAndSettle();
 
@@ -704,7 +707,7 @@ void main() {
     );
     await tester.pump();
     await openFirstScreenshot(tester);
-    await tapRemoveFromContexto(tester);
+    await tapRemoveFromMemoShot(tester);
     await tester.tap(find.text('Remover'));
     await tester.pumpAndSettle();
 
@@ -1257,7 +1260,7 @@ void main() {
     await tester.pump();
     await openFirstScreenshot(tester);
 
-    await tapRemoveFromContexto(tester);
+    await tapRemoveFromMemoShot(tester);
     await tester.tap(find.text('Remover'));
     await tester.pumpAndSettle();
 
@@ -1915,7 +1918,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('screenshot-tile-1')));
     await tester.pumpAndSettle();
-    await tapRemoveFromContexto(tester);
+    await tapRemoveFromMemoShot(tester);
     await tester.tap(find.text('Remover'));
     await tester.pumpAndSettle();
 
@@ -2060,7 +2063,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('1 item'), findsOneWidget);
-      expect(find.text('Screenshot adicionado ao Contexto.'), findsOneWidget);
+      expect(find.text('Screenshot adicionado ao MemoShot.'), findsOneWidget);
       expect(source.resetCount, 1);
     },
   );
@@ -2081,7 +2084,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('2 itens'), findsOneWidget);
-    expect(find.text('2 screenshots adicionados ao Contexto.'), findsOneWidget);
+    expect(find.text('2 screenshots adicionados ao MemoShot.'), findsOneWidget);
   });
 
   testWidgets('compartilhamento duplicado mostra feedback correto', (
@@ -2105,7 +2108,7 @@ void main() {
     ]);
     await tester.pumpAndSettle();
 
-    expect(find.text('Esta imagem já estava no Contexto.'), findsOneWidget);
+    expect(find.text('Esta imagem já estava no MemoShot.'), findsOneWidget);
     expect(repository.itemCount, 1);
   });
 
@@ -2133,7 +2136,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('1 imagem adicionada e 1 já estava no Contexto.'),
+      find.text('1 imagem adicionada e 1 já estava no MemoShot.'),
       findsOneWidget,
     );
   });
@@ -2192,7 +2195,7 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('screenshot-tile-2')));
     await tester.tap(find.byKey(const ValueKey('screenshot-tile-2')));
     await tester.pumpAndSettle();
-    expect(find.text('Compartilhado com o Contexto'), findsOneWidget);
+    expect(find.text('Compartilhado com o MemoShot'), findsOneWidget);
   });
 
   testWidgets('automação começa desativada e não solicita permissão', (
@@ -2340,7 +2343,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Contexto'), findsOneWidget);
+    expect(find.text('MemoShot'), findsOneWidget);
     expect(find.text('Biblioteca'), findsOneWidget);
 
     inboxCompleter.complete(const []);
@@ -2448,7 +2451,7 @@ Widget buildTestApp(
   final resolvedTagRepository = tagRepository ?? FakeTagRepository();
   resolvedCategoryRepository.mediaItems = resolvedMediaRepository._items;
   resolvedMediaRepository.tagAssociations = resolvedTagRepository._associations;
-  return ContextoApp(
+  return MemoShotApp(
     key: UniqueKey(),
     screenshotPicker: picker,
     mediaRepository: resolvedMediaRepository,
@@ -2890,8 +2893,8 @@ Future<void> openAddTagDialog(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> tapRemoveFromContexto(WidgetTester tester) async {
-  final action = find.text('Remover do Contexto');
+Future<void> tapRemoveFromMemoShot(WidgetTester tester) async {
+  final action = find.text('Remover do MemoShot');
   await tester.ensureVisible(action);
   await tester.tap(action);
   await tester.pumpAndSettle();

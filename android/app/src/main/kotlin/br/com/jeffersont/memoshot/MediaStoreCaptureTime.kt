@@ -1,4 +1,4 @@
-package br.com.jeffersont.contexto
+package br.com.jeffersont.memoshot
 
 internal object MediaStoreCaptureTime {
     fun resolve(dateTakenMillis: Long, dateAddedSeconds: Long): Long? {

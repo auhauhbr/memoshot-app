@@ -4,12 +4,29 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   late String source;
+  late String dartSource;
 
   setUpAll(() {
     source = File(
-      'android/app/src/main/kotlin/br/com/jeffersont/contexto/'
+      'android/app/src/main/kotlin/br/com/jeffersont/memoshot/'
       'ScreenshotMediaStoreBridge.kt',
     ).readAsStringSync();
+    dartSource = File(
+      'lib/core/automatic_import/'
+      'method_channel_automatic_screenshot_source.dart',
+    ).readAsStringSync();
+  });
+
+  test('canais MemoShot são idênticos nos lados Dart e Kotlin', () {
+    for (final channel in [
+      'br.com.jeffersont.memoshot/automatic_screenshots/methods',
+      'br.com.jeffersont.memoshot/automatic_screenshots/events',
+    ]) {
+      expect(source, contains(channel));
+      expect(dartSource, contains(channel));
+    }
+    expect(source, isNot(contains('br.com.jeffersont.contexto')));
+    expect(dartSource, isNot(contains('br.com.jeffersont.contexto')));
   });
 
   test('bridge consulta somente imagens posteriores e finalizadas', () {

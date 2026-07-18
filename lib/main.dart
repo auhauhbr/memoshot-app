@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'app/contexto_app.dart';
+import 'app/memoshot_app.dart';
 
 void main() {
-  runApp(const ContextoApp());
+  runApp(const MemoShotApp());
 }

@@ -3,6 +3,34 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('identidade técnica e nome Android usam MemoShot', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final gradle = File('android/app/build.gradle.kts').readAsStringSync();
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+    final strings = File(
+      'android/app/src/main/res/values/strings.xml',
+    ).readAsStringSync();
+    final mainActivity = File(
+      'android/app/src/main/kotlin/br/com/jeffersont/memoshot/MainActivity.kt',
+    ).readAsStringSync();
+
+    expect(pubspec, startsWith('name: memoshot\n'));
+    expect(gradle, contains('namespace = "br.com.jeffersont.memoshot"'));
+    expect(gradle, contains('applicationId = "br.com.jeffersont.memoshot"'));
+    expect(gradle, isNot(contains('br.com.jeffersont.contexto')));
+    expect(manifest, contains('android:label="@string/app_name"'));
+    expect(strings, contains('<string name="app_name">MemoShot</string>'));
+    expect(mainActivity, contains('package br.com.jeffersont.memoshot'));
+    expect(
+      Directory(
+        'android/app/src/main/kotlin/br/com/jeffersont/contexto',
+      ).existsSync(),
+      isFalse,
+    );
+  });
+
   test('manifest recebe somente compartilhamentos de imagens', () {
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',

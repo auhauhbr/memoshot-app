@@ -277,9 +277,9 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remover do Contexto?'),
+        title: const Text('Remover do MemoShot?'),
         content: const Text(
-          'A cópia salva pelo Contexto será removida. '
+          'A cópia salva pelo MemoShot será removida. '
           'O arquivo original da galeria será preservado.',
         ),
         actions: [
@@ -432,7 +432,7 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.delete_outline, size: 19),
-                    label: const Text('Remover do Contexto'),
+                    label: const Text('Remover do MemoShot'),
                   ),
                 ],
               ),
@@ -879,7 +879,7 @@ class _MetadataCard extends StatelessWidget {
             label: 'Origem',
             value: switch (importOrigin) {
               ImportOrigin.picker => 'Selecionado no dispositivo',
-              ImportOrigin.shared => 'Compartilhado com o Contexto',
+              ImportOrigin.shared => 'Compartilhado com o MemoShot',
               ImportOrigin.automatic => 'Importado automaticamente',
             },
           ),

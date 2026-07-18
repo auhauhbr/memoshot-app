@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:contexto/core/database/contexto_database.dart';
-import 'package:contexto/features/categories/data/category_repository.dart';
-import 'package:contexto/features/categories/data/category_store.dart';
+import 'package:memoshot/core/database/contexto_database.dart';
+import 'package:memoshot/features/categories/data/category_repository.dart';
+import 'package:memoshot/features/categories/data/category_store.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -242,7 +242,7 @@ void main() {
   });
 
   test('excluir categoria preserva cópia privada e arquivo original', () async {
-    final directory = Directory.systemTemp.createTempSync('contexto_category_');
+    final directory = Directory.systemTemp.createTempSync('memoshot_category_');
     addTearDown(() => directory.deleteSync(recursive: true));
     final privateCopy = File('${directory.path}/private.png')
       ..writeAsStringSync('private');
@@ -275,7 +275,7 @@ void main() {
   });
 
   test('lista categoria pela captura real e ignora cópia ausente', () async {
-    final directory = Directory.systemTemp.createTempSync('contexto_filter_');
+    final directory = Directory.systemTemp.createTempSync('memoshot_filter_');
     addTearDown(() => directory.deleteSync(recursive: true));
     final oldFile = File('${directory.path}/old.png')..writeAsStringSync('old');
     final newFile = File('${directory.path}/new.png')..writeAsStringSync('new');

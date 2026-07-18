@@ -1,5 +1,5 @@
-import 'package:contexto/core/database/contexto_database.dart';
-import 'package:contexto/features/automatic_import/data/automatic_import_settings_repository.dart';
+import 'package:memoshot/core/database/contexto_database.dart';
+import 'package:memoshot/features/automatic_import/data/automatic_import_settings_repository.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 

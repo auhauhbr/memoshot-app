@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:contexto/core/text/text_normalizer.dart';
-import 'package:contexto/core/theme/app_theme.dart';
-import 'package:contexto/features/library/domain/media_item.dart';
-import 'package:contexto/features/tags/data/tag_repository.dart';
-import 'package:contexto/features/tags/domain/tag.dart';
-import 'package:contexto/features/tags/presentation/tags_page.dart';
+import 'package:memoshot/core/text/text_normalizer.dart';
+import 'package:memoshot/core/theme/app_theme.dart';
+import 'package:memoshot/features/library/domain/media_item.dart';
+import 'package:memoshot/features/tags/data/tag_repository.dart';
+import 'package:memoshot/features/tags/domain/tag.dart';
+import 'package:memoshot/features/tags/presentation/tags_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

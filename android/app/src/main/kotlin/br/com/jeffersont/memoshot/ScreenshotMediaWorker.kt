@@ -1,4 +1,4 @@
-package br.com.jeffersont.contexto
+package br.com.jeffersont.memoshot
 
 import android.Manifest
 import android.content.ContentUris

@@ -1,12 +1,12 @@
 import 'dart:io';
 
-import 'package:contexto/core/database/contexto_database.dart'
+import 'package:memoshot/core/database/contexto_database.dart'
     show ContextoDatabase;
-import 'package:contexto/core/ocr/text_recognition_service.dart';
-import 'package:contexto/features/library/data/media_item_store.dart';
-import 'package:contexto/features/library/domain/media_item.dart';
-import 'package:contexto/features/ocr/data/ocr_repository.dart';
-import 'package:contexto/features/ocr/data/ocr_result_store.dart';
+import 'package:memoshot/core/ocr/text_recognition_service.dart';
+import 'package:memoshot/features/library/data/media_item_store.dart';
+import 'package:memoshot/features/library/domain/media_item.dart';
+import 'package:memoshot/features/ocr/data/ocr_repository.dart';
+import 'package:memoshot/features/ocr/data/ocr_result_store.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -18,7 +18,7 @@ void main() {
 
   setUp(() {
     temporaryDirectory = Directory.systemTemp.createTempSync(
-      'contexto_ocr_test_',
+      'memoshot_ocr_test_',
     );
     database = ContextoDatabase.forTesting(NativeDatabase.memory());
     mediaStore = DriftMediaItemStore(database);

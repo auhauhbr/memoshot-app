@@ -1,4 +1,4 @@
-package br.com.jeffersont.contexto
+package br.com.jeffersont.memoshot
 
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity

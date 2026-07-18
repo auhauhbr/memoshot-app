@@ -1,17 +1,17 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:contexto/core/database/contexto_database.dart'
+import 'package:memoshot/core/database/contexto_database.dart'
     show ContextoDatabase;
-import 'package:contexto/core/ocr/text_recognition_service.dart';
-import 'package:contexto/features/library/data/media_item_store.dart';
-import 'package:contexto/features/library/domain/media_item.dart';
-import 'package:contexto/features/ocr/data/ocr_result_store.dart';
-import 'package:contexto/features/ocr/domain/ocr_result.dart';
-import 'package:contexto/features/processing/data/ocr_job_scheduler.dart';
-import 'package:contexto/features/processing/data/ocr_queue_processor.dart';
-import 'package:contexto/features/processing/data/processing_job_store.dart';
-import 'package:contexto/features/processing/domain/processing_job.dart';
+import 'package:memoshot/core/ocr/text_recognition_service.dart';
+import 'package:memoshot/features/library/data/media_item_store.dart';
+import 'package:memoshot/features/library/domain/media_item.dart';
+import 'package:memoshot/features/ocr/data/ocr_result_store.dart';
+import 'package:memoshot/features/ocr/domain/ocr_result.dart';
+import 'package:memoshot/features/processing/data/ocr_job_scheduler.dart';
+import 'package:memoshot/features/processing/data/ocr_queue_processor.dart';
+import 'package:memoshot/features/processing/data/processing_job_store.dart';
+import 'package:memoshot/features/processing/domain/processing_job.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -25,7 +25,7 @@ void main() {
 
   setUp(() {
     temporaryDirectory = Directory.systemTemp.createTempSync(
-      'contexto_queue_test_',
+      'memoshot_queue_test_',
     );
     database = ContextoDatabase.forTesting(NativeDatabase.memory());
     mediaStore = DriftMediaItemStore(database);

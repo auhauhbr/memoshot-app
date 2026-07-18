@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:contexto/core/sharing/incoming_share_source.dart';
-import 'package:contexto/core/sharing/receive_sharing_intent_source.dart';
+import 'package:memoshot/core/sharing/incoming_share_source.dart';
+import 'package:memoshot/core/sharing/receive_sharing_intent_source.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 

@@ -1,5 +1,5 @@
-import 'package:contexto/core/text/search_snippet_builder.dart';
-import 'package:contexto/core/text/text_normalizer.dart';
+import 'package:memoshot/core/text/search_snippet_builder.dart';
+import 'package:memoshot/core/text/text_normalizer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

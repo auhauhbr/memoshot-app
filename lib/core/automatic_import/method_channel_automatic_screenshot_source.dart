@@ -7,10 +7,10 @@ class MethodChannelAutomaticScreenshotSource
   const MethodChannelAutomaticScreenshotSource();
 
   static const _methods = MethodChannel(
-    'br.com.jeffersont.contexto/automatic_screenshots/methods',
+    'br.com.jeffersont.memoshot/automatic_screenshots/methods',
   );
   static const _events = EventChannel(
-    'br.com.jeffersont.contexto/automatic_screenshots/events',
+    'br.com.jeffersont.memoshot/automatic_screenshots/events',
   );
 
   @override

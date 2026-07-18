@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:contexto/core/sharing/incoming_share_source.dart';
-import 'package:contexto/features/library/data/media_item_repository.dart';
-import 'package:contexto/features/library/domain/media_item.dart';
-import 'package:contexto/features/library/domain/selected_screenshot.dart';
-import 'package:contexto/features/library/domain/screenshot_search_result.dart';
-import 'package:contexto/features/sharing/shared_image_import_coordinator.dart';
+import 'package:memoshot/core/sharing/incoming_share_source.dart';
+import 'package:memoshot/features/library/data/media_item_repository.dart';
+import 'package:memoshot/features/library/domain/media_item.dart';
+import 'package:memoshot/features/library/domain/selected_screenshot.dart';
+import 'package:memoshot/features/library/domain/screenshot_search_result.dart';
+import 'package:memoshot/features/sharing/shared_image_import_coordinator.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

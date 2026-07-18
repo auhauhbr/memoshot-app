@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  final kotlinRoot = 'android/app/src/main/kotlin/br/com/jeffersont/contexto';
+  final kotlinRoot = 'android/app/src/main/kotlin/br/com/jeffersont/memoshot';
   late String scheduler;
   late String worker;
   late String inbox;

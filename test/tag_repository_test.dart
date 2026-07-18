@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:contexto/core/database/contexto_database.dart';
-import 'package:contexto/features/tags/data/tag_repository.dart';
-import 'package:contexto/features/tags/data/tag_store.dart';
+import 'package:memoshot/core/database/contexto_database.dart';
+import 'package:memoshot/features/tags/data/tag_repository.dart';
+import 'package:memoshot/features/tags/data/tag_store.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,7 +15,7 @@ void main() {
   late int secondMediaId;
 
   setUp(() async {
-    directory = Directory.systemTemp.createTempSync('contexto_tags_');
+    directory = Directory.systemTemp.createTempSync('memoshot_tags_');
     database = ContextoDatabase.forTesting(NativeDatabase.memory());
     repository = LocalTagRepository(store: DriftTagStore(database));
     firstMediaId = await _insertMedia(database, directory, 'primeiro.png', 1);

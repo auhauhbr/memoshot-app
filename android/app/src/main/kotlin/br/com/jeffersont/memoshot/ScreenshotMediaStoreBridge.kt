@@ -1,4 +1,4 @@
-package br.com.jeffersont.contexto
+package br.com.jeffersont.memoshot
 
 import android.Manifest
 import android.app.Activity
@@ -340,7 +340,7 @@ internal class ScreenshotMediaStoreBridge(
 
     private fun startObserving() {
         if (observer != null || permissionStatus() != "fullAccess") return
-        val thread = HandlerThread("contexto-media-observer").also { it.start() }
+        val thread = HandlerThread("memoshot-media-observer").also { it.start() }
         val handler = Handler(thread.looper)
         val contentObserver = object : ContentObserver(handler) {
             override fun onChange(selfChange: Boolean, uri: Uri?) {
@@ -394,9 +394,9 @@ internal class ScreenshotMediaStoreBridge(
 
     companion object {
         private const val METHODS_CHANNEL =
-            "br.com.jeffersont.contexto/automatic_screenshots/methods"
+            "br.com.jeffersont.memoshot/automatic_screenshots/methods"
         private const val EVENTS_CHANNEL =
-            "br.com.jeffersont.contexto/automatic_screenshots/events"
+            "br.com.jeffersont.memoshot/automatic_screenshots/events"
         private const val PREFERENCES = "automatic_screenshot_permission"
         private const val KEY_PERMISSION_REQUESTED = "requested"
         private const val CACHE_DIRECTORY = "automatic_screenshots"

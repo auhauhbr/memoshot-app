@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:contexto/core/media/file_hash_calculator.dart';
+import 'package:memoshot/core/media/file_hash_calculator.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -9,7 +9,7 @@ void main() {
 
   setUp(() {
     temporaryDirectory = Directory.systemTemp.createTempSync(
-      'contexto_hash_test_',
+      'memoshot_hash_test_',
     );
   });
 

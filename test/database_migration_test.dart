@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:contexto/core/database/contexto_database.dart';
+import 'package:memoshot/core/database/contexto_database.dart';
 import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('migra schema 8 para 10 preservando dados e criando etiquetas', () async {
     final directory = Directory.systemTemp.createTempSync(
-      'contexto_migration_test_',
+      'memoshot_migration_test_',
     );
     final databaseFile = File('${directory.path}/contexto.sqlite');
 
