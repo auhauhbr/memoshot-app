@@ -2145,6 +2145,420 @@ class MediaCategoriesCompanion extends UpdateCompanion<MediaCategory> {
   }
 }
 
+class $AutomaticImportSettingsTable extends AutomaticImportSettings
+    with TableInfo<$AutomaticImportSettingsTable, AutomaticImportSetting> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AutomaticImportSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _enabledMeta = const VerificationMeta(
+    'enabled',
+  );
+  @override
+  late final GeneratedColumn<bool> enabled = GeneratedColumn<bool>(
+    'enabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _lastMediaIdMeta = const VerificationMeta(
+    'lastMediaId',
+  );
+  @override
+  late final GeneratedColumn<int> lastMediaId = GeneratedColumn<int>(
+    'last_media_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _enabledAtMeta = const VerificationMeta(
+    'enabledAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> enabledAt = GeneratedColumn<DateTime>(
+    'enabled_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastScanAtMeta = const VerificationMeta(
+    'lastScanAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastScanAt = GeneratedColumn<DateTime>(
+    'last_scan_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    enabled,
+    lastMediaId,
+    enabledAt,
+    lastScanAt,
+    updatedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'automatic_import_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AutomaticImportSetting> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('enabled')) {
+      context.handle(
+        _enabledMeta,
+        enabled.isAcceptableOrUnknown(data['enabled']!, _enabledMeta),
+      );
+    }
+    if (data.containsKey('last_media_id')) {
+      context.handle(
+        _lastMediaIdMeta,
+        lastMediaId.isAcceptableOrUnknown(
+          data['last_media_id']!,
+          _lastMediaIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('enabled_at')) {
+      context.handle(
+        _enabledAtMeta,
+        enabledAt.isAcceptableOrUnknown(data['enabled_at']!, _enabledAtMeta),
+      );
+    }
+    if (data.containsKey('last_scan_at')) {
+      context.handle(
+        _lastScanAtMeta,
+        lastScanAt.isAcceptableOrUnknown(
+          data['last_scan_at']!,
+          _lastScanAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AutomaticImportSetting map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AutomaticImportSetting(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      enabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enabled'],
+      )!,
+      lastMediaId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_media_id'],
+      ),
+      enabledAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}enabled_at'],
+      ),
+      lastScanAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_scan_at'],
+      ),
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+    );
+  }
+
+  @override
+  $AutomaticImportSettingsTable createAlias(String alias) {
+    return $AutomaticImportSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class AutomaticImportSetting extends DataClass
+    implements Insertable<AutomaticImportSetting> {
+  final int id;
+  final bool enabled;
+  final int? lastMediaId;
+  final DateTime? enabledAt;
+  final DateTime? lastScanAt;
+  final DateTime updatedAt;
+  const AutomaticImportSetting({
+    required this.id,
+    required this.enabled,
+    this.lastMediaId,
+    this.enabledAt,
+    this.lastScanAt,
+    required this.updatedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['enabled'] = Variable<bool>(enabled);
+    if (!nullToAbsent || lastMediaId != null) {
+      map['last_media_id'] = Variable<int>(lastMediaId);
+    }
+    if (!nullToAbsent || enabledAt != null) {
+      map['enabled_at'] = Variable<DateTime>(enabledAt);
+    }
+    if (!nullToAbsent || lastScanAt != null) {
+      map['last_scan_at'] = Variable<DateTime>(lastScanAt);
+    }
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  AutomaticImportSettingsCompanion toCompanion(bool nullToAbsent) {
+    return AutomaticImportSettingsCompanion(
+      id: Value(id),
+      enabled: Value(enabled),
+      lastMediaId: lastMediaId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastMediaId),
+      enabledAt: enabledAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(enabledAt),
+      lastScanAt: lastScanAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastScanAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory AutomaticImportSetting.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AutomaticImportSetting(
+      id: serializer.fromJson<int>(json['id']),
+      enabled: serializer.fromJson<bool>(json['enabled']),
+      lastMediaId: serializer.fromJson<int?>(json['lastMediaId']),
+      enabledAt: serializer.fromJson<DateTime?>(json['enabledAt']),
+      lastScanAt: serializer.fromJson<DateTime?>(json['lastScanAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'enabled': serializer.toJson<bool>(enabled),
+      'lastMediaId': serializer.toJson<int?>(lastMediaId),
+      'enabledAt': serializer.toJson<DateTime?>(enabledAt),
+      'lastScanAt': serializer.toJson<DateTime?>(lastScanAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  AutomaticImportSetting copyWith({
+    int? id,
+    bool? enabled,
+    Value<int?> lastMediaId = const Value.absent(),
+    Value<DateTime?> enabledAt = const Value.absent(),
+    Value<DateTime?> lastScanAt = const Value.absent(),
+    DateTime? updatedAt,
+  }) => AutomaticImportSetting(
+    id: id ?? this.id,
+    enabled: enabled ?? this.enabled,
+    lastMediaId: lastMediaId.present ? lastMediaId.value : this.lastMediaId,
+    enabledAt: enabledAt.present ? enabledAt.value : this.enabledAt,
+    lastScanAt: lastScanAt.present ? lastScanAt.value : this.lastScanAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
+  AutomaticImportSetting copyWithCompanion(
+    AutomaticImportSettingsCompanion data,
+  ) {
+    return AutomaticImportSetting(
+      id: data.id.present ? data.id.value : this.id,
+      enabled: data.enabled.present ? data.enabled.value : this.enabled,
+      lastMediaId: data.lastMediaId.present
+          ? data.lastMediaId.value
+          : this.lastMediaId,
+      enabledAt: data.enabledAt.present ? data.enabledAt.value : this.enabledAt,
+      lastScanAt: data.lastScanAt.present
+          ? data.lastScanAt.value
+          : this.lastScanAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AutomaticImportSetting(')
+          ..write('id: $id, ')
+          ..write('enabled: $enabled, ')
+          ..write('lastMediaId: $lastMediaId, ')
+          ..write('enabledAt: $enabledAt, ')
+          ..write('lastScanAt: $lastScanAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, enabled, lastMediaId, enabledAt, lastScanAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AutomaticImportSetting &&
+          other.id == this.id &&
+          other.enabled == this.enabled &&
+          other.lastMediaId == this.lastMediaId &&
+          other.enabledAt == this.enabledAt &&
+          other.lastScanAt == this.lastScanAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class AutomaticImportSettingsCompanion
+    extends UpdateCompanion<AutomaticImportSetting> {
+  final Value<int> id;
+  final Value<bool> enabled;
+  final Value<int?> lastMediaId;
+  final Value<DateTime?> enabledAt;
+  final Value<DateTime?> lastScanAt;
+  final Value<DateTime> updatedAt;
+  const AutomaticImportSettingsCompanion({
+    this.id = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.lastMediaId = const Value.absent(),
+    this.enabledAt = const Value.absent(),
+    this.lastScanAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  AutomaticImportSettingsCompanion.insert({
+    this.id = const Value.absent(),
+    this.enabled = const Value.absent(),
+    this.lastMediaId = const Value.absent(),
+    this.enabledAt = const Value.absent(),
+    this.lastScanAt = const Value.absent(),
+    required DateTime updatedAt,
+  }) : updatedAt = Value(updatedAt);
+  static Insertable<AutomaticImportSetting> custom({
+    Expression<int>? id,
+    Expression<bool>? enabled,
+    Expression<int>? lastMediaId,
+    Expression<DateTime>? enabledAt,
+    Expression<DateTime>? lastScanAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (enabled != null) 'enabled': enabled,
+      if (lastMediaId != null) 'last_media_id': lastMediaId,
+      if (enabledAt != null) 'enabled_at': enabledAt,
+      if (lastScanAt != null) 'last_scan_at': lastScanAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  AutomaticImportSettingsCompanion copyWith({
+    Value<int>? id,
+    Value<bool>? enabled,
+    Value<int?>? lastMediaId,
+    Value<DateTime?>? enabledAt,
+    Value<DateTime?>? lastScanAt,
+    Value<DateTime>? updatedAt,
+  }) {
+    return AutomaticImportSettingsCompanion(
+      id: id ?? this.id,
+      enabled: enabled ?? this.enabled,
+      lastMediaId: lastMediaId ?? this.lastMediaId,
+      enabledAt: enabledAt ?? this.enabledAt,
+      lastScanAt: lastScanAt ?? this.lastScanAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (enabled.present) {
+      map['enabled'] = Variable<bool>(enabled.value);
+    }
+    if (lastMediaId.present) {
+      map['last_media_id'] = Variable<int>(lastMediaId.value);
+    }
+    if (enabledAt.present) {
+      map['enabled_at'] = Variable<DateTime>(enabledAt.value);
+    }
+    if (lastScanAt.present) {
+      map['last_scan_at'] = Variable<DateTime>(lastScanAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AutomaticImportSettingsCompanion(')
+          ..write('id: $id, ')
+          ..write('enabled: $enabled, ')
+          ..write('lastMediaId: $lastMediaId, ')
+          ..write('enabledAt: $enabledAt, ')
+          ..write('lastScanAt: $lastScanAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ContextoDatabase extends GeneratedDatabase {
   _$ContextoDatabase(QueryExecutor e) : super(e);
   $ContextoDatabaseManager get managers => $ContextoDatabaseManager(this);
@@ -2155,6 +2569,8 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
   late final $MediaCategoriesTable mediaCategories = $MediaCategoriesTable(
     this,
   );
+  late final $AutomaticImportSettingsTable automaticImportSettings =
+      $AutomaticImportSettingsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2165,6 +2581,7 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
     processingJobs,
     categories,
     mediaCategories,
+    automaticImportSettings,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -4184,6 +4601,242 @@ typedef $$MediaCategoriesTableProcessedTableManager =
       MediaCategory,
       PrefetchHooks Function({bool mediaItemId, bool categoryId})
     >;
+typedef $$AutomaticImportSettingsTableCreateCompanionBuilder =
+    AutomaticImportSettingsCompanion Function({
+      Value<int> id,
+      Value<bool> enabled,
+      Value<int?> lastMediaId,
+      Value<DateTime?> enabledAt,
+      Value<DateTime?> lastScanAt,
+      required DateTime updatedAt,
+    });
+typedef $$AutomaticImportSettingsTableUpdateCompanionBuilder =
+    AutomaticImportSettingsCompanion Function({
+      Value<int> id,
+      Value<bool> enabled,
+      Value<int?> lastMediaId,
+      Value<DateTime?> enabledAt,
+      Value<DateTime?> lastScanAt,
+      Value<DateTime> updatedAt,
+    });
+
+class $$AutomaticImportSettingsTableFilterComposer
+    extends Composer<_$ContextoDatabase, $AutomaticImportSettingsTable> {
+  $$AutomaticImportSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastMediaId => $composableBuilder(
+    column: $table.lastMediaId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get enabledAt => $composableBuilder(
+    column: $table.enabledAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastScanAt => $composableBuilder(
+    column: $table.lastScanAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AutomaticImportSettingsTableOrderingComposer
+    extends Composer<_$ContextoDatabase, $AutomaticImportSettingsTable> {
+  $$AutomaticImportSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enabled => $composableBuilder(
+    column: $table.enabled,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastMediaId => $composableBuilder(
+    column: $table.lastMediaId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get enabledAt => $composableBuilder(
+    column: $table.enabledAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastScanAt => $composableBuilder(
+    column: $table.lastScanAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AutomaticImportSettingsTableAnnotationComposer
+    extends Composer<_$ContextoDatabase, $AutomaticImportSettingsTable> {
+  $$AutomaticImportSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<bool> get enabled =>
+      $composableBuilder(column: $table.enabled, builder: (column) => column);
+
+  GeneratedColumn<int> get lastMediaId => $composableBuilder(
+    column: $table.lastMediaId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get enabledAt =>
+      $composableBuilder(column: $table.enabledAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastScanAt => $composableBuilder(
+    column: $table.lastScanAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+}
+
+class $$AutomaticImportSettingsTableTableManager
+    extends
+        RootTableManager<
+          _$ContextoDatabase,
+          $AutomaticImportSettingsTable,
+          AutomaticImportSetting,
+          $$AutomaticImportSettingsTableFilterComposer,
+          $$AutomaticImportSettingsTableOrderingComposer,
+          $$AutomaticImportSettingsTableAnnotationComposer,
+          $$AutomaticImportSettingsTableCreateCompanionBuilder,
+          $$AutomaticImportSettingsTableUpdateCompanionBuilder,
+          (
+            AutomaticImportSetting,
+            BaseReferences<
+              _$ContextoDatabase,
+              $AutomaticImportSettingsTable,
+              AutomaticImportSetting
+            >,
+          ),
+          AutomaticImportSetting,
+          PrefetchHooks Function()
+        > {
+  $$AutomaticImportSettingsTableTableManager(
+    _$ContextoDatabase db,
+    $AutomaticImportSettingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AutomaticImportSettingsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$AutomaticImportSettingsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$AutomaticImportSettingsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<int?> lastMediaId = const Value.absent(),
+                Value<DateTime?> enabledAt = const Value.absent(),
+                Value<DateTime?> lastScanAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+              }) => AutomaticImportSettingsCompanion(
+                id: id,
+                enabled: enabled,
+                lastMediaId: lastMediaId,
+                enabledAt: enabledAt,
+                lastScanAt: lastScanAt,
+                updatedAt: updatedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<bool> enabled = const Value.absent(),
+                Value<int?> lastMediaId = const Value.absent(),
+                Value<DateTime?> enabledAt = const Value.absent(),
+                Value<DateTime?> lastScanAt = const Value.absent(),
+                required DateTime updatedAt,
+              }) => AutomaticImportSettingsCompanion.insert(
+                id: id,
+                enabled: enabled,
+                lastMediaId: lastMediaId,
+                enabledAt: enabledAt,
+                lastScanAt: lastScanAt,
+                updatedAt: updatedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AutomaticImportSettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ContextoDatabase,
+      $AutomaticImportSettingsTable,
+      AutomaticImportSetting,
+      $$AutomaticImportSettingsTableFilterComposer,
+      $$AutomaticImportSettingsTableOrderingComposer,
+      $$AutomaticImportSettingsTableAnnotationComposer,
+      $$AutomaticImportSettingsTableCreateCompanionBuilder,
+      $$AutomaticImportSettingsTableUpdateCompanionBuilder,
+      (
+        AutomaticImportSetting,
+        BaseReferences<
+          _$ContextoDatabase,
+          $AutomaticImportSettingsTable,
+          AutomaticImportSetting
+        >,
+      ),
+      AutomaticImportSetting,
+      PrefetchHooks Function()
+    >;
 
 class $ContextoDatabaseManager {
   final _$ContextoDatabase _db;
@@ -4198,4 +4851,9 @@ class $ContextoDatabaseManager {
       $$CategoriesTableTableManager(_db, _db.categories);
   $$MediaCategoriesTableTableManager get mediaCategories =>
       $$MediaCategoriesTableTableManager(_db, _db.mediaCategories);
+  $$AutomaticImportSettingsTableTableManager get automaticImportSettings =>
+      $$AutomaticImportSettingsTableTableManager(
+        _db,
+        _db.automaticImportSettings,
+      );
 }

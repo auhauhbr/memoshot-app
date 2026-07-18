@@ -24,7 +24,8 @@ class MediaItem {
 
 enum ImportOrigin {
   picker('picker'),
-  shared('shared');
+  shared('shared'),
+  automatic('automatic');
 
   const ImportOrigin(this.databaseValue);
 

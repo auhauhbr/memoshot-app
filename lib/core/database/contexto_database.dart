@@ -92,8 +92,32 @@ class MediaCategories extends Table {
   Set<Column<Object>> get primaryKey => {mediaItemId, categoryId};
 }
 
+class AutomaticImportSettings extends Table {
+  IntColumn get id => integer()();
+
+  BoolColumn get enabled => boolean().withDefault(const Constant(false))();
+
+  IntColumn get lastMediaId => integer().nullable()();
+
+  DateTimeColumn get enabledAt => dateTime().nullable()();
+
+  DateTimeColumn get lastScanAt => dateTime().nullable()();
+
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 @DriftDatabase(
-  tables: [MediaItems, OcrResults, ProcessingJobs, Categories, MediaCategories],
+  tables: [
+    MediaItems,
+    OcrResults,
+    ProcessingJobs,
+    Categories,
+    MediaCategories,
+    AutomaticImportSettings,
+  ],
 )
 class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase() : super(_openConnection());
@@ -101,7 +125,7 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -130,6 +154,9 @@ class ContextoDatabase extends _$ContextoDatabase {
       }
       if (from < 7) {
         await migrator.addColumn(mediaItems, mediaItems.importOrigin);
+      }
+      if (from < 8) {
+        await migrator.createTable(automaticImportSettings);
       }
     },
     beforeOpen: (details) async {

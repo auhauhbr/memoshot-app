@@ -672,9 +672,11 @@ class _MetadataCard extends StatelessWidget {
           const Divider(height: 20),
           _MetadataRow(
             label: 'Origem',
-            value: importOrigin == ImportOrigin.shared
-                ? 'Compartilhado com o Contexto'
-                : 'Selecionado no dispositivo',
+            value: switch (importOrigin) {
+              ImportOrigin.picker => 'Selecionado no dispositivo',
+              ImportOrigin.shared => 'Compartilhado com o Contexto',
+              ImportOrigin.automatic => 'Importado automaticamente',
+            },
           ),
           const Divider(height: 20),
           const _MetadataRow(label: 'Estado', value: 'Salvo neste dispositivo'),
