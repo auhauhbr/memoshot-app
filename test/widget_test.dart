@@ -1066,6 +1066,235 @@ void main() {
       find.text('Categoria com um nome bastante comprido'),
       findsOneWidget,
     );
+    await tester.tap(find.byType(ListTile));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Nenhum screenshot nesta categoria.'), findsOneWidget);
+  });
+
+  testWidgets('tocar em categoria mostra somente screenshots associados', (
+    tester,
+  ) async {
+    final first = createTestImage(temporaryDirectory, 'associado.png');
+    final second = createTestImage(temporaryDirectory, 'fora.png');
+    final media = FakeMediaItemRepository(
+      initialItems: [
+        createMediaItem(1, first.path, importedAt: DateTime(2025)),
+        createMediaItem(2, second.path, importedAt: DateTime(2026)),
+      ],
+    );
+    final categories = FakeCategoryRepository();
+    final category = await categories.createCategory('Trabalho');
+    await categories.replaceForMedia(1, {category.id});
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: media,
+        categoryRepository: categories,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('category-tile-${category.id}')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 screenshot'), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-2')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('screenshot-tile-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Detalhes do screenshot'), findsOneWidget);
+  });
+
+  testWidgets('categoria vazia apresenta estado correto', (tester) async {
+    final categories = FakeCategoryRepository();
+    final category = await categories.createCategory('Vazia');
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('category-tile-${category.id}')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 screenshots'), findsOneWidget);
+    expect(find.text('Nenhum screenshot nesta categoria.'), findsOneWidget);
+  });
+
+  testWidgets('voltar dos detalhes atualiza associações da categoria', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'alterar-categoria.png');
+    final media = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final categories = FakeCategoryRepository();
+    final category = await categories.createCategory('Revisar');
+    await categories.replaceForMedia(1, {category.id});
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: media,
+        categoryRepository: categories,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('category-tile-${category.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('screenshot-tile-1')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('edit-categories-button')));
+    await tester.tap(find.byKey(const Key('edit-categories-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('category-checkbox-${category.id}')));
+    await tester.tap(find.byKey(const Key('save-category-selection')));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nenhum screenshot nesta categoria.'), findsOneWidget);
+  });
+
+  testWidgets('voltar após remover screenshot atualiza tela da categoria', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'remover-filtrado.png');
+    final media = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final categories = FakeCategoryRepository();
+    final category = await categories.createCategory('Descartar');
+    await categories.replaceForMedia(1, {category.id});
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: media,
+        categoryRepository: categories,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey('category-tile-${category.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('screenshot-tile-1')));
+    await tester.pumpAndSettle();
+    await tapRemoveFromContexto(tester);
+    await tester.tap(find.text('Remover'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nenhum screenshot nesta categoria.'), findsOneWidget);
+    expect(find.text('0 screenshots'), findsOneWidget);
+  });
+
+  testWidgets('renomear atualiza interface e conflito mostra erro', (
+    tester,
+  ) async {
+    final categories = FakeCategoryRepository();
+    final first = await categories.createCategory('Carreira');
+    await categories.createCategory('Estudos');
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Renomear'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('rename-category-field')),
+      'estúdos',
+    );
+    await tester.tap(find.byKey(const Key('save-category-rename')));
+    await tester.pump();
+    expect(find.text('Essa categoria já existe.'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('rename-category-field')),
+      'Projetos',
+    );
+    await tester.tap(find.byKey(const Key('save-category-rename')));
+    await tester.pumpAndSettle();
+    expect(find.text('Projetos'), findsOneWidget);
+    expect(find.text(first.name), findsNothing);
+  });
+
+  testWidgets('cancelar exclusão preserva categoria e screenshot', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'cancelar-exclusao.png');
+    final media = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final categories = FakeCategoryRepository();
+    final category = await categories.createCategory('Manter');
+    await categories.replaceForMedia(1, {category.id});
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: media,
+        categoryRepository: categories,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Excluir categoria'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Manter'), findsOneWidget);
+    expect(media.itemCount, 1);
+    expect(image.existsSync(), isTrue);
+  });
+
+  testWidgets('confirmar exclusão preserva screenshot e atualiza Home', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'preservado.png');
+    final media = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final categories = FakeCategoryRepository();
+    final category = await categories.createCategory('Excluir');
+    await categories.replaceForMedia(1, {category.id});
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: media,
+        categoryRepository: categories,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Excluir categoria'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-category-deletion')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nenhuma categoria criada.'), findsOneWidget);
+    expect(media.itemCount, 1);
+    expect(image.existsSync(), isTrue);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('0 categorias'), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const ValueKey('screenshot-tile-1')));
+    await tester.tap(find.byKey(const ValueKey('screenshot-tile-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Nenhuma categoria atribuída.'), findsOneWidget);
   });
 }
 
@@ -1077,12 +1306,16 @@ Widget buildTestApp(
   FakeCategoryRepository? categoryRepository,
 }) {
   final resolvedOcrRepository = ocrRepository ?? FakeOcrRepository();
+  final resolvedMediaRepository = repository ?? FakeMediaItemRepository();
+  final resolvedCategoryRepository =
+      categoryRepository ?? FakeCategoryRepository();
+  resolvedCategoryRepository.mediaItems = resolvedMediaRepository._items;
   return ContextoApp(
     screenshotPicker: picker,
-    mediaRepository: repository ?? FakeMediaItemRepository(),
+    mediaRepository: resolvedMediaRepository,
     ocrRepository: resolvedOcrRepository,
     ocrQueue: ocrQueue ?? FakeOcrQueue(resolvedOcrRepository),
-    categoryRepository: categoryRepository ?? FakeCategoryRepository(),
+    categoryRepository: resolvedCategoryRepository,
   );
 }
 
@@ -1121,12 +1354,17 @@ class FakeCategoryRepository implements CategoryRepository {
 
   @override
   Future<List<CategorySummary>> loadCategories() async {
+    final existingMediaIds = mediaItems.map((item) => item.id).toSet();
     return [
       for (final category in _categories)
         CategorySummary(
           category: category,
-          mediaCount: _associations.values
-              .where((ids) => ids.contains(category.id))
+          mediaCount: _associations.entries
+              .where(
+                (entry) =>
+                    existingMediaIds.contains(entry.key) &&
+                    entry.value.contains(category.id),
+              )
               .length,
         ),
     ];
@@ -1142,6 +1380,60 @@ class FakeCategoryRepository implements CategoryRepository {
   Future<void> replaceForMedia(int mediaItemId, Set<int> categoryIds) async {
     _associations[mediaItemId] = {...categoryIds};
   }
+
+  @override
+  Future<Category> renameCategory(Category category, String name) async {
+    final visible = name.trim();
+    const normalizer = TextNormalizer();
+    final normalized = normalizer.normalize(visible);
+    if (normalized.isEmpty) {
+      throw const CategoryValidationException(CategoryValidationError.empty);
+    }
+    if (visible.length > 40) {
+      throw const CategoryValidationException(CategoryValidationError.tooLong);
+    }
+    if (_categories.any(
+      (item) => item.id != category.id && item.normalizedName == normalized,
+    )) {
+      throw const CategoryValidationException(
+        CategoryValidationError.duplicate,
+      );
+    }
+    final renamed = Category(
+      id: category.id,
+      name: visible,
+      normalizedName: normalized,
+      createdAt: category.createdAt,
+    );
+    final index = _categories.indexWhere((item) => item.id == category.id);
+    _categories[index] = renamed;
+    return renamed;
+  }
+
+  @override
+  Future<void> deleteCategory(int categoryId) async {
+    _categories.removeWhere((category) => category.id == categoryId);
+    for (final ids in _associations.values) {
+      ids.remove(categoryId);
+    }
+  }
+
+  @override
+  Future<List<MediaItem>> loadMediaForCategory(int categoryId) async {
+    final mediaIds = _associations.entries
+        .where((entry) => entry.value.contains(categoryId))
+        .map((entry) => entry.key)
+        .toSet();
+    return mediaItems
+        .where(
+          (item) =>
+              mediaIds.contains(item.id) && File(item.privatePath).existsSync(),
+        )
+        .toList()
+      ..sort((first, second) => second.importedAt.compareTo(first.importedAt));
+  }
+
+  List<MediaItem> mediaItems = [];
 }
 
 Future<void> openFirstScreenshot(WidgetTester tester) async {
