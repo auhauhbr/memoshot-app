@@ -257,6 +257,7 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                   const SizedBox(height: 14),
                   _MetadataCard(
                     importedAt: _formatImportedAt(widget.mediaItem.importedAt),
+                    importOrigin: widget.mediaItem.importOrigin,
                   ),
                   const SizedBox(height: 12),
                   _OcrSection(
@@ -649,9 +650,10 @@ class _DetailOcrStatus extends StatelessWidget {
 }
 
 class _MetadataCard extends StatelessWidget {
-  const _MetadataCard({required this.importedAt});
+  const _MetadataCard({required this.importedAt, required this.importOrigin});
 
   final String importedAt;
+  final ImportOrigin importOrigin;
 
   @override
   Widget build(BuildContext context) {
@@ -668,9 +670,11 @@ class _MetadataCard extends StatelessWidget {
         children: [
           _MetadataRow(label: 'Importado em', value: importedAt),
           const Divider(height: 20),
-          const _MetadataRow(
+          _MetadataRow(
             label: 'Origem',
-            value: 'Selecionado no dispositivo',
+            value: importOrigin == ImportOrigin.shared
+                ? 'Compartilhado com o Contexto'
+                : 'Selecionado no dispositivo',
           ),
           const Divider(height: 20),
           const _MetadataRow(label: 'Estado', value: 'Salvo neste dispositivo'),

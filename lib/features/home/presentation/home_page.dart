@@ -7,6 +7,8 @@ import '../../../core/media/image_picker_screenshot_picker.dart';
 import '../../../core/media/screenshot_picker.dart';
 import '../../../core/media/screenshot_storage.dart';
 import '../../../core/ocr/ml_kit_text_recognition_service.dart';
+import '../../../core/sharing/incoming_share_source.dart';
+import '../../../core/sharing/receive_sharing_intent_source.dart';
 import '../../../core/text/text_normalizer.dart';
 import '../../categories/data/category_repository.dart';
 import '../../categories/data/category_store.dart';
@@ -24,6 +26,7 @@ import '../../processing/data/ocr_job_scheduler.dart';
 import '../../processing/data/ocr_queue_processor.dart';
 import '../../processing/data/processing_job_store.dart';
 import '../../processing/domain/processing_job.dart';
+import '../../sharing/shared_image_import_coordinator.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -33,6 +36,7 @@ class HomePage extends StatefulWidget {
     this.ocrRepository,
     this.ocrQueue,
     this.categoryRepository,
+    this.incomingShareSource,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -40,6 +44,7 @@ class HomePage extends StatefulWidget {
   final OcrRepository? ocrRepository;
   final OcrQueue? ocrQueue;
   final CategoryRepository? categoryRepository;
+  final IncomingShareSource? incomingShareSource;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -54,6 +59,7 @@ class _HomePageState extends State<HomePage> {
   late final bool _ownsMediaRepository;
   ContextoDatabase? _ownedAuxiliaryDatabase;
   StreamSubscription<int>? _queueSubscription;
+  late final SharedImageImportCoordinator _sharedImportCoordinator;
   final TextEditingController _searchController = TextEditingController();
   final TextNormalizer _textNormalizer = const TextNormalizer();
   Timer? _searchDebounce;
@@ -113,7 +119,16 @@ class _HomePageState extends State<HomePage> {
       _ownedAuxiliaryDatabase = database;
     }
     _queueSubscription = _ocrQueue.changes.listen(_handleQueueChange);
+    _sharedImportCoordinator = SharedImageImportCoordinator(
+      source: widget.incomingShareSource ?? const ReceiveSharingIntentSource(),
+      repository: _mediaRepository,
+      onCompleted: _handleSharedImport,
+      onError: _handleSharedImportError,
+    );
     _initialize();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_sharedImportCoordinator.start());
+    });
   }
 
   @override
@@ -125,6 +140,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _disposeResources() async {
+    await _sharedImportCoordinator.dispose();
     await _queueSubscription?.cancel();
     await _ocrQueue.close();
     if (_ownsMediaRepository) {
@@ -132,6 +148,65 @@ class _HomePageState extends State<HomePage> {
     } else if (_ownedAuxiliaryDatabase != null) {
       await _ownedAuxiliaryDatabase!.close();
     }
+  }
+
+  Future<void> _handleSharedImport(ImportResult result) async {
+    if (!mounted) return;
+    await _reloadItemsIgnoringErrors();
+    _ocrQueue.signal();
+    if (_searchActive) await _searchNow();
+    if (!mounted) return;
+    final message = _sharedImportMessage(result);
+    if (message != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  void _handleSharedImportError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text('Não foi possível adicionar a imagem.')),
+      );
+  }
+
+  String? _sharedImportMessage(ImportResult result) {
+    final imported = result.importedItems.length;
+    final duplicates = result.duplicateCount;
+    final rejected = result.rejectedCount;
+    if (imported == 0 && duplicates == 0 && rejected == 0) return null;
+    if (imported == 0 && duplicates == 0) {
+      return rejected == 1
+          ? 'Não foi possível adicionar a imagem.'
+          : 'Não foi possível adicionar as imagens.';
+    }
+    if (imported == 0) {
+      return duplicates == 1
+          ? 'Esta imagem já estava no Contexto.'
+          : '$duplicates imagens já estavam no Contexto.';
+    }
+    if (duplicates == 0 && rejected == 0) {
+      return imported == 1
+          ? 'Screenshot adicionado ao Contexto.'
+          : '$imported screenshots adicionados ao Contexto.';
+    }
+    final addedText =
+        '$imported ${imported == 1 ? 'imagem adicionada' : 'imagens adicionadas'}';
+    final parts = <String>[addedText];
+    if (duplicates > 0) {
+      parts.add(
+        '$duplicates ${duplicates == 1 ? 'já estava' : 'já estavam'} no Contexto',
+      );
+    }
+    if (rejected > 0) {
+      parts.add(
+        '$rejected ${rejected == 1 ? 'não pôde ser adicionada' : 'não puderam ser adicionadas'}',
+      );
+    }
+    return '${parts.join(' e ')}.';
   }
 
   Future<void> _initialize() async {
@@ -777,6 +852,13 @@ class _ImportCard extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Text('Selecionar imagens'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Você também pode enviar imagens pelo menu Compartilhar.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
             ),
             if (errorMessage != null) ...[
               const SizedBox(height: 8),
