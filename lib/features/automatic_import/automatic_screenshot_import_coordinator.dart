@@ -55,10 +55,25 @@ class AutomaticScreenshotImportCoordinator {
   bool _observing = false;
   Future<void>? _drainFuture;
   bool _drainAgain = false;
+  Future<void>? _resumeFuture;
 
   Future<void> initialize() async {
     try {
       final settings = await _settingsRepository.load();
+      if (!settings.hasStoredPreference) {
+        final permission = await _source.permissionStatus();
+        if (permission == MediaPermissionStatus.fullAccess) {
+          await _activateFromCurrentBaseline();
+          return;
+        }
+        await _source.configureBackgroundMonitoring(
+          enabled: false,
+          lastMediaId: settings.lastMediaId ?? 0,
+        );
+        await _drainInbox();
+        _onStateChanged(_stateForPermission(permission));
+        return;
+      }
       if (!settings.enabled) {
         await _source.configureBackgroundMonitoring(
           enabled: false,
@@ -81,29 +96,57 @@ class AutomaticScreenshotImportCoordinator {
         _onStateChanged(_stateForPermission(permission));
         return permission;
       }
-      final baseline = await _source.currentMaxMediaId();
-      await _settingsRepository.enable(baselineMediaId: baseline);
-      try {
-        await _source.configureBackgroundMonitoring(
-          enabled: true,
-          lastMediaId: baseline,
-          resetBaseline: true,
-        );
-      } catch (_) {
-        await _settingsRepository.disable();
-        rethrow;
-      }
-      _onStateChanged(AutomaticImportUiState.active);
-      await _beginObserving();
+      await _activateFromCurrentBaseline();
       return permission;
     } catch (_) {
       _onStateChanged(AutomaticImportUiState.unavailable);
       _onError();
-      return MediaPermissionStatus.unsupported;
+      rethrow;
     }
   }
 
-  Future<void> disable() async {
+  Future<MediaPermissionStatus> requestPermissionAndApplyDefault() async {
+    try {
+      final settings = await _settingsRepository.load();
+      final permission = await _source.requestPermission();
+      if (permission != MediaPermissionStatus.fullAccess) {
+        _onStateChanged(_stateForPermission(permission));
+        return permission;
+      }
+      if (!settings.hasStoredPreference) {
+        await _activateFromCurrentBaseline();
+      } else if (settings.enabled) {
+        await resume();
+      } else {
+        _onStateChanged(AutomaticImportUiState.disabled);
+      }
+      return permission;
+    } catch (_) {
+      _onStateChanged(AutomaticImportUiState.unavailable);
+      _onError();
+      rethrow;
+    }
+  }
+
+  Future<void> _activateFromCurrentBaseline() async {
+    final baseline = await _source.currentMaxMediaId();
+    await _settingsRepository.enable(baselineMediaId: baseline);
+    try {
+      await _source.configureBackgroundMonitoring(
+        enabled: true,
+        lastMediaId: baseline,
+        resetBaseline: true,
+      );
+    } catch (_) {
+      await _settingsRepository.disable();
+      rethrow;
+    }
+    _onStateChanged(AutomaticImportUiState.active);
+    await _drainInbox();
+    await _beginObserving();
+  }
+
+  Future<bool> disable() async {
     await _stopObserving();
     try {
       final settings = await _settingsRepository.load();
@@ -123,12 +166,23 @@ class AutomaticScreenshotImportCoordinator {
             : AutomaticImportUiState.unavailable,
       );
       if (!nativeDisabled) _onError();
+      return nativeDisabled;
     } catch (_) {
       _onError();
+      await resume();
+      rethrow;
     }
   }
 
-  Future<void> resume() async {
+  Future<void> resume() {
+    final running = _resumeFuture;
+    if (running != null) return running;
+    final future = _performResume();
+    _resumeFuture = future;
+    return future.whenComplete(() => _resumeFuture = null);
+  }
+
+  Future<void> _performResume() async {
     if (_disposed) return;
     try {
       final settings = await _settingsRepository.load();
@@ -140,6 +194,9 @@ class AutomaticScreenshotImportCoordinator {
   }
 
   Future<void> openAppSettings() => _source.openAppSettings();
+
+  Future<MediaPermissionStatus> permissionStatus() =>
+      _source.permissionStatus();
 
   Future<void> _resumeEnabled(int lastMediaId) async {
     final permission = await _source.permissionStatus();

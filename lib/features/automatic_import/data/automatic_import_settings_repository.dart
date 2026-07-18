@@ -28,6 +28,7 @@ class DriftAutomaticImportSettingsRepository
     if (row == null) return domain.AutomaticImportSettings.disabled();
     return domain.AutomaticImportSettings(
       enabled: row.enabled,
+      hasStoredPreference: true,
       lastMediaId: row.lastMediaId,
       enabledAt: row.enabledAt,
       lastScanAt: row.lastScanAt,

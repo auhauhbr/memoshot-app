@@ -18,6 +18,7 @@ void main() {
     final settings = await repository.load();
 
     expect(settings.enabled, isFalse);
+    expect(settings.hasStoredPreference, isFalse);
     expect(settings.lastMediaId, isNull);
   });
 
@@ -26,6 +27,7 @@ void main() {
 
     final settings = await repository.load();
     expect(settings.enabled, isTrue);
+    expect(settings.hasStoredPreference, isTrue);
     expect(settings.lastMediaId, 42);
     expect(settings.enabledAt, isNotNull);
   });

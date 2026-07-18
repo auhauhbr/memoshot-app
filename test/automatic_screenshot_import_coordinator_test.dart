@@ -24,6 +24,56 @@ void main() {
     await coordinator.dispose();
   });
 
+  test('sem preferência e com acesso ativa automação por padrão', () async {
+    final source = _FakeSource(maxMediaId: 17);
+    final settings = _FakeSettings(hasStoredPreference: false);
+    final coordinator = _coordinator(source: source, settings: settings);
+
+    await coordinator.initialize();
+
+    expect(source.requestCalls, 0);
+    expect(source.statusCalls, 1);
+    expect(settings.enabled, isTrue);
+    expect(settings.hasStoredPreference, isTrue);
+    expect(settings.marker, 17);
+    expect(source.backgroundConfigurationCalls, 1);
+    expect(source.startCalls, 1);
+    await coordinator.dispose();
+  });
+
+  test('sem preferência e sem acesso não ativa automação', () async {
+    final source = _FakeSource(permission: MediaPermissionStatus.denied);
+    final settings = _FakeSettings(hasStoredPreference: false);
+    final states = <AutomaticImportUiState>[];
+    final coordinator = _coordinator(
+      source: source,
+      settings: settings,
+      states: states,
+    );
+
+    await coordinator.initialize();
+
+    expect(settings.enabled, isFalse);
+    expect(settings.hasStoredPreference, isFalse);
+    expect(source.requestCalls, 0);
+    expect(source.startCalls, 0);
+    expect(states.last, AutomaticImportUiState.accessRequired);
+    await coordinator.dispose();
+  });
+
+  test('preferência explicitamente desativada nunca é sobrescrita', () async {
+    final source = _FakeSource();
+    final settings = _FakeSettings(enabled: false, hasStoredPreference: true);
+    final coordinator = _coordinator(source: source, settings: settings);
+
+    await coordinator.initialize();
+
+    expect(settings.enabled, isFalse);
+    expect(source.statusCalls, 0);
+    expect(source.startCalls, 0);
+    await coordinator.dispose();
+  });
+
   test('acesso completo salva linha de base antes de observar', () async {
     final source = _FakeSource(maxMediaId: 81);
     final settings = _FakeSettings();
@@ -456,23 +506,33 @@ class _FakeSource implements AutomaticScreenshotSource {
 }
 
 class _FakeSettings implements AutomaticImportSettingsRepository {
-  _FakeSettings({this.enabled = false, this.marker});
+  _FakeSettings({
+    this.enabled = false,
+    this.marker,
+    this.hasStoredPreference = true,
+  });
 
   bool enabled;
   int? marker;
+  bool hasStoredPreference;
 
   @override
-  Future<void> disable() async => enabled = false;
+  Future<void> disable() async {
+    enabled = false;
+    hasStoredPreference = true;
+  }
 
   @override
   Future<void> enable({required int baselineMediaId}) async {
     enabled = true;
+    hasStoredPreference = true;
     marker = baselineMediaId;
   }
 
   @override
   Future<AutomaticImportSettings> load() async => AutomaticImportSettings(
     enabled: enabled,
+    hasStoredPreference: hasStoredPreference,
     lastMediaId: marker,
     updatedAt: DateTime(2026),
   );
