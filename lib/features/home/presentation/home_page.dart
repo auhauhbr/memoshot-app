@@ -33,6 +33,7 @@ import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
 import '../../automatic_import/data/automatic_import_settings_repository.dart';
 import '../../tags/data/tag_repository.dart';
 import '../../tags/data/tag_store.dart';
+import '../../tags/presentation/tags_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -88,6 +89,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String? _duplicateMessage;
   String? _searchErrorMessage;
   int _categoryCount = 0;
+  int _tagCount = 0;
   AutomaticImportUiState _automaticImportState =
       AutomaticImportUiState.disabled;
 
@@ -329,6 +331,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     try {
       await _reloadItems();
       await _reloadCategoryCount();
+      await _reloadTagCountIgnoringErrors();
       unawaited(_ocrQueue.recoverAndStart());
       final lost = await _screenshotPicker.retrieveLostScreenshots();
       if (lost.isNotEmpty) {
@@ -557,6 +560,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _reloadTagCount() async {
+    final tags = await _tagRepository.loadTagSummaries();
+    if (mounted) setState(() => _tagCount = tags.length);
+  }
+
+  Future<void> _reloadTagCountIgnoringErrors() async {
+    try {
+      await _reloadTagCount();
+    } catch (_) {
+      // Uma falha no contador não impede o uso da biblioteca.
+    }
+  }
+
   Future<void> _openCategories() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
@@ -570,6 +586,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ),
     );
     await _reloadCategoryCountIgnoringErrors();
+  }
+
+  Future<void> _openTags() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => TagsPage(repository: _tagRepository)),
+    );
+    await _reloadTagCountIgnoringErrors();
   }
 
   Future<void> _openDetails(MediaItem item) async {
@@ -666,6 +689,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               '$_categoryCount '
                               '${_categoryCount == 1 ? 'categoria' : 'categorias'}',
                           onTap: _openCategories,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _LibrarySummary(
+                          key: const Key('tags-summary'),
+                          icon: Icons.label_outline,
+                          title: 'Etiquetas',
+                          count:
+                              '$_tagCount '
+                              '${_tagCount == 1 ? 'etiqueta' : 'etiquetas'}',
+                          onTap: _openTags,
                         ),
                       ),
                     ],
@@ -884,6 +919,8 @@ class _LibrarySummary extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 count,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colors.onSurfaceVariant,
                 ),

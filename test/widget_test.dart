@@ -56,6 +56,8 @@ void main() {
     expect(find.text('0 itens'), findsOneWidget);
     expect(find.text('Categorias'), findsOneWidget);
     expect(find.text('0 categorias'), findsOneWidget);
+    expect(find.text('Etiquetas'), findsOneWidget);
+    expect(find.text('0 etiquetas'), findsOneWidget);
     expect(find.text('Importar screenshots'), findsOneWidget);
     expect(find.text('Processamento local'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsNothing);
@@ -1336,6 +1338,36 @@ void main() {
     expect(find.text('Nova categoria'), findsOneWidget);
   });
 
+  testWidgets('bloco Etiquetas abre gerenciamento pela navegação existente', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
+    await tester.pump();
+
+    expect(find.text('0 etiquetas'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('tags-summary')));
+    await tester.tap(find.byKey(const Key('tags-summary')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Etiquetas'), findsOneWidget);
+    expect(find.text('Nenhuma etiqueta criada.'), findsOneWidget);
+    expect(find.byKey(const Key('new-tag-button')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('new-tag-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('new-tag-name-field')),
+      'Favorita',
+    );
+    await tester.tap(find.byKey(const Key('save-new-tag-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('Favorita'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 etiqueta'), findsOneWidget);
+  });
+
   testWidgets('criar categoria atualiza lista e contador da Home', (
     tester,
   ) async {
@@ -2160,6 +2192,24 @@ class FakeTagRepository implements TagRepository {
     ..sort(
       (first, second) => first.normalizedName.compareTo(second.normalizedName),
     );
+
+  @override
+  Future<List<TagSummary>> loadTagSummaries() async {
+    final summaries = [
+      for (final tag in _tags)
+        TagSummary(
+          tag: tag,
+          mediaCount: _associations.values
+              .where((tagIds) => tagIds.contains(tag.id))
+              .length,
+        ),
+    ];
+    summaries.sort(
+      (first, second) =>
+          first.tag.normalizedName.compareTo(second.tag.normalizedName),
+    );
+    return summaries;
+  }
 
   @override
   Future<Tag?> findById(int id) async {

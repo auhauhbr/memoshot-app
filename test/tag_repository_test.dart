@@ -52,6 +52,24 @@ void main() {
     },
   );
 
+  test('lista etiquetas com contagem eficiente e ordem normalizada', () async {
+    final urgent = await repository.createTag('Urgente');
+    final studies = await repository.createTag('Estudos');
+    await repository.createTag('Ação');
+    await repository.addToMedia(tagId: urgent.id, mediaItemId: firstMediaId);
+    await repository.addToMedia(tagId: urgent.id, mediaItemId: secondMediaId);
+    await repository.addToMedia(tagId: studies.id, mediaItemId: firstMediaId);
+
+    final summaries = await repository.loadTagSummaries();
+
+    expect(summaries.map((summary) => summary.tag.name), [
+      'Ação',
+      'Estudos',
+      'Urgente',
+    ]);
+    expect(summaries.map((summary) => summary.mediaCount), [0, 1, 2]);
+  });
+
   test('rejeita nome vazio e nomes logicamente duplicados', () async {
     await repository.createTag('Urgente');
 
@@ -98,6 +116,7 @@ void main() {
 
   test('renomeia etiqueta e atualiza o nome normalizado', () async {
     final tag = await repository.createTag('Responder');
+    await repository.addToMedia(tagId: tag.id, mediaItemId: firstMediaId);
 
     await Future<void>.delayed(const Duration(milliseconds: 1));
     final renamed = await repository.renameTag(tag, '  Próxima ação  ');
@@ -108,6 +127,13 @@ void main() {
     expect(renamed.createdAt, tag.createdAt);
     expect(renamed.updatedAt.isAfter(tag.updatedAt), isTrue);
     expect((await repository.findById(tag.id))?.name, 'Próxima ação');
+    expect(
+      (await repository.loadForMedia(firstMediaId)).single.name,
+      'Próxima ação',
+    );
+    final summary = (await repository.loadTagSummaries()).single;
+    expect(summary.tag.name, 'Próxima ação');
+    expect(summary.mediaCount, 1);
   });
 
   test('renomeação rejeita nome pertencente a outra etiqueta', () async {

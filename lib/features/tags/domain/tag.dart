@@ -13,3 +13,10 @@ class Tag {
   final DateTime createdAt;
   final DateTime updatedAt;
 }
+
+class TagSummary {
+  const TagSummary({required this.tag, required this.mediaCount});
+
+  final Tag tag;
+  final int mediaCount;
+}

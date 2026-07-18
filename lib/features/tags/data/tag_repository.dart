@@ -18,6 +18,8 @@ abstract interface class TagRepository {
 
   Future<List<Tag>> loadTags();
 
+  Future<List<TagSummary>> loadTagSummaries();
+
   Future<Tag?> findById(int id);
 
   Future<Tag?> findByNormalizedName(String normalizedName);
@@ -79,6 +81,9 @@ class LocalTagRepository implements TagRepository {
 
   @override
   Future<List<Tag>> loadTags() => _store.listTags();
+
+  @override
+  Future<List<TagSummary>> loadTagSummaries() => _store.listWithMediaCounts();
 
   @override
   Future<Tag?> findById(int id) => _store.findById(id);

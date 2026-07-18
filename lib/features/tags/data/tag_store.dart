@@ -14,6 +14,8 @@ abstract interface class TagStore {
 
   Future<List<domain.Tag>> listTags();
 
+  Future<List<domain.TagSummary>> listWithMediaCounts();
+
   Future<domain.Tag?> findById(int id);
 
   Future<domain.Tag?> findByNormalizedName(String normalizedName);
@@ -78,6 +80,33 @@ class DriftTagStore implements TagStore {
             ]))
             .get();
     return rows.map(_toDomain).toList(growable: false);
+  }
+
+  @override
+  Future<List<domain.TagSummary>> listWithMediaCounts() async {
+    final count = _database.mediaTags.mediaItemId.count();
+    final query = _database.select(_database.tags).join([
+      leftOuterJoin(
+        _database.mediaTags,
+        _database.mediaTags.tagId.equalsExp(_database.tags.id),
+      ),
+    ]);
+    query
+      ..addColumns([count])
+      ..groupBy([_database.tags.id])
+      ..orderBy([
+        OrderingTerm.asc(_database.tags.normalizedName),
+        OrderingTerm.asc(_database.tags.id),
+      ]);
+    final rows = await query.get();
+    return rows
+        .map(
+          (row) => domain.TagSummary(
+            tag: _toDomain(row.readTable(_database.tags)),
+            mediaCount: row.read(count) ?? 0,
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
