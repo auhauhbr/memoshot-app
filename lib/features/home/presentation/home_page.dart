@@ -33,6 +33,7 @@ import '../../processing/domain/processing_job.dart';
 import '../../sharing/shared_image_import_coordinator.dart';
 import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
 import '../../automatic_import/data/automatic_import_settings_repository.dart';
+import '../../settings/presentation/settings_page.dart';
 import '../../tags/data/tag_repository.dart';
 import '../../tags/data/tag_store.dart';
 import '../../tags/domain/tag.dart';
@@ -79,6 +80,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   StreamSubscription<int>? _queueSubscription;
   late final SharedImageImportCoordinator _sharedImportCoordinator;
   late final AutomaticScreenshotImportCoordinator _automaticImportCoordinator;
+  late final AutomaticImportSettingsRepository _automaticSettingsRepository;
   final TextEditingController _searchController = TextEditingController();
   final TextNormalizer _textNormalizer = const TextNormalizer();
   Timer? _searchDebounce;
@@ -147,7 +149,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _tagRepository =
         widget.tagRepository ??
         LocalTagRepository(store: DriftTagStore(database!));
-    final automaticSettingsRepository =
+    _automaticSettingsRepository =
         widget.automaticImportSettingsRepository ??
         DriftAutomaticImportSettingsRepository(database!);
     if (!_ownsMediaRepository) {
@@ -164,7 +166,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       source:
           widget.automaticScreenshotSource ??
           const MethodChannelAutomaticScreenshotSource(),
-      settingsRepository: automaticSettingsRepository,
+      settingsRepository: _automaticSettingsRepository,
       mediaRepository: _mediaRepository,
       onStateChanged: _handleAutomaticImportState,
       onImported: _handleAutomaticImport,
@@ -700,6 +702,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _openSettings() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => SettingsPage(
+          coordinator: _automaticImportCoordinator,
+          settingsRepository: _automaticSettingsRepository,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _automaticImportCoordinator.resume();
+    await _reloadItemsIgnoringErrors();
+    await _reloadCategories();
+    await _reloadTagCountIgnoringErrors();
+    if (_searchActive) await _searchNow();
+  }
+
   Future<void> _openDetails(MediaItem item) async {
     final removed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -758,7 +777,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _AppHeader(onOpenTags: _openTags),
+                  _AppHeader(
+                    onOpenTags: _openTags,
+                    onOpenSettings: _openSettings,
+                  ),
                   const SizedBox(height: 18),
                   Row(
                     children: [
@@ -801,12 +823,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     const SizedBox(height: 10),
                     _AutomaticImportNotice(
                       state: _automaticImportState,
-                      onAction: () => unawaited(
-                        _automaticImportState ==
-                                AutomaticImportUiState.unavailable
-                            ? _automaticImportCoordinator.resume()
-                            : _automaticImportCoordinator.openAppSettings(),
-                      ),
+                      onAction: () => unawaited(_openSettings()),
                     ),
                   ],
                   if (_errorMessage != null || _duplicateMessage != null) ...[
@@ -919,9 +936,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 }
 
 class _AppHeader extends StatelessWidget {
-  const _AppHeader({required this.onOpenTags});
+  const _AppHeader({required this.onOpenTags, required this.onOpenSettings});
 
   final VoidCallback onOpenTags;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -949,6 +967,12 @@ class _AppHeader extends StatelessWidget {
               ),
             ],
           ),
+        ),
+        IconButton(
+          key: const Key('open-settings'),
+          onPressed: onOpenSettings,
+          tooltip: 'Configurações',
+          icon: const Icon(Icons.settings_outlined),
         ),
         PopupMenuButton<String>(
           key: const Key('home-actions-menu'),

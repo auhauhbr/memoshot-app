@@ -20,6 +20,7 @@ import 'package:memoshot/features/library/domain/screenshot_search_result.dart';
 import 'package:memoshot/features/library/presentation/screenshot_grid.dart';
 import 'package:memoshot/features/ocr/data/ocr_repository.dart';
 import 'package:memoshot/features/ocr/domain/ocr_result.dart';
+import 'package:memoshot/features/onboarding/data/onboarding_repository.dart';
 import 'package:memoshot/features/processing/data/ocr_queue_processor.dart';
 import 'package:memoshot/features/processing/domain/processing_job.dart';
 import 'package:memoshot/features/tags/data/tag_repository.dart';
@@ -2295,6 +2296,443 @@ void main() {
     expect(find.text('Compartilhado com o MemoShot'), findsOneWidget);
   });
 
+  testWidgets('primeira execução apresenta e conclui onboarding', (
+    tester,
+  ) async {
+    final onboarding = FakeOnboardingRepository();
+    final source = FakeAutomaticScreenshotSource();
+    final settings = FakeAutomaticImportSettingsRepository(
+      hasStoredPreference: false,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        onboardingRepository: onboarding,
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Capturou, organizou.'), findsOneWidget);
+    expect(
+      find.text(
+        'O MemoShot ajuda a encontrar e organizar seus prints automaticamente.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('onboarding-next')));
+    await tester.pump();
+    expect(find.text('Tudo no seu dispositivo'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('onboarding-next')));
+    await tester.pump();
+    expect(find.text('Permita o acesso aos seus prints'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('onboarding-allow')));
+    await tester.pumpAndSettle();
+
+    expect(onboarding.completed, isTrue);
+    expect(onboarding.completeCalls, 1);
+    expect(source.requestCount, 1);
+    expect(settings.enabled, isTrue);
+    expect(find.text('Todos os prints'), findsOneWidget);
+  });
+
+  testWidgets('onboarding concluído não reaparece', (tester) async {
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        onboardingRepository: FakeOnboardingRepository(completed: true),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('onboarding-next')), findsNothing);
+    expect(find.text('Todos os prints'), findsOneWidget);
+  });
+
+  testWidgets('Agora não conclui sem pedir permissão e sem loop', (
+    tester,
+  ) async {
+    final onboarding = FakeOnboardingRepository();
+    final source = FakeAutomaticScreenshotSource(
+      permission: MediaPermissionStatus.notRequested,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        onboardingRepository: onboarding,
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: FakeAutomaticImportSettingsRepository(
+          hasStoredPreference: false,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('onboarding-next')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('onboarding-next')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('onboarding-not-now')));
+    await tester.pumpAndSettle();
+
+    expect(source.requestCount, 0);
+    expect(onboarding.completed, isTrue);
+    expect(find.text('Todos os prints'), findsOneWidget);
+
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), onboardingRepository: onboarding),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('onboarding-next')), findsNothing);
+  });
+
+  testWidgets('permissão negada conclui onboarding e mostra aviso na Home', (
+    tester,
+  ) async {
+    final source = FakeAutomaticScreenshotSource(
+      permission: MediaPermissionStatus.denied,
+    );
+    final settings = FakeAutomaticImportSettingsRepository(
+      hasStoredPreference: false,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        onboardingRepository: FakeOnboardingRepository(),
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('onboarding-next')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('onboarding-next')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('onboarding-allow')));
+    await tester.pumpAndSettle();
+
+    expect(settings.enabled, isFalse);
+    expect(find.byKey(const Key('automatic-import-notice')), findsOneWidget);
+    expect(find.text('Todos os prints'), findsOneWidget);
+  });
+
+  testWidgets('descarte durante solicitação do onboarding é seguro', (
+    tester,
+  ) async {
+    final blocker = Completer<MediaPermissionStatus>();
+    final source = FakeAutomaticScreenshotSource(
+      permissionRequestCompleter: blocker,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        onboardingRepository: FakeOnboardingRepository(),
+        automaticScreenshotSource: source,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('onboarding-next')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('onboarding-next')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('onboarding-allow')));
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox());
+    blocker.complete(MediaPermissionStatus.fullAccess);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Home abre Configurações com privacidade e sobre', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Configurações'), findsOneWidget);
+    expect(find.text('Captura e organização automática'), findsOneWidget);
+    expect(find.text('Privacidade'), findsOneWidget);
+    expect(find.text('Sobre o MemoShot'), findsOneWidget);
+    expect(find.text('Capturou, organizou.'), findsOneWidget);
+    expect(
+      find.textContaining('não são enviados para servidores'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('switch desliga, salva e permanece somente em Configurações', (
+    tester,
+  ) async {
+    final settings = FakeAutomaticImportSettingsRepository(enabled: true);
+    final source = FakeAutomaticScreenshotSource();
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('automatic-import-switch')), findsNothing);
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    final switchTile = tester.widget<SwitchListTile>(
+      find.byKey(const Key('automatic-import-switch')),
+    );
+    switchTile.onChanged!(false);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+
+    expect(settings.enabled, isFalse);
+    expect(settings.disableCalls, 1);
+    expect(find.byKey(const Key('settings-progress')), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('automatic-import-switch')), findsNothing);
+    expect(find.text('Processamento local'), findsNothing);
+  });
+
+  testWidgets('reativar sem permissão solicita acesso e restaura switch', (
+    tester,
+  ) async {
+    final settings = FakeAutomaticImportSettingsRepository(enabled: false);
+    final source = FakeAutomaticScreenshotSource(
+      permission: MediaPermissionStatus.denied,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('automatic-import-switch')));
+    await tester.pumpAndSettle();
+
+    expect(source.requestCount, 1);
+    expect(settings.enabled, isFalse);
+    expect(
+      find.text('Permita o acesso às imagens para ativar esta função.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('reativar com acesso salva preferência e configura uma vez', (
+    tester,
+  ) async {
+    final settings = FakeAutomaticImportSettingsRepository(enabled: false);
+    final source = FakeAutomaticScreenshotSource(maxMediaId: 12);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    final tile = tester.widget<SwitchListTile>(
+      find.byKey(const Key('automatic-import-switch')),
+    );
+    tile.onChanged!(true);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+
+    expect(settings.enabled, isTrue);
+    expect(settings.marker, 12);
+    expect(settings.enableCalls, 1);
+    expect(source.requestCount, 1);
+    expect(source.backgroundConfigurationCount, 2);
+  });
+
+  testWidgets('erro ao ativar restaura switch e mostra mensagem', (
+    tester,
+  ) async {
+    final settings = FakeAutomaticImportSettingsRepository(failEnable: true);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    tester
+        .widget<SwitchListTile>(
+          find.byKey(const Key('automatic-import-switch')),
+        )
+        .onChanged!(true);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+
+    expect(settings.enabled, isFalse);
+    expect(
+      find.text('Não foi possível ativar a organização automática.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('erro ao desativar restaura switch e mostra mensagem', (
+    tester,
+  ) async {
+    final settings = FakeAutomaticImportSettingsRepository(
+      enabled: true,
+      failDisable: true,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    tester
+        .widget<SwitchListTile>(
+          find.byKey(const Key('automatic-import-switch')),
+        )
+        .onChanged!(false);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+
+    expect(settings.enabled, isTrue);
+    expect(
+      find.text('Não foi possível atualizar a configuração.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('ativação pendente impede solicitações repetidas', (
+    tester,
+  ) async {
+    final permission = Completer<MediaPermissionStatus>();
+    final source = FakeAutomaticScreenshotSource(
+      permissionRequestCompleter: permission,
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), automaticScreenshotSource: source),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    final callback = tester
+        .widget<SwitchListTile>(
+          find.byKey(const Key('automatic-import-switch')),
+        )
+        .onChanged!;
+    callback(true);
+    callback(true);
+    await tester.pump();
+
+    expect(source.requestCount, 1);
+    expect(find.byKey(const Key('settings-progress')), findsOneWidget);
+    permission.complete(MediaPermissionStatus.fullAccess);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+    expect(source.requestCount, 1);
+  });
+
+  testWidgets('negação permanente abre configurações do Android', (
+    tester,
+  ) async {
+    final source = FakeAutomaticScreenshotSource(
+      permission: MediaPermissionStatus.permanentlyDenied,
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), automaticScreenshotSource: source),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Abrir configurações do Android'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('permission-action')));
+    await tester.pump();
+    expect(source.openSettingsCount, 1);
+    expect(source.requestCount, 0);
+  });
+
+  testWidgets('retorno das configurações Android atualiza permissão e Home', (
+    tester,
+  ) async {
+    final source = FakeAutomaticScreenshotSource(
+      permission: MediaPermissionStatus.permanentlyDenied,
+    );
+    final settings = FakeAutomaticImportSettingsRepository(enabled: true);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('automatic-import-notice')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    expect(find.text('Acesso não permitido'), findsOneWidget);
+
+    source.permission = MediaPermissionStatus.fullAccess;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+
+    expect(find.text('Acesso permitido'), findsOneWidget);
+    expect(source.startCount, 1);
+    await tester.pageBack();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('automatic-import-notice')), findsNothing);
+  });
+
+  testWidgets('Configurações apresenta estados amigáveis de permissão', (
+    tester,
+  ) async {
+    for (final entry in <(MediaPermissionStatus, String)>[
+      (MediaPermissionStatus.fullAccess, 'Acesso permitido'),
+      (MediaPermissionStatus.limitedAccess, 'Acesso parcial'),
+      (MediaPermissionStatus.denied, 'Acesso não permitido'),
+      (MediaPermissionStatus.unsupported, 'Indisponível neste dispositivo'),
+    ]) {
+      await tester.pumpWidget(
+        buildTestApp(
+          FakeScreenshotPicker(),
+          automaticScreenshotSource: FakeAutomaticScreenshotSource(
+            permission: entry.$1,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('open-settings')));
+      await tester.pumpAndSettle();
+      expect(find.text(entry.$2), findsOneWidget);
+    }
+  });
+
   testWidgets('automação começa desativada e não solicita permissão', (
     tester,
   ) async {
@@ -2573,6 +3011,7 @@ Widget buildTestApp(
   IncomingShareSource? incomingShareSource,
   FakeAutomaticScreenshotSource? automaticScreenshotSource,
   FakeAutomaticImportSettingsRepository? automaticSettingsRepository,
+  OnboardingRepository? onboardingRepository,
 }) {
   final resolvedOcrRepository = ocrRepository ?? FakeOcrRepository();
   final resolvedMediaRepository = repository ?? FakeMediaItemRepository();
@@ -2594,6 +3033,8 @@ Widget buildTestApp(
         automaticScreenshotSource ?? FakeAutomaticScreenshotSource(),
     automaticImportSettingsRepository:
         automaticSettingsRepository ?? FakeAutomaticImportSettingsRepository(),
+    onboardingRepository:
+        onboardingRepository ?? FakeOnboardingRepository(completed: true),
   );
 }
 
@@ -2751,6 +3192,8 @@ class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
     this.permission = MediaPermissionStatus.fullAccess,
     this.maxMediaId = 0,
     this.inboxCompleter,
+    this.permissionRequestCompleter,
+    this.failBackgroundConfiguration = false,
     List<AutomaticScreenshotBatch> batches = const [],
   }) : batches = [...batches];
 
@@ -2763,7 +3206,11 @@ class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
   final List<String> deletedPaths = [];
   final List<BackgroundScreenshotEntry> inbox = [];
   final Completer<List<BackgroundScreenshotEntry>>? inboxCompleter;
+  final Completer<MediaPermissionStatus>? permissionRequestCompleter;
+  final bool failBackgroundConfiguration;
   int backgroundMarker = 0;
+  int backgroundConfigurationCount = 0;
+  int openSettingsCount = 0;
 
   @override
   Future<void> acknowledgeBackgroundEntry(String entryId) async {
@@ -2776,6 +3223,10 @@ class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
     required int lastMediaId,
     bool resetBaseline = false,
   }) async {
+    backgroundConfigurationCount++;
+    if (failBackgroundConfiguration) {
+      throw StateError('Falha privada ao configurar');
+    }
     backgroundMarker = resetBaseline || lastMediaId > backgroundMarker
         ? lastMediaId
         : backgroundMarker;
@@ -2801,7 +3252,7 @@ class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
   Future<void> deleteTemporary(String path) async => deletedPaths.add(path);
 
   @override
-  Future<void> openAppSettings() async {}
+  Future<void> openAppSettings() async => openSettingsCount++;
 
   @override
   Future<List<BackgroundScreenshotEntry>> loadBackgroundInbox() async =>
@@ -2813,7 +3264,7 @@ class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
   @override
   Future<MediaPermissionStatus> requestPermission() async {
     requestCount++;
-    return permission;
+    return permissionRequestCompleter?.future ?? permission;
   }
 
   @override
@@ -2843,29 +3294,70 @@ class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
 
 class FakeAutomaticImportSettingsRepository
     implements AutomaticImportSettingsRepository {
-  FakeAutomaticImportSettingsRepository({this.enabled = false, this.marker});
+  FakeAutomaticImportSettingsRepository({
+    this.enabled = false,
+    this.marker,
+    this.hasStoredPreference = true,
+    this.failEnable = false,
+    this.failDisable = false,
+  });
 
   bool enabled;
   int? marker;
+  bool hasStoredPreference;
+  final bool failEnable;
+  final bool failDisable;
+  int enableCalls = 0;
+  int disableCalls = 0;
 
   @override
-  Future<void> disable() async => enabled = false;
+  Future<void> disable() async {
+    disableCalls++;
+    if (failDisable) throw StateError('Falha privada ao desativar');
+    enabled = false;
+    hasStoredPreference = true;
+  }
 
   @override
   Future<void> enable({required int baselineMediaId}) async {
+    enableCalls++;
+    if (failEnable) throw StateError('Falha privada ao ativar');
     enabled = true;
+    hasStoredPreference = true;
     marker = baselineMediaId;
   }
 
   @override
   Future<AutomaticImportSettings> load() async => AutomaticImportSettings(
     enabled: enabled,
+    hasStoredPreference: hasStoredPreference,
     lastMediaId: marker,
     updatedAt: DateTime(2026),
   );
 
   @override
   Future<void> updateMarker(int lastMediaId) async => marker = lastMediaId;
+}
+
+class FakeOnboardingRepository implements OnboardingRepository {
+  FakeOnboardingRepository({this.completed = false, this.completeBlocker});
+
+  bool completed;
+  int completeCalls = 0;
+  final Completer<void>? completeBlocker;
+
+  @override
+  bool? get cachedCompletion => completed;
+
+  @override
+  Future<void> complete() async {
+    completeCalls++;
+    await completeBlocker?.future;
+    completed = true;
+  }
+
+  @override
+  Future<bool> isCompleted() async => completed;
 }
 
 class FakeIncomingShareSource implements IncomingShareSource {
