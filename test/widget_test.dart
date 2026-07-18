@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:contexto/app/contexto_app.dart';
+import 'package:contexto/core/automatic_import/automatic_screenshot_source.dart';
 import 'package:contexto/core/media/screenshot_picker.dart';
 import 'package:contexto/core/sharing/incoming_share_source.dart';
 import 'package:contexto/core/theme/app_theme.dart';
@@ -10,6 +11,8 @@ import 'package:contexto/core/text/search_snippet_builder.dart';
 import 'package:contexto/core/text/text_normalizer.dart';
 import 'package:contexto/features/categories/data/category_repository.dart';
 import 'package:contexto/features/categories/domain/category.dart';
+import 'package:contexto/features/automatic_import/data/automatic_import_settings_repository.dart';
+import 'package:contexto/features/automatic_import/domain/automatic_import_settings.dart';
 import 'package:contexto/features/library/data/media_item_repository.dart';
 import 'package:contexto/features/library/domain/media_item.dart';
 import 'package:contexto/features/library/domain/selected_screenshot.dart';
@@ -1464,6 +1467,138 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Compartilhado com o Contexto'), findsOneWidget);
   });
+
+  testWidgets('automação começa desativada e não solicita permissão', (
+    tester,
+  ) async {
+    final source = FakeAutomaticScreenshotSource();
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), automaticScreenshotSource: source),
+    );
+    await tester.pump();
+
+    expect(find.text('Importação automática'), findsOneWidget);
+    expect(find.text('Desativada'), findsOneWidget);
+    expect(source.requestCount, 0);
+  });
+
+  testWidgets('cancelar explicação não solicita permissão', (tester) async {
+    final source = FakeAutomaticScreenshotSource();
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), automaticScreenshotSource: source),
+    );
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const Key('automatic-import-switch')),
+    );
+    await tester.tap(find.byKey(const Key('automatic-import-switch')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ativar importação automática?'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(source.requestCount, 0);
+    expect(find.text('Desativada'), findsOneWidget);
+  });
+
+  testWidgets('acesso completo ativa usando linha de base', (tester) async {
+    final source = FakeAutomaticScreenshotSource(maxMediaId: 37);
+    final settings = FakeAutomaticImportSettingsRepository();
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const Key('automatic-import-switch')),
+    );
+    await tester.tap(find.byKey(const Key('automatic-import-switch')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+
+    expect(source.requestCount, 1);
+    expect(settings.marker, 37);
+    expect(find.text('Ativa'), findsOneWidget);
+  });
+
+  testWidgets('acesso limitado não ativa e explica a limitação', (
+    tester,
+  ) async {
+    final source = FakeAutomaticScreenshotSource(
+      permission: MediaPermissionStatus.limitedAccess,
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), automaticScreenshotSource: source),
+    );
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const Key('automatic-import-switch')),
+    );
+    await tester.tap(find.byKey(const Key('automatic-import-switch')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Acesso limitado'), findsOneWidget);
+    expect(find.textContaining('apenas imagens escolhidas'), findsOneWidget);
+    expect(source.startCount, 0);
+  });
+
+  testWidgets('importação automática atualiza biblioteca e feedback', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'automatico.png');
+    final source = FakeAutomaticScreenshotSource(
+      batches: [
+        AutomaticScreenshotBatch(
+          lastExaminedMediaId: 8,
+          items: [
+            AutomaticScreenshotCandidate(
+              mediaId: 8,
+              temporaryPath: image.path,
+              mimeType: 'image/png',
+            ),
+          ],
+        ),
+      ],
+    );
+    final settings = FakeAutomaticImportSettingsRepository(
+      enabled: true,
+      marker: 7,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 item'), findsOneWidget);
+    expect(find.text('Screenshot importado automaticamente.'), findsOneWidget);
+  });
+
+  testWidgets('detalhes apresentam origem automática', (tester) async {
+    final image = createTestImage(temporaryDirectory, 'origem-auto.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [
+        createMediaItem(1, image.path, importOrigin: ImportOrigin.automatic),
+      ],
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+
+    expect(find.text('Importado automaticamente'), findsOneWidget);
+  });
 }
 
 Widget buildTestApp(
@@ -1473,6 +1608,8 @@ Widget buildTestApp(
   FakeOcrQueue? ocrQueue,
   FakeCategoryRepository? categoryRepository,
   IncomingShareSource? incomingShareSource,
+  FakeAutomaticScreenshotSource? automaticScreenshotSource,
+  FakeAutomaticImportSettingsRepository? automaticSettingsRepository,
 }) {
   final resolvedOcrRepository = ocrRepository ?? FakeOcrRepository();
   final resolvedMediaRepository = repository ?? FakeMediaItemRepository();
@@ -1486,7 +1623,95 @@ Widget buildTestApp(
     ocrQueue: ocrQueue ?? FakeOcrQueue(resolvedOcrRepository),
     categoryRepository: resolvedCategoryRepository,
     incomingShareSource: incomingShareSource ?? FakeIncomingShareSource(),
+    automaticScreenshotSource:
+        automaticScreenshotSource ?? FakeAutomaticScreenshotSource(),
+    automaticImportSettingsRepository:
+        automaticSettingsRepository ?? FakeAutomaticImportSettingsRepository(),
   );
+}
+
+class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
+  FakeAutomaticScreenshotSource({
+    this.permission = MediaPermissionStatus.fullAccess,
+    this.maxMediaId = 0,
+    List<AutomaticScreenshotBatch> batches = const [],
+  }) : batches = [...batches];
+
+  MediaPermissionStatus permission;
+  int maxMediaId;
+  int requestCount = 0;
+  int startCount = 0;
+  int stopCount = 0;
+  final List<AutomaticScreenshotBatch> batches;
+  final List<String> deletedPaths = [];
+  final StreamController<void> controller = StreamController<void>.broadcast();
+
+  @override
+  Stream<void> get changes => controller.stream;
+
+  @override
+  Future<int> currentMaxMediaId() async => maxMediaId;
+
+  @override
+  Future<void> deleteTemporary(String path) async => deletedPaths.add(path);
+
+  @override
+  Future<void> openAppSettings() async {}
+
+  @override
+  Future<MediaPermissionStatus> permissionStatus() async => permission;
+
+  @override
+  Future<MediaPermissionStatus> requestPermission() async {
+    requestCount++;
+    return permission;
+  }
+
+  @override
+  Future<AutomaticScreenshotBatch> scanAfter(int lastMediaId) async =>
+      batches.isEmpty
+      ? AutomaticScreenshotBatch(
+          lastExaminedMediaId: lastMediaId,
+          items: const [],
+        )
+      : batches.removeAt(0);
+
+  @override
+  Future<void> startObserving() async {
+    startCount++;
+  }
+
+  @override
+  Future<void> stopObserving() async {
+    stopCount++;
+  }
+}
+
+class FakeAutomaticImportSettingsRepository
+    implements AutomaticImportSettingsRepository {
+  FakeAutomaticImportSettingsRepository({this.enabled = false, this.marker});
+
+  bool enabled;
+  int? marker;
+
+  @override
+  Future<void> disable() async => enabled = false;
+
+  @override
+  Future<void> enable({required int baselineMediaId}) async {
+    enabled = true;
+    marker = baselineMediaId;
+  }
+
+  @override
+  Future<AutomaticImportSettings> load() async => AutomaticImportSettings(
+    enabled: enabled,
+    lastMediaId: marker,
+    updatedAt: DateTime(2026),
+  );
+
+  @override
+  Future<void> updateMarker(int lastMediaId) async => marker = lastMediaId;
 }
 
 class FakeIncomingShareSource implements IncomingShareSource {

@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 6 para 7 preservando as tabelas existentes', () async {
+  test('migra schema 7 para 8 preservando as tabelas existentes', () async {
     final directory = Directory.systemTemp.createTempSync(
       'contexto_migration_test_',
     );
@@ -25,6 +25,23 @@ void main() {
         'image/png',
         DateTime(2025).millisecondsSinceEpoch ~/ 1000,
         'photoPicker',
+        'ready',
+      ],
+    );
+    await legacy.customStatement(
+      '''
+      INSERT INTO media_items (
+        private_path, internal_name, mime_type, imported_at, source_mode,
+        import_origin, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''',
+      [
+        '${directory.path}/compartilhada-antiga.png',
+        'compartilhada-antiga.png',
+        'image/png',
+        DateTime(2025).millisecondsSinceEpoch ~/ 1000,
+        'photoPicker',
+        'shared',
         'ready',
       ],
     );
@@ -68,20 +85,25 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 7);
-    expect(rows, hasLength(1));
-    expect(rows.single.internalName, 'copia.png');
-    expect(rows.single.mediaHash, isNull);
-    expect(rows.single.importOrigin, 'picker');
+    expect(version.read<int>('user_version'), 8);
+    expect(rows, hasLength(2));
+    expect(rows.first.internalName, 'copia.png');
+    expect(rows.first.mediaHash, isNull);
+    expect(rows.first.importOrigin, 'picker');
+    expect(rows.last.importOrigin, 'shared');
     final ocrRows = await migrated.select(migrated.ocrResults).get();
     expect(ocrRows.single.fullText, 'Texto fictício preservado');
     expect(ocrRows.single.normalizedText, 'texto ficticio preservado');
     expect(await migrated.select(migrated.processingJobs).get(), hasLength(1));
     expect(await migrated.select(migrated.categories).get(), hasLength(1));
     expect(await migrated.select(migrated.mediaCategories).get(), hasLength(1));
+    expect(
+      await migrated.select(migrated.automaticImportSettings).get(),
+      isEmpty,
+    );
 
     await (migrated.update(migrated.mediaItems)
-          ..where((item) => item.id.equals(rows.single.id)))
+          ..where((item) => item.id.equals(rows.first.id)))
         .write(const MediaItemsCompanion(mediaHash: Value('hash-repetido')));
     await expectLater(
       migrated
@@ -124,7 +146,7 @@ void main() {
     final reopened = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
     final reopenedOcr = await reopened.select(reopened.ocrResults).getSingle();
     expect(reopenedOcr.normalizedText, 'texto ficticio preservado');
-    expect(await reopened.select(reopened.mediaItems).get(), hasLength(2));
+    expect(await reopened.select(reopened.mediaItems).get(), hasLength(3));
     expect(await reopened.select(reopened.processingJobs).get(), hasLength(1));
     await reopened.close();
     directory.deleteSync(recursive: true);
@@ -138,7 +160,7 @@ class _LegacyDatabase extends GeneratedDatabase {
   final List<TableInfo> allTables = const [];
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -152,6 +174,7 @@ class _LegacyDatabase extends GeneratedDatabase {
           media_hash TEXT NULL,
           imported_at INTEGER NOT NULL,
           source_mode TEXT NOT NULL,
+          import_origin TEXT NOT NULL DEFAULT 'picker',
           status TEXT NOT NULL
         )
       ''');

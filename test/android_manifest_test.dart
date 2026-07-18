@@ -17,16 +17,24 @@ void main() {
     expect(manifest, isNot(contains('android.intent.action.VIEW')));
   });
 
-  test('manifest não adiciona permissões amplas de armazenamento', () {
+  test('manifest adiciona somente permissões de imagens por versão', () {
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',
     ).readAsStringSync();
 
+    expect(manifest, contains('android.permission.READ_MEDIA_IMAGES'));
+    expect(
+      manifest,
+      contains('android.permission.READ_MEDIA_VISUAL_USER_SELECTED'),
+    );
+    expect(manifest, contains('android.permission.READ_EXTERNAL_STORAGE'));
+    expect(manifest, contains('android:maxSdkVersion="32"'));
     for (final permission in [
-      'READ_EXTERNAL_STORAGE',
-      'READ_MEDIA_IMAGES',
       'WRITE_EXTERNAL_STORAGE',
       'MANAGE_EXTERNAL_STORAGE',
+      'READ_MEDIA_VIDEO',
+      'READ_MEDIA_AUDIO',
+      'ACCESS_MEDIA_LOCATION',
     ]) {
       expect(manifest, isNot(contains(permission)));
     }

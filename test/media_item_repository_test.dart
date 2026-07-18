@@ -85,6 +85,30 @@ void main() {
     expect(original.existsSync(), isTrue);
   });
 
+  test('imagem automática persiste origem e cria somente um job OCR', () async {
+    final jobStore = DriftProcessingJobStore(database);
+    repository = LocalMediaItemRepository(
+      store: store,
+      storage: storage,
+      ocrJobScheduler: LocalOcrJobScheduler(jobStore),
+    );
+    final original = createTestImage(temporaryDirectory, 'automatic.png');
+
+    final first = await repository.importScreenshots([
+      SelectedScreenshot(path: original.path, mimeType: 'image/png'),
+    ], origin: ImportOrigin.automatic);
+    final duplicate = await repository.importScreenshots([
+      SelectedScreenshot(path: original.path, mimeType: 'image/png'),
+    ], origin: ImportOrigin.automatic);
+
+    expect(first.importedItems.single.importOrigin, ImportOrigin.automatic);
+    expect(duplicate.duplicateCount, 1);
+    expect(await database.select(database.mediaItems).get(), hasLength(1));
+    expect(await database.select(database.processingJobs).get(), hasLength(1));
+    expect(privateCopies(privateDirectory), hasLength(1));
+    expect(original.existsSync(), isTrue);
+  });
+
   test('persiste múltiplos itens', () async {
     final first = createTestImage(temporaryDirectory, 'primeira.png');
     final second = createTestImage(temporaryDirectory, 'segunda.png', 1);
