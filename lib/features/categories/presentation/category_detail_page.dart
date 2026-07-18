@@ -12,7 +12,7 @@ import '../../processing/domain/processing_job.dart';
 import '../../tags/data/tag_repository.dart';
 import '../data/category_repository.dart';
 import '../domain/category.dart';
-import 'categories_page.dart';
+import 'folder_management_dialogs.dart';
 
 const categoryDetailRouteName = '/categories/detail';
 
@@ -72,6 +72,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
   bool _childrenLoading = true;
   bool _itemsLoading = true;
   bool _loadedFolderOnce = false;
+  bool _dialogOpen = false;
   String? _folderError;
   String? _childrenError;
   String? _itemsError;
@@ -208,23 +209,51 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
     if (mounted) await _load();
   }
 
-  Future<void> _rename() async {
+  Future<void> _withDialog(Future<void> Function() operation) async {
+    if (_dialogOpen) return;
+    setState(() => _dialogOpen = true);
+    try {
+      await operation();
+    } finally {
+      if (mounted) setState(() => _dialogOpen = false);
+    }
+  }
+
+  Future<void> _createChild() => _withDialog(() async {
+    final created = await showCreateCategoryDialog(
+      context,
+      widget.categoryRepository,
+      fixedParent: _category,
+    );
+    if (created != null && mounted) await _load();
+  });
+
+  Future<void> _rename() => _withDialog(() async {
     final renamed = await showRenameCategoryDialog(
       context,
       widget.categoryRepository,
       _category,
     );
     if (renamed != null && mounted) await _load();
-  }
+  });
 
-  Future<void> _delete() async {
+  Future<void> _move() => _withDialog(() async {
+    final moved = await showMoveCategoryDialog(
+      context,
+      widget.categoryRepository,
+      _category,
+    );
+    if (moved != null && mounted) await _load();
+  });
+
+  Future<void> _delete() => _withDialog(() async {
     final deleted = await confirmCategoryDeletion(
       context,
       widget.categoryRepository,
       CategorySummary(category: _category, mediaCount: _items.length),
     );
     if (deleted && mounted) Navigator.pop(context, true);
-  }
+  });
 
   void _openAncestor(Category category) {
     Navigator.of(context).popUntil(
@@ -255,12 +284,20 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         actions: [
           PopupMenuButton<String>(
             tooltip: 'Ações da pasta',
+            enabled: !_dialogOpen,
             onSelected: (action) {
+              if (action == 'create-child') unawaited(_createChild());
               if (action == 'rename') unawaited(_rename());
+              if (action == 'move') unawaited(_move());
               if (action == 'delete') unawaited(_delete());
             },
             itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'create-child',
+                child: Text('Nova subpasta'),
+              ),
               const PopupMenuItem(value: 'rename', child: Text('Renomear')),
+              const PopupMenuItem(value: 'move', child: Text('Mover')),
               PopupMenuItem(
                 value: 'delete',
                 child: Text(

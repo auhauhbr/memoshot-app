@@ -1542,6 +1542,431 @@ void main() {
     expect(find.text('Nova pasta'), findsOneWidget);
   });
 
+  testWidgets('CategoriesPage cria subpasta escolhendo pasta-mãe', (
+    tester,
+  ) async {
+    final categories = FakeCategoryRepository();
+    final books = await categories.createRootCategory('Livros');
+    await categories.createRootCategory('Carreira');
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('new-category-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Local: Raiz'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('choose-folder-parent')));
+    await tester.pumpAndSettle();
+    final destinationList = find.byKey(const Key('folder-destination-list'));
+    expect(find.byKey(const Key('destination-root')), findsOneWidget);
+    expect(
+      find.descendant(of: destinationList, matching: find.text('Carreira')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: destinationList, matching: find.text('Livros')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getTopLeft(
+            find.descendant(
+              of: destinationList,
+              matching: find.text('Carreira'),
+            ),
+          )
+          .dy,
+      lessThan(
+        tester
+            .getTopLeft(
+              find.descendant(
+                of: destinationList,
+                matching: find.text('Livros'),
+              ),
+            )
+            .dy,
+      ),
+    );
+    await tester.tap(find.byKey(Key('destination-${books.id}')));
+    await tester.pumpAndSettle();
+    expect(find.text('Local: Livros'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const Key('category-name-field')),
+      ' Trechos ',
+    );
+    await tester.tap(find.byKey(const Key('save-category-button')));
+    await tester.pumpAndSettle();
+
+    final child = (await categories.loadChildCategories(books.id)).single;
+    expect(child.name, 'Trechos');
+    expect(find.text('Livros/Trechos'), findsOneWidget);
+  });
+
+  testWidgets('CategoryDetailPage cria subpasta e atualiza imediatamente', (
+    tester,
+  ) async {
+    final categories = FakeCategoryRepository();
+    final books = await categories.createRootCategory('Livros');
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(Key('folder-${books.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Ações da pasta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nova subpasta'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Criar subpasta em Livros'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('category-name-field')),
+      'Capas',
+    );
+    await tester.tap(find.byKey(const Key('save-category-button')));
+    await tester.pumpAndSettle();
+
+    final child = (await categories.loadChildCategories(books.id)).single;
+    expect(find.byKey(Key('subfolder-${child.id}')), findsOneWidget);
+    expect(find.text('Capas'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Ações da pasta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nova subpasta'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('category-name-field')),
+      ' capas ',
+    );
+    await tester.tap(find.byKey(const Key('save-category-button')));
+    await tester.pump();
+    expect(find.text('Já existe uma pasta com esse nome.'), findsOneWidget);
+  });
+
+  testWidgets('mesmo nome pode ser criado em mães diferentes pela interface', (
+    tester,
+  ) async {
+    final categories = FakeCategoryRepository();
+    final books = await categories.createRootCategory('Livros');
+    final studies = await categories.createRootCategory('Estudos');
+    await categories.createSubcategory(parentId: books.id, name: 'Trechos');
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+
+    final studiesTile = find.byKey(ValueKey('category-tile-${studies.id}'));
+    await tester.tap(
+      find.descendant(
+        of: studiesTile,
+        matching: find.byType(PopupMenuButton<String>),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Nova subpasta'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('category-name-field')),
+      'trechos',
+    );
+    await tester.tap(find.byKey(const Key('save-category-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Livros/Trechos'), findsOneWidget);
+    expect(find.text('Estudos/trechos'), findsOneWidget);
+  });
+
+  testWidgets('seletor de movimento indica atual e bloqueia ciclo', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final categories = FakeCategoryRepository();
+    final root = await categories.createRootCategory(
+      'Pasta raiz com nome bastante comprido',
+    );
+    final child = await categories.createSubcategory(
+      parentId: root.id,
+      name: 'Filha',
+    );
+    final grandchild = await categories.createSubcategory(
+      parentId: child.id,
+      name: 'Neta',
+    );
+    await categories.createRootCategory('Destino');
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+
+    final rootTile = find.byKey(ValueKey('category-tile-${root.id}'));
+    await tester.tap(
+      find.descendant(
+        of: rootTile,
+        matching: find.byType(PopupMenuButton<String>),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mover'));
+    await tester.pumpAndSettle();
+    final confirm = tester.widget<FilledButton>(
+      find.byKey(const Key('confirm-category-move')),
+    );
+    expect(confirm.onPressed, isNull);
+    expect(find.textContaining('(atual)'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('choose-move-destination')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      tester
+          .widget<ListTile>(
+            find.descendant(
+              of: find.byKey(Key('destination-${root.id}')),
+              matching: find.byType(ListTile),
+            ),
+          )
+          .enabled,
+      isFalse,
+    );
+    expect(
+      tester
+          .widget<ListTile>(
+            find.descendant(
+              of: find.byKey(Key('destination-${child.id}')),
+              matching: find.byType(ListTile),
+            ),
+          )
+          .enabled,
+      isFalse,
+    );
+    expect(
+      tester
+          .widget<ListTile>(
+            find.descendant(
+              of: find.byKey(Key('destination-${grandchild.id}')),
+              matching: find.byType(ListTile),
+            ),
+          )
+          .enabled,
+      isFalse,
+    );
+    expect(find.text('Destino atual'), findsOneWidget);
+    await tester.tap(find.text('Cancelar').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(categories.moveCallCount, 0);
+  });
+
+  testWidgets('move raiz com subárvore e atualiza breadcrumb e Home', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'mover-pasta.png');
+    final item = createMediaItem(1, image.path);
+    final media = FakeMediaItemRepository(initialItems: [item]);
+    final categories = FakeCategoryRepository();
+    final books = await categories.createRootCategory('Livros');
+    final excerpts = await categories.createSubcategory(
+      parentId: books.id,
+      name: 'Trechos',
+    );
+    final studies = await categories.createRootCategory('Estudos');
+    await categories.replaceForMedia(1, {books.id});
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: media,
+        categoryRepository: categories,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(Key('folder-${books.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Ações da pasta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mover'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('choose-move-destination')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('destination-${studies.id}')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-category-move')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(Key('breadcrumb-${studies.id}')), findsOneWidget);
+    expect((await categories.findCategoryById(books.id))?.parentId, studies.id);
+    expect(
+      (await categories.findCategoryById(excerpts.id))?.parentId,
+      books.id,
+    );
+    expect((await categories.loadForMedia(1)).single.id, books.id);
+    await tester.tap(find.byKey(const Key('breadcrumb-folders')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(Key('folder-${books.id}')), findsNothing);
+    expect(find.byKey(Key('folder-${studies.id}')), findsOneWidget);
+  });
+
+  testWidgets('move subpasta para outra mãe e depois para raiz', (
+    tester,
+  ) async {
+    final categories = FakeCategoryRepository();
+    final books = await categories.createRootCategory('Livros');
+    final studies = await categories.createRootCategory('Estudos');
+    final child = await categories.createSubcategory(
+      parentId: books.id,
+      name: 'Trechos',
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+
+    await _moveCategoryFromManagement(tester, child.id, studies.id);
+    expect(find.text('Estudos/Trechos'), findsOneWidget);
+    final moved = await categories.findCategoryById(child.id);
+    expect(moved?.id, child.id);
+    expect(moved?.parentId, studies.id);
+
+    await _moveCategoryFromManagement(tester, child.id, null);
+    expect((await categories.findCategoryById(child.id))?.parentId, isNull);
+    expect(find.text('Trechos'), findsOneWidget);
+  });
+
+  testWidgets('conflito e erro ao mover mantêm o dialog aberto', (
+    tester,
+  ) async {
+    final categories = ControlledCategoryRepository();
+    final books = await categories.createRootCategory('Livros');
+    final studies = await categories.createRootCategory('Estudos');
+    final child = await categories.createSubcategory(
+      parentId: books.id,
+      name: 'Trechos',
+    );
+    await categories.createSubcategory(parentId: studies.id, name: 'trechos');
+    categories.createOperationCalls = 0;
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await _openMoveDialog(tester, child.id);
+    await _selectMoveDestination(tester, studies.id);
+    await tester.tap(find.byKey(const Key('confirm-category-move')));
+    await tester.pump();
+    expect(
+      find.text('Já existe uma pasta com esse nome no destino escolhido.'),
+      findsOneWidget,
+    );
+    expect((await categories.findCategoryById(child.id))?.parentId, books.id);
+
+    categories.failMove = true;
+    await tester.tap(find.byKey(const Key('choose-move-destination')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('destination-root')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-category-move')));
+    await tester.pump();
+    expect(find.text('Não foi possível mover a pasta.'), findsOneWidget);
+
+    categories.failMove = false;
+    categories.moveFailure = const CategoryHierarchyException(
+      CategoryHierarchyError.selfParent,
+    );
+    await tester.tap(find.byKey(const Key('confirm-category-move')));
+    await tester.pump();
+    expect(
+      find.text('Uma pasta não pode ser movida para dentro dela mesma.'),
+      findsOneWidget,
+    );
+
+    categories.moveFailure = const CategoryHierarchyException(
+      CategoryHierarchyError.cycle,
+    );
+    await tester.tap(find.byKey(const Key('confirm-category-move')));
+    await tester.pump();
+    expect(
+      find.text('Uma pasta não pode ser movida para uma de suas subpastas.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('criação e movimento pendentes impedem envios repetidos', (
+    tester,
+  ) async {
+    final categories = ControlledCategoryRepository();
+    final root = await categories.createRootCategory('Livros');
+    final destination = await categories.createRootCategory('Estudos');
+    categories.createOperationCalls = 0;
+    categories.createBlocker = Completer<void>();
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('new-category-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('category-name-field')),
+      'Projetos',
+    );
+    await tester.tap(find.byKey(const Key('save-category-button')));
+    await tester.tap(find.byKey(const Key('save-category-button')));
+    await tester.pump();
+    expect(categories.createOperationCalls, 1);
+    categories.createBlocker!.complete();
+    await tester.pumpAndSettle();
+
+    categories.moveBlocker = Completer<void>();
+    await _openMoveDialog(tester, root.id);
+    await _selectMoveDestination(tester, destination.id);
+    await tester.tap(find.byKey(const Key('confirm-category-move')));
+    await tester.tap(find.byKey(const Key('confirm-category-move')));
+    await tester.pump();
+    expect(categories.moveOperationCalls, 1);
+    categories.moveBlocker!.complete();
+    await tester.pumpAndSettle();
+    expect(
+      (await categories.findCategoryById(root.id))?.parentId,
+      destination.id,
+    );
+  });
+
+  testWidgets('erro ao criar não fecha dialog e permite corrigir', (
+    tester,
+  ) async {
+    final categories = ControlledCategoryRepository()..failCreate = true;
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('categories-summary')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('new-category-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('category-name-field')),
+      'Projetos',
+    );
+    await tester.tap(find.byKey(const Key('save-category-button')));
+    await tester.pump();
+
+    expect(find.text('Não foi possível criar a pasta.'), findsOneWidget);
+    expect(find.byKey(const Key('save-category-button')), findsOneWidget);
+  });
+
   testWidgets('detalhe distingue pasta inexistente de falha de carregamento', (
     tester,
   ) async {
@@ -2040,15 +2465,12 @@ void main() {
     await tester.enterText(find.byType(TextField), ' carreira ');
     await tester.tap(find.byKey(const Key('save-category-button')));
     await tester.pump();
-    expect(
-      find.text('Já existe uma pasta com esse nome neste local.'),
-      findsOneWidget,
-    );
+    expect(find.text('Já existe uma pasta com esse nome.'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), '   ');
     await tester.tap(find.byKey(const Key('save-category-button')));
     await tester.pump();
-    expect(find.text('Informe um nome para a pasta.'), findsOneWidget);
+    expect(find.text('Digite um nome para a pasta.'), findsOneWidget);
   });
 
   testWidgets('detalhes associam múltiplas categorias e permitem desmarcar', (
@@ -2258,10 +2680,7 @@ void main() {
     );
     await tester.tap(find.byKey(const Key('save-category-rename')));
     await tester.pump();
-    expect(
-      find.text('Já existe uma pasta com esse nome neste local.'),
-      findsOneWidget,
-    );
+    expect(find.text('Já existe uma pasta com esse nome.'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const Key('rename-category-field')),
@@ -2281,6 +2700,11 @@ void main() {
     final child = await categories.createSubcategory(
       parentId: root.id,
       name: 'Trechos',
+    );
+    final otherRoot = await categories.createRootCategory('Estudos');
+    await categories.createSubcategory(
+      parentId: otherRoot.id,
+      name: 'Citações',
     );
     await tester.pumpWidget(
       buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
@@ -2306,6 +2730,43 @@ void main() {
     expect(find.text('Livros/Citações'), findsOneWidget);
     expect((await categories.findCategoryById(child.id))?.parentId, root.id);
   });
+
+  testWidgets(
+    'excluir folha no detalhe retorna com segurança e preserva print',
+    (tester) async {
+      final image = createTestImage(temporaryDirectory, 'folha-excluida.png');
+      final item = createMediaItem(1, image.path);
+      final media = FakeMediaItemRepository(initialItems: [item]);
+      final categories = FakeCategoryRepository();
+      final leaf = await categories.createRootCategory('Temporária');
+      await categories.replaceForMedia(item.id, {leaf.id});
+      await tester.pumpWidget(
+        buildTestApp(
+          FakeScreenshotPicker(),
+          repository: media,
+          categoryRepository: categories,
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(Key('folder-${leaf.id}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Ações da pasta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Excluir pasta'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Os prints não serão excluídos.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('confirm-category-deletion')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(Key('folder-${leaf.id}')), findsNothing);
+      expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+      expect(media.itemCount, 1);
+      expect(image.existsSync(), isTrue);
+    },
+  );
 
   testWidgets('cancelar exclusão preserva categoria e screenshot', (
     tester,
@@ -2359,6 +2820,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Excluir pasta'));
     await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Os prints não serão excluídos.'),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const Key('confirm-category-deletion')));
     await tester.pumpAndSettle();
 
@@ -3692,6 +4157,7 @@ class FakeCategoryRepository implements CategoryRepository {
 
   final List<Category> _categories;
   final Map<int, Set<int>> _associations = {};
+  int moveCallCount = 0;
 
   @override
   Future<Category> createCategory(String name) async {
@@ -3880,11 +4346,32 @@ class FakeCategoryRepository implements CategoryRepository {
     Category category, {
     required int? parentId,
   }) async {
+    moveCallCount++;
+    if (await findCategoryById(category.id) == null) {
+      throw const CategoryHierarchyException(
+        CategoryHierarchyError.categoryNotFound,
+      );
+    }
+    if (parentId != null && await findCategoryById(parentId) == null) {
+      throw const CategoryHierarchyException(
+        CategoryHierarchyError.parentNotFound,
+      );
+    }
     if (await wouldCreateCycle(categoryId: category.id, parentId: parentId)) {
       throw CategoryHierarchyException(
         parentId == category.id
             ? CategoryHierarchyError.selfParent
             : CategoryHierarchyError.cycle,
+      );
+    }
+    if (_categories.any(
+      (item) =>
+          item.id != category.id &&
+          item.parentId == parentId &&
+          item.normalizedName == category.normalizedName,
+    )) {
+      throw const CategoryValidationException(
+        CategoryValidationError.duplicate,
       );
     }
     final moved = Category(
@@ -4009,10 +4496,84 @@ class FailingCategoryRepository extends FakeCategoryRepository {
   }
 }
 
+class ControlledCategoryRepository extends FakeCategoryRepository {
+  bool failCreate = false;
+  bool failMove = false;
+  Object? moveFailure;
+  Completer<void>? createBlocker;
+  Completer<void>? moveBlocker;
+  int createOperationCalls = 0;
+  int moveOperationCalls = 0;
+
+  @override
+  Future<Category> createRootCategory(String name) async {
+    createOperationCalls++;
+    await createBlocker?.future;
+    if (failCreate) throw Exception('falha privada');
+    return super.createRootCategory(name);
+  }
+
+  @override
+  Future<Category> createSubcategory({
+    required int parentId,
+    required String name,
+  }) async {
+    createOperationCalls++;
+    await createBlocker?.future;
+    if (failCreate) throw Exception('falha privada');
+    return super.createSubcategory(parentId: parentId, name: name);
+  }
+
+  @override
+  Future<Category> moveCategory(
+    Category category, {
+    required int? parentId,
+  }) async {
+    moveOperationCalls++;
+    await moveBlocker?.future;
+    if (moveFailure != null) throw moveFailure!;
+    if (failMove) throw Exception('falha privada');
+    return super.moveCategory(category, parentId: parentId);
+  }
+}
+
 Future<void> openFirstScreenshot(WidgetTester tester) async {
   final tile = find.byKey(const ValueKey('screenshot-tile-1'));
   await tester.ensureVisible(tile);
   await tester.tap(tile);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openMoveDialog(WidgetTester tester, int categoryId) async {
+  final tile = find.byKey(ValueKey('category-tile-$categoryId'));
+  await tester.ensureVisible(tile);
+  await tester.tap(
+    find.descendant(of: tile, matching: find.byType(PopupMenuButton<String>)),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Mover'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _selectMoveDestination(WidgetTester tester, int? parentId) async {
+  await tester.tap(find.byKey(const Key('choose-move-destination')));
+  await tester.pumpAndSettle();
+  await tester.tap(
+    parentId == null
+        ? find.byKey(const Key('destination-root'))
+        : find.byKey(Key('destination-$parentId')),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _moveCategoryFromManagement(
+  WidgetTester tester,
+  int categoryId,
+  int? parentId,
+) async {
+  await _openMoveDialog(tester, categoryId);
+  await _selectMoveDestination(tester, parentId);
+  await tester.tap(find.byKey(const Key('confirm-category-move')));
   await tester.pumpAndSettle();
 }
 

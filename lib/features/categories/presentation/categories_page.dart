@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../library/data/media_item_repository.dart';
@@ -7,6 +9,8 @@ import '../../tags/data/tag_repository.dart';
 import '../data/category_repository.dart';
 import '../domain/category.dart';
 import 'category_detail_page.dart';
+import 'category_tree.dart';
+import 'folder_management_dialogs.dart';
 
 class CategoriesPage extends StatefulWidget {
   const CategoriesPage({
@@ -31,20 +35,23 @@ class CategoriesPage extends StatefulWidget {
 class _CategoriesPageState extends State<CategoriesPage> {
   List<CategorySummary> _categories = const [];
   bool _loading = true;
+  bool _dialogOpen = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    unawaited(_load());
   }
 
   Future<void> _load() async {
     try {
       final categories = await widget.categoryRepository.loadCategories();
-      if (mounted) {
-        setState(() => _categories = categories);
-      }
+      if (!mounted) return;
+      setState(() {
+        _categories = categories;
+        _error = null;
+      });
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'Não foi possível carregar as pastas.');
@@ -54,13 +61,33 @@ class _CategoriesPageState extends State<CategoriesPage> {
     }
   }
 
-  Future<void> _create() async {
+  Future<void> _withDialog(Future<void> Function() operation) async {
+    if (_dialogOpen) return;
+    setState(() => _dialogOpen = true);
+    try {
+      await operation();
+    } finally {
+      if (mounted) setState(() => _dialogOpen = false);
+    }
+  }
+
+  Future<void> _create() => _withDialog(() async {
     final created = await showCreateCategoryDialog(
       context,
       widget.categoryRepository,
+      allowParentSelection: true,
     );
-    if (created != null) await _load();
-  }
+    if (created != null && mounted) await _load();
+  });
+
+  Future<void> _createChild(Category category) => _withDialog(() async {
+    final created = await showCreateCategoryDialog(
+      context,
+      widget.categoryRepository,
+      fixedParent: category,
+    );
+    if (created != null && mounted) await _load();
+  });
 
   Future<void> _open(CategorySummary summary) async {
     await Navigator.of(context).push<bool>(
@@ -73,32 +100,57 @@ class _CategoriesPageState extends State<CategoriesPage> {
         tagRepository: widget.tagRepository,
       ),
     );
-    await _load();
+    if (mounted) await _load();
   }
 
-  Future<void> _rename(CategorySummary summary) async {
+  Future<void> _rename(CategorySummary summary) => _withDialog(() async {
     final renamed = await showRenameCategoryDialog(
       context,
       widget.categoryRepository,
       summary.category,
     );
-    if (renamed != null) await _load();
-  }
+    if (renamed != null && mounted) await _load();
+  });
 
-  Future<void> _delete(CategorySummary summary) async {
-    if (await confirmCategoryDeletion(
+  Future<void> _move(CategorySummary summary) => _withDialog(() async {
+    final moved = await showMoveCategoryDialog(
       context,
       widget.categoryRepository,
-      summary,
-    )) {
+      summary.category,
+    );
+    if (moved != null && mounted) await _load();
+  });
+
+  Future<void> _delete(CategorySummary summary) => _withDialog(() async {
+    if (await confirmCategoryDeletion(
+          context,
+          widget.categoryRepository,
+          summary,
+        ) &&
+        mounted) {
       await _load();
+    }
+  });
+
+  void _handleAction(String action, CategorySummary summary) {
+    switch (action) {
+      case 'open':
+        unawaited(_open(summary));
+      case 'create-child':
+        unawaited(_createChild(summary.category));
+      case 'rename':
+        unawaited(_rename(summary));
+      case 'move':
+        unawaited(_move(summary));
+      case 'delete':
+        unawaited(_delete(summary));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final entries = _hierarchyEntries(_categories);
+    final entries = buildCategoryTreeEntries(_categories);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Pastas'),
@@ -140,7 +192,9 @@ class _CategoriesPageState extends State<CategoriesPage> {
                                 key: ValueKey(
                                   'category-tile-${summary.category.id}',
                                 ),
-                                onTap: () => _open(summary),
+                                onTap: _dialogOpen
+                                    ? null
+                                    : () => _open(summary),
                                 leading: Icon(
                                   entry.depth == 0
                                       ? Icons.folder_outlined
@@ -169,14 +223,25 @@ class _CategoriesPageState extends State<CategoriesPage> {
                                 ),
                                 trailing: PopupMenuButton<String>(
                                   tooltip: 'Ações da pasta',
-                                  onSelected: (action) {
-                                    if (action == 'rename') _rename(summary);
-                                    if (action == 'delete') _delete(summary);
-                                  },
+                                  enabled: !_dialogOpen,
+                                  onSelected: (action) =>
+                                      _handleAction(action, summary),
                                   itemBuilder: (_) => [
+                                    const PopupMenuItem(
+                                      value: 'open',
+                                      child: Text('Abrir'),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'create-child',
+                                      child: Text('Nova subpasta'),
+                                    ),
                                     const PopupMenuItem(
                                       value: 'rename',
                                       child: Text('Renomear'),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'move',
+                                      child: Text('Mover'),
                                     ),
                                     PopupMenuItem(
                                       value: 'delete',
@@ -196,7 +261,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     key: const Key('new-category-button'),
-                    onPressed: _create,
+                    onPressed: _dialogOpen ? null : _create,
                     icon: const Icon(Icons.add, size: 19),
                     label: const Text('Nova pasta'),
                   ),
@@ -208,333 +273,4 @@ class _CategoriesPageState extends State<CategoriesPage> {
       ),
     );
   }
-}
-
-Future<Category?> showCreateCategoryDialog(
-  BuildContext context,
-  CategoryRepository repository,
-) {
-  return showDialog<Category>(
-    context: context,
-    builder: (_) => _CreateCategoryDialog(repository: repository),
-  );
-}
-
-class _CreateCategoryDialog extends StatefulWidget {
-  const _CreateCategoryDialog({required this.repository});
-
-  final CategoryRepository repository;
-
-  @override
-  State<_CreateCategoryDialog> createState() => _CreateCategoryDialogState();
-}
-
-class _CreateCategoryDialogState extends State<_CreateCategoryDialog> {
-  final _controller = TextEditingController();
-  String? _error;
-  bool _saving = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (_saving) return;
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      final category = await widget.repository.createCategory(_controller.text);
-      if (mounted) Navigator.pop(context, category);
-    } on CategoryValidationException catch (error) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-          _error = switch (error.error) {
-            CategoryValidationError.empty => 'Informe um nome para a pasta.',
-            CategoryValidationError.tooLong => 'Use no máximo 40 caracteres.',
-            CategoryValidationError.duplicate =>
-              'Já existe uma pasta com esse nome neste local.',
-          };
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-          _error = 'Não foi possível criar a pasta.';
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Nova pasta'),
-      content: TextField(
-        key: const Key('category-name-field'),
-        controller: _controller,
-        autofocus: true,
-        maxLength: 40,
-        textInputAction: TextInputAction.done,
-        onSubmitted: (_) => _save(),
-        decoration: InputDecoration(
-          labelText: 'Nome da pasta',
-          errorText: _error,
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          key: const Key('save-category-button'),
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox.square(
-                  dimension: 17,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Criar'),
-        ),
-      ],
-    );
-  }
-}
-
-Future<Category?> showRenameCategoryDialog(
-  BuildContext context,
-  CategoryRepository repository,
-  Category category,
-) {
-  return showDialog<Category>(
-    context: context,
-    builder: (_) =>
-        _RenameCategoryDialog(repository: repository, category: category),
-  );
-}
-
-class _RenameCategoryDialog extends StatefulWidget {
-  const _RenameCategoryDialog({
-    required this.repository,
-    required this.category,
-  });
-
-  final CategoryRepository repository;
-  final Category category;
-
-  @override
-  State<_RenameCategoryDialog> createState() => _RenameCategoryDialogState();
-}
-
-class _RenameCategoryDialogState extends State<_RenameCategoryDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.category.name,
-  );
-  String? _error;
-  bool _saving = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (_saving) return;
-    setState(() {
-      _saving = true;
-      _error = null;
-    });
-    try {
-      final category = await widget.repository.renameCategory(
-        widget.category,
-        _controller.text,
-      );
-      if (mounted) Navigator.pop(context, category);
-    } on CategoryValidationException catch (error) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-          _error = _categoryValidationMessage(error.error);
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _saving = false;
-          _error = 'Não foi possível renomear a pasta.';
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Renomear pasta'),
-      content: TextField(
-        key: const Key('rename-category-field'),
-        controller: _controller,
-        autofocus: true,
-        maxLength: 40,
-        textInputAction: TextInputAction.done,
-        onSubmitted: (_) => _save(),
-        decoration: InputDecoration(
-          labelText: 'Nome da pasta',
-          errorText: _error,
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          key: const Key('save-category-rename'),
-          onPressed: _saving ? null : _save,
-          child: _saving
-              ? const SizedBox.square(
-                  dimension: 17,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Salvar'),
-        ),
-      ],
-    );
-  }
-}
-
-Future<bool> confirmCategoryDeletion(
-  BuildContext context,
-  CategoryRepository repository,
-  CategorySummary summary,
-) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text('Excluir “${summary.category.name}”?'),
-      content: Text(
-        '${summary.mediaCount} '
-        '${summary.mediaCount == 1 ? 'screenshot está associado' : 'screenshots estão associados'}. '
-        'Esta ação removerá a pasta e suas associações. '
-        'Os screenshots continuarão na biblioteca e os arquivos originais '
-        'não serão alterados.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancelar'),
-        ),
-        TextButton(
-          key: const Key('confirm-category-deletion'),
-          onPressed: () => Navigator.pop(context, true),
-          child: Text(
-            'Excluir pasta',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-        ),
-      ],
-    ),
-  );
-  if (confirmed != true || !context.mounted) return false;
-  try {
-    await repository.deleteCategory(summary.category.id);
-    return true;
-  } on CategoryHierarchyException catch (error) {
-    if (context.mounted) {
-      final message = error.error == CategoryHierarchyError.hasChildren
-          ? 'Esta pasta possui subpastas e não pode ser excluída.'
-          : 'Não foi possível excluir a pasta.';
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(message)));
-    }
-    return false;
-  } catch (_) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível excluir a pasta.')),
-      );
-    }
-    return false;
-  }
-}
-
-String _categoryValidationMessage(CategoryValidationError error) {
-  return switch (error) {
-    CategoryValidationError.empty => 'Informe um nome para a pasta.',
-    CategoryValidationError.tooLong => 'Use no máximo 40 caracteres.',
-    CategoryValidationError.duplicate =>
-      'Já existe uma pasta com esse nome neste local.',
-  };
-}
-
-class _HierarchyEntry {
-  const _HierarchyEntry({
-    required this.summary,
-    required this.depth,
-    required this.path,
-  });
-
-  final CategorySummary summary;
-  final int depth;
-  final String path;
-}
-
-List<_HierarchyEntry> _hierarchyEntries(List<CategorySummary> summaries) {
-  final byParent = <int?, List<CategorySummary>>{};
-  for (final summary in summaries) {
-    byParent.putIfAbsent(summary.category.parentId, () => []).add(summary);
-  }
-  for (final children in byParent.values) {
-    children.sort((first, second) {
-      final name = first.category.normalizedName.compareTo(
-        second.category.normalizedName,
-      );
-      return name != 0 ? name : first.category.id.compareTo(second.category.id);
-    });
-  }
-
-  final entries = <_HierarchyEntry>[];
-  final visited = <int>{};
-  final pending = <({CategorySummary summary, int depth, String parentPath})>[
-    for (final root in (byParent[null] ?? const []).reversed)
-      (summary: root, depth: 0, parentPath: ''),
-  ];
-  while (pending.isNotEmpty) {
-    final current = pending.removeLast();
-    if (!visited.add(current.summary.category.id)) continue;
-    final path = current.parentPath.isEmpty
-        ? current.summary.category.name
-        : '${current.parentPath}/${current.summary.category.name}';
-    entries.add(
-      _HierarchyEntry(
-        summary: current.summary,
-        depth: current.depth,
-        path: path,
-      ),
-    );
-    final children = byParent[current.summary.category.id] ?? const [];
-    for (final child in children.reversed) {
-      pending.add((summary: child, depth: current.depth + 1, parentPath: path));
-    }
-  }
-  for (final summary in summaries) {
-    if (visited.add(summary.category.id)) {
-      entries.add(
-        _HierarchyEntry(
-          summary: summary,
-          depth: 0,
-          path: summary.category.name,
-        ),
-      );
-    }
-  }
-  return entries;
 }

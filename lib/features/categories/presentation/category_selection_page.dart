@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/category_repository.dart';
 import '../domain/category.dart';
-import 'categories_page.dart';
+import 'folder_management_dialogs.dart';
 
 class CategorySelectionPage extends StatefulWidget {
   const CategorySelectionPage({
