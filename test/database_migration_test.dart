@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 8 para 11 preservando dados e hierarquia', () async {
+  test('migra schema 8 para 12 preservando dados e hierarquia', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_test_',
     );
@@ -100,7 +100,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 11);
+    expect(version.read<int>('user_version'), 12);
     expect(rows, hasLength(2));
     expect(rows.first.internalName, 'copia.png');
     expect(rows.first.mediaHash, isNull);
@@ -126,6 +126,10 @@ void main() {
     expect(mediaCategories.single.categoryId, 1);
     expect(await migrated.select(migrated.tags).get(), isEmpty);
     expect(await migrated.select(migrated.mediaTags).get(), isEmpty);
+    expect(
+      await migrated.select(migrated.classificationSuggestions).get(),
+      isEmpty,
+    );
     final settings = await migrated
         .select(migrated.automaticImportSettings)
         .getSingle();
@@ -216,7 +220,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 10 para 11 preservando IDs e associações', () async {
+  test('migra schema 10 para 12 preservando IDs e associações', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_10_test_',
     );
@@ -273,13 +277,101 @@ void main() {
         .select(migrated.mediaCategories)
         .getSingle();
 
-    expect(version.read<int>('user_version'), 11);
+    expect(version.read<int>('user_version'), 12);
     expect(category.id, 7);
     expect(category.name, 'Livros');
     expect(category.parentId, isNull);
     expect(relation.mediaItemId, 3);
     expect(relation.categoryId, 7);
     expect(await migrated.select(migrated.mediaItems).get(), hasLength(1));
+    expect(
+      await migrated.select(migrated.classificationSuggestions).get(),
+      isEmpty,
+    );
+
+    await migrated.close();
+    directory.deleteSync(recursive: true);
+  });
+
+  test('migra schema 11 para 12 e cria fila vazia', () async {
+    final directory = Directory.systemTemp.createTempSync(
+      'memoshot_migration_11_test_',
+    );
+    final databaseFile = File('${directory.path}/contexto.sqlite');
+    final legacy = _LegacyDatabase(NativeDatabase(databaseFile));
+    await legacy.customSelect('SELECT 1').get();
+    await legacy.customStatement(
+      'ALTER TABLE media_items ADD COLUMN captured_at INTEGER NULL',
+    );
+    await legacy.customStatement('''
+      CREATE TABLE tags (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        normalized_name TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
+    await legacy.customStatement('''
+      CREATE TABLE media_tags (
+        media_item_id INTEGER NOT NULL
+          REFERENCES media_items (id) ON DELETE CASCADE,
+        tag_id INTEGER NOT NULL
+          REFERENCES tags (id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (media_item_id, tag_id)
+      )
+    ''');
+    await legacy.customStatement(
+      'ALTER TABLE categories ADD COLUMN parent_id INTEGER NULL '
+      'REFERENCES categories (id) ON DELETE RESTRICT',
+    );
+    final timestamp = DateTime(2025).millisecondsSinceEpoch ~/ 1000;
+    await legacy.customStatement(
+      "INSERT INTO media_items (id, private_path, internal_name, imported_at, "
+      "source_mode, status) VALUES (4, '/tmp/item.png', 'item.png', ?, "
+      "'picker', 'ready')",
+      [timestamp],
+    );
+    await legacy.customStatement(
+      "INSERT INTO categories (id, name, normalized_name, created_at) "
+      "VALUES (9, 'Livros', 'livros', ?)",
+      [timestamp],
+    );
+    await legacy.customStatement(
+      'INSERT INTO media_categories '
+      '(media_item_id, category_id, created_at) VALUES (4, 9, ?)',
+      [timestamp],
+    );
+    await legacy.customStatement(
+      "INSERT INTO ocr_results (media_item_id, full_text, normalized_text, "
+      "engine, engine_version, processed_at) VALUES "
+      "(4, 'Texto preservado', 'texto preservado', 'Teste', '1', ?)",
+      [timestamp],
+    );
+    await legacy.customStatement('PRAGMA user_version = 11');
+    await legacy.close();
+
+    final migrated = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
+    expect(
+      (await migrated.customSelect('PRAGMA user_version').getSingle())
+          .read<int>('user_version'),
+      12,
+    );
+    expect((await migrated.select(migrated.mediaItems).getSingle()).id, 4);
+    expect((await migrated.select(migrated.categories).getSingle()).id, 9);
+    expect(
+      (await migrated.select(migrated.mediaCategories).getSingle()).categoryId,
+      9,
+    );
+    expect(
+      (await migrated.select(migrated.ocrResults).getSingle()).fullText,
+      'Texto preservado',
+    );
+    expect(
+      await migrated.select(migrated.classificationSuggestions).get(),
+      isEmpty,
+    );
 
     await migrated.close();
     directory.deleteSync(recursive: true);

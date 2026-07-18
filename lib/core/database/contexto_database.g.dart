@@ -3297,6 +3297,765 @@ class AutomaticImportSettingsCompanion
   }
 }
 
+class $ClassificationSuggestionsTable extends ClassificationSuggestions
+    with TableInfo<$ClassificationSuggestionsTable, ClassificationSuggestion> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ClassificationSuggestionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _mediaItemIdMeta = const VerificationMeta(
+    'mediaItemId',
+  );
+  @override
+  late final GeneratedColumn<int> mediaItemId = GeneratedColumn<int>(
+    'media_item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES media_items (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _suggestedCategoryNameMeta =
+      const VerificationMeta('suggestedCategoryName');
+  @override
+  late final GeneratedColumn<String> suggestedCategoryName =
+      GeneratedColumn<String>(
+        'suggested_category_name',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _confidenceMeta = const VerificationMeta(
+    'confidence',
+  );
+  @override
+  late final GeneratedColumn<double> confidence = GeneratedColumn<double>(
+    'confidence',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _hasSuggestionMeta = const VerificationMeta(
+    'hasSuggestion',
+  );
+  @override
+  late final GeneratedColumn<bool> hasSuggestion = GeneratedColumn<bool>(
+    'has_suggestion',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("has_suggestion" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _suggestedTagsJsonMeta = const VerificationMeta(
+    'suggestedTagsJson',
+  );
+  @override
+  late final GeneratedColumn<String> suggestedTagsJson =
+      GeneratedColumn<String>(
+        'suggested_tags_json',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _evidenceJsonMeta = const VerificationMeta(
+    'evidenceJson',
+  );
+  @override
+  late final GeneratedColumn<String> evidenceJson = GeneratedColumn<String>(
+    'evidence_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _reviewReasonMeta = const VerificationMeta(
+    'reviewReason',
+  );
+  @override
+  late final GeneratedColumn<String> reviewReason = GeneratedColumn<String>(
+    'review_reason',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _engineVersionMeta = const VerificationMeta(
+    'engineVersion',
+  );
+  @override
+  late final GeneratedColumn<int> engineVersion = GeneratedColumn<int>(
+    'engine_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _resolvedAtMeta = const VerificationMeta(
+    'resolvedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> resolvedAt = GeneratedColumn<DateTime>(
+    'resolved_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    mediaItemId,
+    suggestedCategoryName,
+    confidence,
+    hasSuggestion,
+    suggestedTagsJson,
+    evidenceJson,
+    status,
+    reviewReason,
+    engineVersion,
+    createdAt,
+    updatedAt,
+    resolvedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'classification_suggestions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ClassificationSuggestion> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('media_item_id')) {
+      context.handle(
+        _mediaItemIdMeta,
+        mediaItemId.isAcceptableOrUnknown(
+          data['media_item_id']!,
+          _mediaItemIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('suggested_category_name')) {
+      context.handle(
+        _suggestedCategoryNameMeta,
+        suggestedCategoryName.isAcceptableOrUnknown(
+          data['suggested_category_name']!,
+          _suggestedCategoryNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('confidence')) {
+      context.handle(
+        _confidenceMeta,
+        confidence.isAcceptableOrUnknown(data['confidence']!, _confidenceMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_confidenceMeta);
+    }
+    if (data.containsKey('has_suggestion')) {
+      context.handle(
+        _hasSuggestionMeta,
+        hasSuggestion.isAcceptableOrUnknown(
+          data['has_suggestion']!,
+          _hasSuggestionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_hasSuggestionMeta);
+    }
+    if (data.containsKey('suggested_tags_json')) {
+      context.handle(
+        _suggestedTagsJsonMeta,
+        suggestedTagsJson.isAcceptableOrUnknown(
+          data['suggested_tags_json']!,
+          _suggestedTagsJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_suggestedTagsJsonMeta);
+    }
+    if (data.containsKey('evidence_json')) {
+      context.handle(
+        _evidenceJsonMeta,
+        evidenceJson.isAcceptableOrUnknown(
+          data['evidence_json']!,
+          _evidenceJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_evidenceJsonMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statusMeta);
+    }
+    if (data.containsKey('review_reason')) {
+      context.handle(
+        _reviewReasonMeta,
+        reviewReason.isAcceptableOrUnknown(
+          data['review_reason']!,
+          _reviewReasonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('engine_version')) {
+      context.handle(
+        _engineVersionMeta,
+        engineVersion.isAcceptableOrUnknown(
+          data['engine_version']!,
+          _engineVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_engineVersionMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('resolved_at')) {
+      context.handle(
+        _resolvedAtMeta,
+        resolvedAt.isAcceptableOrUnknown(data['resolved_at']!, _resolvedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {mediaItemId};
+  @override
+  ClassificationSuggestion map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ClassificationSuggestion(
+      mediaItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}media_item_id'],
+      )!,
+      suggestedCategoryName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}suggested_category_name'],
+      ),
+      confidence: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}confidence'],
+      )!,
+      hasSuggestion: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}has_suggestion'],
+      )!,
+      suggestedTagsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}suggested_tags_json'],
+      )!,
+      evidenceJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}evidence_json'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      reviewReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}review_reason'],
+      ),
+      engineVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}engine_version'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      resolvedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}resolved_at'],
+      ),
+    );
+  }
+
+  @override
+  $ClassificationSuggestionsTable createAlias(String alias) {
+    return $ClassificationSuggestionsTable(attachedDatabase, alias);
+  }
+}
+
+class ClassificationSuggestion extends DataClass
+    implements Insertable<ClassificationSuggestion> {
+  final int mediaItemId;
+  final String? suggestedCategoryName;
+  final double confidence;
+  final bool hasSuggestion;
+  final String suggestedTagsJson;
+  final String evidenceJson;
+  final String status;
+  final String? reviewReason;
+  final int engineVersion;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? resolvedAt;
+  const ClassificationSuggestion({
+    required this.mediaItemId,
+    this.suggestedCategoryName,
+    required this.confidence,
+    required this.hasSuggestion,
+    required this.suggestedTagsJson,
+    required this.evidenceJson,
+    required this.status,
+    this.reviewReason,
+    required this.engineVersion,
+    required this.createdAt,
+    required this.updatedAt,
+    this.resolvedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['media_item_id'] = Variable<int>(mediaItemId);
+    if (!nullToAbsent || suggestedCategoryName != null) {
+      map['suggested_category_name'] = Variable<String>(suggestedCategoryName);
+    }
+    map['confidence'] = Variable<double>(confidence);
+    map['has_suggestion'] = Variable<bool>(hasSuggestion);
+    map['suggested_tags_json'] = Variable<String>(suggestedTagsJson);
+    map['evidence_json'] = Variable<String>(evidenceJson);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || reviewReason != null) {
+      map['review_reason'] = Variable<String>(reviewReason);
+    }
+    map['engine_version'] = Variable<int>(engineVersion);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || resolvedAt != null) {
+      map['resolved_at'] = Variable<DateTime>(resolvedAt);
+    }
+    return map;
+  }
+
+  ClassificationSuggestionsCompanion toCompanion(bool nullToAbsent) {
+    return ClassificationSuggestionsCompanion(
+      mediaItemId: Value(mediaItemId),
+      suggestedCategoryName: suggestedCategoryName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(suggestedCategoryName),
+      confidence: Value(confidence),
+      hasSuggestion: Value(hasSuggestion),
+      suggestedTagsJson: Value(suggestedTagsJson),
+      evidenceJson: Value(evidenceJson),
+      status: Value(status),
+      reviewReason: reviewReason == null && nullToAbsent
+          ? const Value.absent()
+          : Value(reviewReason),
+      engineVersion: Value(engineVersion),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      resolvedAt: resolvedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(resolvedAt),
+    );
+  }
+
+  factory ClassificationSuggestion.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ClassificationSuggestion(
+      mediaItemId: serializer.fromJson<int>(json['mediaItemId']),
+      suggestedCategoryName: serializer.fromJson<String?>(
+        json['suggestedCategoryName'],
+      ),
+      confidence: serializer.fromJson<double>(json['confidence']),
+      hasSuggestion: serializer.fromJson<bool>(json['hasSuggestion']),
+      suggestedTagsJson: serializer.fromJson<String>(json['suggestedTagsJson']),
+      evidenceJson: serializer.fromJson<String>(json['evidenceJson']),
+      status: serializer.fromJson<String>(json['status']),
+      reviewReason: serializer.fromJson<String?>(json['reviewReason']),
+      engineVersion: serializer.fromJson<int>(json['engineVersion']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      resolvedAt: serializer.fromJson<DateTime?>(json['resolvedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'mediaItemId': serializer.toJson<int>(mediaItemId),
+      'suggestedCategoryName': serializer.toJson<String?>(
+        suggestedCategoryName,
+      ),
+      'confidence': serializer.toJson<double>(confidence),
+      'hasSuggestion': serializer.toJson<bool>(hasSuggestion),
+      'suggestedTagsJson': serializer.toJson<String>(suggestedTagsJson),
+      'evidenceJson': serializer.toJson<String>(evidenceJson),
+      'status': serializer.toJson<String>(status),
+      'reviewReason': serializer.toJson<String?>(reviewReason),
+      'engineVersion': serializer.toJson<int>(engineVersion),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'resolvedAt': serializer.toJson<DateTime?>(resolvedAt),
+    };
+  }
+
+  ClassificationSuggestion copyWith({
+    int? mediaItemId,
+    Value<String?> suggestedCategoryName = const Value.absent(),
+    double? confidence,
+    bool? hasSuggestion,
+    String? suggestedTagsJson,
+    String? evidenceJson,
+    String? status,
+    Value<String?> reviewReason = const Value.absent(),
+    int? engineVersion,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> resolvedAt = const Value.absent(),
+  }) => ClassificationSuggestion(
+    mediaItemId: mediaItemId ?? this.mediaItemId,
+    suggestedCategoryName: suggestedCategoryName.present
+        ? suggestedCategoryName.value
+        : this.suggestedCategoryName,
+    confidence: confidence ?? this.confidence,
+    hasSuggestion: hasSuggestion ?? this.hasSuggestion,
+    suggestedTagsJson: suggestedTagsJson ?? this.suggestedTagsJson,
+    evidenceJson: evidenceJson ?? this.evidenceJson,
+    status: status ?? this.status,
+    reviewReason: reviewReason.present ? reviewReason.value : this.reviewReason,
+    engineVersion: engineVersion ?? this.engineVersion,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    resolvedAt: resolvedAt.present ? resolvedAt.value : this.resolvedAt,
+  );
+  ClassificationSuggestion copyWithCompanion(
+    ClassificationSuggestionsCompanion data,
+  ) {
+    return ClassificationSuggestion(
+      mediaItemId: data.mediaItemId.present
+          ? data.mediaItemId.value
+          : this.mediaItemId,
+      suggestedCategoryName: data.suggestedCategoryName.present
+          ? data.suggestedCategoryName.value
+          : this.suggestedCategoryName,
+      confidence: data.confidence.present
+          ? data.confidence.value
+          : this.confidence,
+      hasSuggestion: data.hasSuggestion.present
+          ? data.hasSuggestion.value
+          : this.hasSuggestion,
+      suggestedTagsJson: data.suggestedTagsJson.present
+          ? data.suggestedTagsJson.value
+          : this.suggestedTagsJson,
+      evidenceJson: data.evidenceJson.present
+          ? data.evidenceJson.value
+          : this.evidenceJson,
+      status: data.status.present ? data.status.value : this.status,
+      reviewReason: data.reviewReason.present
+          ? data.reviewReason.value
+          : this.reviewReason,
+      engineVersion: data.engineVersion.present
+          ? data.engineVersion.value
+          : this.engineVersion,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      resolvedAt: data.resolvedAt.present
+          ? data.resolvedAt.value
+          : this.resolvedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ClassificationSuggestion(')
+          ..write('mediaItemId: $mediaItemId, ')
+          ..write('suggestedCategoryName: $suggestedCategoryName, ')
+          ..write('confidence: $confidence, ')
+          ..write('hasSuggestion: $hasSuggestion, ')
+          ..write('suggestedTagsJson: $suggestedTagsJson, ')
+          ..write('evidenceJson: $evidenceJson, ')
+          ..write('status: $status, ')
+          ..write('reviewReason: $reviewReason, ')
+          ..write('engineVersion: $engineVersion, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('resolvedAt: $resolvedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    mediaItemId,
+    suggestedCategoryName,
+    confidence,
+    hasSuggestion,
+    suggestedTagsJson,
+    evidenceJson,
+    status,
+    reviewReason,
+    engineVersion,
+    createdAt,
+    updatedAt,
+    resolvedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ClassificationSuggestion &&
+          other.mediaItemId == this.mediaItemId &&
+          other.suggestedCategoryName == this.suggestedCategoryName &&
+          other.confidence == this.confidence &&
+          other.hasSuggestion == this.hasSuggestion &&
+          other.suggestedTagsJson == this.suggestedTagsJson &&
+          other.evidenceJson == this.evidenceJson &&
+          other.status == this.status &&
+          other.reviewReason == this.reviewReason &&
+          other.engineVersion == this.engineVersion &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.resolvedAt == this.resolvedAt);
+}
+
+class ClassificationSuggestionsCompanion
+    extends UpdateCompanion<ClassificationSuggestion> {
+  final Value<int> mediaItemId;
+  final Value<String?> suggestedCategoryName;
+  final Value<double> confidence;
+  final Value<bool> hasSuggestion;
+  final Value<String> suggestedTagsJson;
+  final Value<String> evidenceJson;
+  final Value<String> status;
+  final Value<String?> reviewReason;
+  final Value<int> engineVersion;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> resolvedAt;
+  const ClassificationSuggestionsCompanion({
+    this.mediaItemId = const Value.absent(),
+    this.suggestedCategoryName = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.hasSuggestion = const Value.absent(),
+    this.suggestedTagsJson = const Value.absent(),
+    this.evidenceJson = const Value.absent(),
+    this.status = const Value.absent(),
+    this.reviewReason = const Value.absent(),
+    this.engineVersion = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.resolvedAt = const Value.absent(),
+  });
+  ClassificationSuggestionsCompanion.insert({
+    this.mediaItemId = const Value.absent(),
+    this.suggestedCategoryName = const Value.absent(),
+    required double confidence,
+    required bool hasSuggestion,
+    required String suggestedTagsJson,
+    required String evidenceJson,
+    required String status,
+    this.reviewReason = const Value.absent(),
+    required int engineVersion,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.resolvedAt = const Value.absent(),
+  }) : confidence = Value(confidence),
+       hasSuggestion = Value(hasSuggestion),
+       suggestedTagsJson = Value(suggestedTagsJson),
+       evidenceJson = Value(evidenceJson),
+       status = Value(status),
+       engineVersion = Value(engineVersion),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<ClassificationSuggestion> custom({
+    Expression<int>? mediaItemId,
+    Expression<String>? suggestedCategoryName,
+    Expression<double>? confidence,
+    Expression<bool>? hasSuggestion,
+    Expression<String>? suggestedTagsJson,
+    Expression<String>? evidenceJson,
+    Expression<String>? status,
+    Expression<String>? reviewReason,
+    Expression<int>? engineVersion,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? resolvedAt,
+  }) {
+    return RawValuesInsertable({
+      if (mediaItemId != null) 'media_item_id': mediaItemId,
+      if (suggestedCategoryName != null)
+        'suggested_category_name': suggestedCategoryName,
+      if (confidence != null) 'confidence': confidence,
+      if (hasSuggestion != null) 'has_suggestion': hasSuggestion,
+      if (suggestedTagsJson != null) 'suggested_tags_json': suggestedTagsJson,
+      if (evidenceJson != null) 'evidence_json': evidenceJson,
+      if (status != null) 'status': status,
+      if (reviewReason != null) 'review_reason': reviewReason,
+      if (engineVersion != null) 'engine_version': engineVersion,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (resolvedAt != null) 'resolved_at': resolvedAt,
+    });
+  }
+
+  ClassificationSuggestionsCompanion copyWith({
+    Value<int>? mediaItemId,
+    Value<String?>? suggestedCategoryName,
+    Value<double>? confidence,
+    Value<bool>? hasSuggestion,
+    Value<String>? suggestedTagsJson,
+    Value<String>? evidenceJson,
+    Value<String>? status,
+    Value<String?>? reviewReason,
+    Value<int>? engineVersion,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? resolvedAt,
+  }) {
+    return ClassificationSuggestionsCompanion(
+      mediaItemId: mediaItemId ?? this.mediaItemId,
+      suggestedCategoryName:
+          suggestedCategoryName ?? this.suggestedCategoryName,
+      confidence: confidence ?? this.confidence,
+      hasSuggestion: hasSuggestion ?? this.hasSuggestion,
+      suggestedTagsJson: suggestedTagsJson ?? this.suggestedTagsJson,
+      evidenceJson: evidenceJson ?? this.evidenceJson,
+      status: status ?? this.status,
+      reviewReason: reviewReason ?? this.reviewReason,
+      engineVersion: engineVersion ?? this.engineVersion,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      resolvedAt: resolvedAt ?? this.resolvedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (mediaItemId.present) {
+      map['media_item_id'] = Variable<int>(mediaItemId.value);
+    }
+    if (suggestedCategoryName.present) {
+      map['suggested_category_name'] = Variable<String>(
+        suggestedCategoryName.value,
+      );
+    }
+    if (confidence.present) {
+      map['confidence'] = Variable<double>(confidence.value);
+    }
+    if (hasSuggestion.present) {
+      map['has_suggestion'] = Variable<bool>(hasSuggestion.value);
+    }
+    if (suggestedTagsJson.present) {
+      map['suggested_tags_json'] = Variable<String>(suggestedTagsJson.value);
+    }
+    if (evidenceJson.present) {
+      map['evidence_json'] = Variable<String>(evidenceJson.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (reviewReason.present) {
+      map['review_reason'] = Variable<String>(reviewReason.value);
+    }
+    if (engineVersion.present) {
+      map['engine_version'] = Variable<int>(engineVersion.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (resolvedAt.present) {
+      map['resolved_at'] = Variable<DateTime>(resolvedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ClassificationSuggestionsCompanion(')
+          ..write('mediaItemId: $mediaItemId, ')
+          ..write('suggestedCategoryName: $suggestedCategoryName, ')
+          ..write('confidence: $confidence, ')
+          ..write('hasSuggestion: $hasSuggestion, ')
+          ..write('suggestedTagsJson: $suggestedTagsJson, ')
+          ..write('evidenceJson: $evidenceJson, ')
+          ..write('status: $status, ')
+          ..write('reviewReason: $reviewReason, ')
+          ..write('engineVersion: $engineVersion, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('resolvedAt: $resolvedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ContextoDatabase extends GeneratedDatabase {
   _$ContextoDatabase(QueryExecutor e) : super(e);
   $ContextoDatabaseManager get managers => $ContextoDatabaseManager(this);
@@ -3311,6 +4070,8 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
   late final $MediaTagsTable mediaTags = $MediaTagsTable(this);
   late final $AutomaticImportSettingsTable automaticImportSettings =
       $AutomaticImportSettingsTable(this);
+  late final $ClassificationSuggestionsTable classificationSuggestions =
+      $ClassificationSuggestionsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3324,6 +4085,7 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
     tags,
     mediaTags,
     automaticImportSettings,
+    classificationSuggestions,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -3368,6 +4130,15 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('media_tags', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'media_items',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [
+        TableUpdate('classification_suggestions', kind: UpdateKind.delete),
+      ],
     ),
   ]);
 }
@@ -3474,6 +4245,31 @@ final class $$MediaItemsTableReferences
     ).filter((f) => f.mediaItemId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_mediaTagsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $ClassificationSuggestionsTable,
+    List<ClassificationSuggestion>
+  >
+  _classificationSuggestionsRefsTable(_$ContextoDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.classificationSuggestions,
+        aliasName: 'media_items__id__classification_suggestions__media_item_id',
+      );
+
+  $$ClassificationSuggestionsTableProcessedTableManager
+  get classificationSuggestionsRefs {
+    final manager = $$ClassificationSuggestionsTableTableManager(
+      $_db,
+      $_db.classificationSuggestions,
+    ).filter((f) => f.mediaItemId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _classificationSuggestionsRefsTable($_db),
+    );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -3636,6 +4432,33 @@ class $$MediaItemsTableFilterComposer
                 $removeJoinBuilderFromRootComposer,
           ),
     );
+    return f(composer);
+  }
+
+  Expression<bool> classificationSuggestionsRefs(
+    Expression<bool> Function($$ClassificationSuggestionsTableFilterComposer f)
+    f,
+  ) {
+    final $$ClassificationSuggestionsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.classificationSuggestions,
+          getReferencedColumn: (t) => t.mediaItemId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ClassificationSuggestionsTableFilterComposer(
+                $db: $db,
+                $table: $db.classificationSuggestions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
     return f(composer);
   }
 }
@@ -3850,6 +4673,33 @@ class $$MediaItemsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> classificationSuggestionsRefs<T extends Object>(
+    Expression<T> Function($$ClassificationSuggestionsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$ClassificationSuggestionsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.classificationSuggestions,
+          getReferencedColumn: (t) => t.mediaItemId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ClassificationSuggestionsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.classificationSuggestions,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$MediaItemsTableTableManager
@@ -3870,6 +4720,7 @@ class $$MediaItemsTableTableManager
             bool processingJobsRefs,
             bool mediaCategoriesRefs,
             bool mediaTagsRefs,
+            bool classificationSuggestionsRefs,
           })
         > {
   $$MediaItemsTableTableManager(_$ContextoDatabase db, $MediaItemsTable table)
@@ -3945,6 +4796,7 @@ class $$MediaItemsTableTableManager
                 processingJobsRefs = false,
                 mediaCategoriesRefs = false,
                 mediaTagsRefs = false,
+                classificationSuggestionsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -3953,6 +4805,8 @@ class $$MediaItemsTableTableManager
                     if (processingJobsRefs) db.processingJobs,
                     if (mediaCategoriesRefs) db.mediaCategories,
                     if (mediaTagsRefs) db.mediaTags,
+                    if (classificationSuggestionsRefs)
+                      db.classificationSuggestions,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -4041,6 +4895,27 @@ class $$MediaItemsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (classificationSuggestionsRefs)
+                        await $_getPrefetchedData<
+                          MediaItem,
+                          $MediaItemsTable,
+                          ClassificationSuggestion
+                        >(
+                          currentTable: table,
+                          referencedTable: $$MediaItemsTableReferences
+                              ._classificationSuggestionsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$MediaItemsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).classificationSuggestionsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.mediaItemId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -4066,6 +4941,7 @@ typedef $$MediaItemsTableProcessedTableManager =
         bool processingJobsRefs,
         bool mediaCategoriesRefs,
         bool mediaTagsRefs,
+        bool classificationSuggestionsRefs,
       })
     >;
 typedef $$OcrResultsTableCreateCompanionBuilder =
@@ -6486,6 +7362,493 @@ typedef $$AutomaticImportSettingsTableProcessedTableManager =
       AutomaticImportSetting,
       PrefetchHooks Function()
     >;
+typedef $$ClassificationSuggestionsTableCreateCompanionBuilder =
+    ClassificationSuggestionsCompanion Function({
+      Value<int> mediaItemId,
+      Value<String?> suggestedCategoryName,
+      required double confidence,
+      required bool hasSuggestion,
+      required String suggestedTagsJson,
+      required String evidenceJson,
+      required String status,
+      Value<String?> reviewReason,
+      required int engineVersion,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> resolvedAt,
+    });
+typedef $$ClassificationSuggestionsTableUpdateCompanionBuilder =
+    ClassificationSuggestionsCompanion Function({
+      Value<int> mediaItemId,
+      Value<String?> suggestedCategoryName,
+      Value<double> confidence,
+      Value<bool> hasSuggestion,
+      Value<String> suggestedTagsJson,
+      Value<String> evidenceJson,
+      Value<String> status,
+      Value<String?> reviewReason,
+      Value<int> engineVersion,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> resolvedAt,
+    });
+
+final class $$ClassificationSuggestionsTableReferences
+    extends
+        BaseReferences<
+          _$ContextoDatabase,
+          $ClassificationSuggestionsTable,
+          ClassificationSuggestion
+        > {
+  $$ClassificationSuggestionsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $MediaItemsTable _mediaItemIdTable(_$ContextoDatabase db) =>
+      db.mediaItems.createAlias(
+        'classification_suggestions__media_item_id__media_items__id',
+      );
+
+  $$MediaItemsTableProcessedTableManager get mediaItemId {
+    final $_column = $_itemColumn<int>('media_item_id')!;
+
+    final manager = $$MediaItemsTableTableManager(
+      $_db,
+      $_db.mediaItems,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_mediaItemIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ClassificationSuggestionsTableFilterComposer
+    extends Composer<_$ContextoDatabase, $ClassificationSuggestionsTable> {
+  $$ClassificationSuggestionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get suggestedCategoryName => $composableBuilder(
+    column: $table.suggestedCategoryName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get hasSuggestion => $composableBuilder(
+    column: $table.hasSuggestion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get suggestedTagsJson => $composableBuilder(
+    column: $table.suggestedTagsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get evidenceJson => $composableBuilder(
+    column: $table.evidenceJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reviewReason => $composableBuilder(
+    column: $table.reviewReason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$MediaItemsTableFilterComposer get mediaItemId {
+    final $$MediaItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ClassificationSuggestionsTableOrderingComposer
+    extends Composer<_$ContextoDatabase, $ClassificationSuggestionsTable> {
+  $$ClassificationSuggestionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get suggestedCategoryName => $composableBuilder(
+    column: $table.suggestedCategoryName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get hasSuggestion => $composableBuilder(
+    column: $table.hasSuggestion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get suggestedTagsJson => $composableBuilder(
+    column: $table.suggestedTagsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get evidenceJson => $composableBuilder(
+    column: $table.evidenceJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get reviewReason => $composableBuilder(
+    column: $table.reviewReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$MediaItemsTableOrderingComposer get mediaItemId {
+    final $$MediaItemsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableOrderingComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ClassificationSuggestionsTableAnnotationComposer
+    extends Composer<_$ContextoDatabase, $ClassificationSuggestionsTable> {
+  $$ClassificationSuggestionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get suggestedCategoryName => $composableBuilder(
+    column: $table.suggestedCategoryName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get hasSuggestion => $composableBuilder(
+    column: $table.hasSuggestion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get suggestedTagsJson => $composableBuilder(
+    column: $table.suggestedTagsJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get evidenceJson => $composableBuilder(
+    column: $table.evidenceJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get reviewReason => $composableBuilder(
+    column: $table.reviewReason,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get resolvedAt => $composableBuilder(
+    column: $table.resolvedAt,
+    builder: (column) => column,
+  );
+
+  $$MediaItemsTableAnnotationComposer get mediaItemId {
+    final $$MediaItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ClassificationSuggestionsTableTableManager
+    extends
+        RootTableManager<
+          _$ContextoDatabase,
+          $ClassificationSuggestionsTable,
+          ClassificationSuggestion,
+          $$ClassificationSuggestionsTableFilterComposer,
+          $$ClassificationSuggestionsTableOrderingComposer,
+          $$ClassificationSuggestionsTableAnnotationComposer,
+          $$ClassificationSuggestionsTableCreateCompanionBuilder,
+          $$ClassificationSuggestionsTableUpdateCompanionBuilder,
+          (
+            ClassificationSuggestion,
+            $$ClassificationSuggestionsTableReferences,
+          ),
+          ClassificationSuggestion,
+          PrefetchHooks Function({bool mediaItemId})
+        > {
+  $$ClassificationSuggestionsTableTableManager(
+    _$ContextoDatabase db,
+    $ClassificationSuggestionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ClassificationSuggestionsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ClassificationSuggestionsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ClassificationSuggestionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> mediaItemId = const Value.absent(),
+                Value<String?> suggestedCategoryName = const Value.absent(),
+                Value<double> confidence = const Value.absent(),
+                Value<bool> hasSuggestion = const Value.absent(),
+                Value<String> suggestedTagsJson = const Value.absent(),
+                Value<String> evidenceJson = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> reviewReason = const Value.absent(),
+                Value<int> engineVersion = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> resolvedAt = const Value.absent(),
+              }) => ClassificationSuggestionsCompanion(
+                mediaItemId: mediaItemId,
+                suggestedCategoryName: suggestedCategoryName,
+                confidence: confidence,
+                hasSuggestion: hasSuggestion,
+                suggestedTagsJson: suggestedTagsJson,
+                evidenceJson: evidenceJson,
+                status: status,
+                reviewReason: reviewReason,
+                engineVersion: engineVersion,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                resolvedAt: resolvedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> mediaItemId = const Value.absent(),
+                Value<String?> suggestedCategoryName = const Value.absent(),
+                required double confidence,
+                required bool hasSuggestion,
+                required String suggestedTagsJson,
+                required String evidenceJson,
+                required String status,
+                Value<String?> reviewReason = const Value.absent(),
+                required int engineVersion,
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> resolvedAt = const Value.absent(),
+              }) => ClassificationSuggestionsCompanion.insert(
+                mediaItemId: mediaItemId,
+                suggestedCategoryName: suggestedCategoryName,
+                confidence: confidence,
+                hasSuggestion: hasSuggestion,
+                suggestedTagsJson: suggestedTagsJson,
+                evidenceJson: evidenceJson,
+                status: status,
+                reviewReason: reviewReason,
+                engineVersion: engineVersion,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                resolvedAt: resolvedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ClassificationSuggestionsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({mediaItemId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (mediaItemId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.mediaItemId,
+                                referencedTable:
+                                    $$ClassificationSuggestionsTableReferences
+                                        ._mediaItemIdTable(db),
+                                referencedColumn:
+                                    $$ClassificationSuggestionsTableReferences
+                                        ._mediaItemIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ClassificationSuggestionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ContextoDatabase,
+      $ClassificationSuggestionsTable,
+      ClassificationSuggestion,
+      $$ClassificationSuggestionsTableFilterComposer,
+      $$ClassificationSuggestionsTableOrderingComposer,
+      $$ClassificationSuggestionsTableAnnotationComposer,
+      $$ClassificationSuggestionsTableCreateCompanionBuilder,
+      $$ClassificationSuggestionsTableUpdateCompanionBuilder,
+      (ClassificationSuggestion, $$ClassificationSuggestionsTableReferences),
+      ClassificationSuggestion,
+      PrefetchHooks Function({bool mediaItemId})
+    >;
 
 class $ContextoDatabaseManager {
   final _$ContextoDatabase _db;
@@ -6507,5 +7870,10 @@ class $ContextoDatabaseManager {
       $$AutomaticImportSettingsTableTableManager(
         _db,
         _db.automaticImportSettings,
+      );
+  $$ClassificationSuggestionsTableTableManager get classificationSuggestions =>
+      $$ClassificationSuggestionsTableTableManager(
+        _db,
+        _db.classificationSuggestions,
       );
 }

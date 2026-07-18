@@ -147,6 +147,41 @@ class AutomaticImportSettings extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class ClassificationSuggestions extends Table {
+  IntColumn get mediaItemId =>
+      integer().references(MediaItems, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get suggestedCategoryName => text().nullable()();
+
+  RealColumn get confidence => real()();
+
+  BoolColumn get hasSuggestion => boolean()();
+
+  TextColumn get suggestedTagsJson => text()();
+
+  TextColumn get evidenceJson => text()();
+
+  TextColumn get status => text()();
+
+  TextColumn get reviewReason => text().nullable()();
+
+  IntColumn get engineVersion => integer()();
+
+  DateTimeColumn get createdAt => dateTime()();
+
+  DateTimeColumn get updatedAt => dateTime()();
+
+  DateTimeColumn get resolvedAt => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {mediaItemId};
+
+  @override
+  List<String> get customConstraints => const [
+    'CHECK (confidence >= 0 AND confidence <= 1)',
+  ];
+}
+
 @DriftDatabase(
   tables: [
     MediaItems,
@@ -157,6 +192,7 @@ class AutomaticImportSettings extends Table {
     Tags,
     MediaTags,
     AutomaticImportSettings,
+    ClassificationSuggestions,
   ],
 )
 class ContextoDatabase extends _$ContextoDatabase {
@@ -165,7 +201,7 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -217,6 +253,9 @@ class ContextoDatabase extends _$ContextoDatabase {
       }
       if (from < 11) {
         await _createCategoryNameIndexes();
+      }
+      if (from < 12) {
+        await migrator.createTable(classificationSuggestions);
       }
     },
     beforeOpen: (details) async {
