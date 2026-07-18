@@ -1648,7 +1648,20 @@ class $CategoriesTable extends Categories
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: true,
-    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _parentIdMeta = const VerificationMeta(
+    'parentId',
+  );
+  @override
+  late final GeneratedColumn<int> parentId = GeneratedColumn<int>(
+    'parent_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES categories (id) ON DELETE RESTRICT',
+    ),
   );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
@@ -1662,7 +1675,13 @@ class $CategoriesTable extends Categories
     requiredDuringInsert: true,
   );
   @override
-  List<GeneratedColumn> get $columns => [id, name, normalizedName, createdAt];
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    normalizedName,
+    parentId,
+    createdAt,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1697,6 +1716,12 @@ class $CategoriesTable extends Categories
     } else if (isInserting) {
       context.missing(_normalizedNameMeta);
     }
+    if (data.containsKey('parent_id')) {
+      context.handle(
+        _parentIdMeta,
+        parentId.isAcceptableOrUnknown(data['parent_id']!, _parentIdMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -1726,6 +1751,10 @@ class $CategoriesTable extends Categories
         DriftSqlType.string,
         data['${effectivePrefix}normalized_name'],
       )!,
+      parentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}parent_id'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -1743,11 +1772,13 @@ class Category extends DataClass implements Insertable<Category> {
   final int id;
   final String name;
   final String normalizedName;
+  final int? parentId;
   final DateTime createdAt;
   const Category({
     required this.id,
     required this.name,
     required this.normalizedName,
+    this.parentId,
     required this.createdAt,
   });
   @override
@@ -1756,6 +1787,9 @@ class Category extends DataClass implements Insertable<Category> {
     map['id'] = Variable<int>(id);
     map['name'] = Variable<String>(name);
     map['normalized_name'] = Variable<String>(normalizedName);
+    if (!nullToAbsent || parentId != null) {
+      map['parent_id'] = Variable<int>(parentId);
+    }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -1765,6 +1799,9 @@ class Category extends DataClass implements Insertable<Category> {
       id: Value(id),
       name: Value(name),
       normalizedName: Value(normalizedName),
+      parentId: parentId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(parentId),
       createdAt: Value(createdAt),
     );
   }
@@ -1778,6 +1815,7 @@ class Category extends DataClass implements Insertable<Category> {
       id: serializer.fromJson<int>(json['id']),
       name: serializer.fromJson<String>(json['name']),
       normalizedName: serializer.fromJson<String>(json['normalizedName']),
+      parentId: serializer.fromJson<int?>(json['parentId']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -1788,6 +1826,7 @@ class Category extends DataClass implements Insertable<Category> {
       'id': serializer.toJson<int>(id),
       'name': serializer.toJson<String>(name),
       'normalizedName': serializer.toJson<String>(normalizedName),
+      'parentId': serializer.toJson<int?>(parentId),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -1796,11 +1835,13 @@ class Category extends DataClass implements Insertable<Category> {
     int? id,
     String? name,
     String? normalizedName,
+    Value<int?> parentId = const Value.absent(),
     DateTime? createdAt,
   }) => Category(
     id: id ?? this.id,
     name: name ?? this.name,
     normalizedName: normalizedName ?? this.normalizedName,
+    parentId: parentId.present ? parentId.value : this.parentId,
     createdAt: createdAt ?? this.createdAt,
   );
   Category copyWithCompanion(CategoriesCompanion data) {
@@ -1810,6 +1851,7 @@ class Category extends DataClass implements Insertable<Category> {
       normalizedName: data.normalizedName.present
           ? data.normalizedName.value
           : this.normalizedName,
+      parentId: data.parentId.present ? data.parentId.value : this.parentId,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1820,13 +1862,15 @@ class Category extends DataClass implements Insertable<Category> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('normalizedName: $normalizedName, ')
+          ..write('parentId: $parentId, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, name, normalizedName, createdAt);
+  int get hashCode =>
+      Object.hash(id, name, normalizedName, parentId, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1834,6 +1878,7 @@ class Category extends DataClass implements Insertable<Category> {
           other.id == this.id &&
           other.name == this.name &&
           other.normalizedName == this.normalizedName &&
+          other.parentId == this.parentId &&
           other.createdAt == this.createdAt);
 }
 
@@ -1841,17 +1886,20 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   final Value<int> id;
   final Value<String> name;
   final Value<String> normalizedName;
+  final Value<int?> parentId;
   final Value<DateTime> createdAt;
   const CategoriesCompanion({
     this.id = const Value.absent(),
     this.name = const Value.absent(),
     this.normalizedName = const Value.absent(),
+    this.parentId = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   CategoriesCompanion.insert({
     this.id = const Value.absent(),
     required String name,
     required String normalizedName,
+    this.parentId = const Value.absent(),
     required DateTime createdAt,
   }) : name = Value(name),
        normalizedName = Value(normalizedName),
@@ -1860,12 +1908,14 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Expression<int>? id,
     Expression<String>? name,
     Expression<String>? normalizedName,
+    Expression<int>? parentId,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (name != null) 'name': name,
       if (normalizedName != null) 'normalized_name': normalizedName,
+      if (parentId != null) 'parent_id': parentId,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -1874,12 +1924,14 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Value<int>? id,
     Value<String>? name,
     Value<String>? normalizedName,
+    Value<int?>? parentId,
     Value<DateTime>? createdAt,
   }) {
     return CategoriesCompanion(
       id: id ?? this.id,
       name: name ?? this.name,
       normalizedName: normalizedName ?? this.normalizedName,
+      parentId: parentId ?? this.parentId,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -1896,6 +1948,9 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     if (normalizedName.present) {
       map['normalized_name'] = Variable<String>(normalizedName.value);
     }
+    if (parentId.present) {
+      map['parent_id'] = Variable<int>(parentId.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -1908,6 +1963,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
           ..write('id: $id, ')
           ..write('name: $name, ')
           ..write('normalizedName: $normalizedName, ')
+          ..write('parentId: $parentId, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -4755,6 +4811,7 @@ typedef $$CategoriesTableCreateCompanionBuilder =
       Value<int> id,
       required String name,
       required String normalizedName,
+      Value<int?> parentId,
       required DateTime createdAt,
     });
 typedef $$CategoriesTableUpdateCompanionBuilder =
@@ -4762,12 +4819,30 @@ typedef $$CategoriesTableUpdateCompanionBuilder =
       Value<int> id,
       Value<String> name,
       Value<String> normalizedName,
+      Value<int?> parentId,
       Value<DateTime> createdAt,
     });
 
 final class $$CategoriesTableReferences
     extends BaseReferences<_$ContextoDatabase, $CategoriesTable, Category> {
   $$CategoriesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $CategoriesTable _parentIdTable(_$ContextoDatabase db) =>
+      db.categories.createAlias('categories__parent_id__categories__id');
+
+  $$CategoriesTableProcessedTableManager? get parentId {
+    final $_column = $_itemColumn<int>('parent_id');
+    if ($_column == null) return null;
+    final manager = $$CategoriesTableTableManager(
+      $_db,
+      $_db.categories,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_parentIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
 
   static MultiTypedResultKey<$MediaCategoriesTable, List<MediaCategory>>
   _mediaCategoriesRefsTable(_$ContextoDatabase db) =>
@@ -4819,6 +4894,29 @@ class $$CategoriesTableFilterComposer
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  $$CategoriesTableFilterComposer get parentId {
+    final $$CategoriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.parentId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableFilterComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   Expression<bool> mediaCategoriesRefs(
     Expression<bool> Function($$MediaCategoriesTableFilterComposer f) f,
@@ -4874,6 +4972,29 @@ class $$CategoriesTableOrderingComposer
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  $$CategoriesTableOrderingComposer get parentId {
+    final $$CategoriesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.parentId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableOrderingComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$CategoriesTableAnnotationComposer
@@ -4898,6 +5019,29 @@ class $$CategoriesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$CategoriesTableAnnotationComposer get parentId {
+    final $$CategoriesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.parentId,
+      referencedTable: $db.categories,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$CategoriesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.categories,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 
   Expression<T> mediaCategoriesRefs<T extends Object>(
     Expression<T> Function($$MediaCategoriesTableAnnotationComposer a) f,
@@ -4938,7 +5082,7 @@ class $$CategoriesTableTableManager
           $$CategoriesTableUpdateCompanionBuilder,
           (Category, $$CategoriesTableReferences),
           Category,
-          PrefetchHooks Function({bool mediaCategoriesRefs})
+          PrefetchHooks Function({bool parentId, bool mediaCategoriesRefs})
         > {
   $$CategoriesTableTableManager(_$ContextoDatabase db, $CategoriesTable table)
     : super(
@@ -4956,11 +5100,13 @@ class $$CategoriesTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> normalizedName = const Value.absent(),
+                Value<int?> parentId = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => CategoriesCompanion(
                 id: id,
                 name: name,
                 normalizedName: normalizedName,
+                parentId: parentId,
                 createdAt: createdAt,
               ),
           createCompanionCallback:
@@ -4968,11 +5114,13 @@ class $$CategoriesTableTableManager
                 Value<int> id = const Value.absent(),
                 required String name,
                 required String normalizedName,
+                Value<int?> parentId = const Value.absent(),
                 required DateTime createdAt,
               }) => CategoriesCompanion.insert(
                 id: id,
                 name: name,
                 normalizedName: normalizedName,
+                parentId: parentId,
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0
@@ -4983,38 +5131,73 @@ class $$CategoriesTableTableManager
                 ),
               )
               .toList(),
-          prefetchHooksCallback: ({mediaCategoriesRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [
-                if (mediaCategoriesRefs) db.mediaCategories,
-              ],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (mediaCategoriesRefs)
-                    await $_getPrefetchedData<
-                      Category,
-                      $CategoriesTable,
-                      MediaCategory
-                    >(
-                      currentTable: table,
-                      referencedTable: $$CategoriesTableReferences
-                          ._mediaCategoriesRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$CategoriesTableReferences(
-                            db,
-                            table,
-                            p0,
-                          ).mediaCategoriesRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.categoryId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({parentId = false, mediaCategoriesRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (mediaCategoriesRefs) db.mediaCategories,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (parentId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.parentId,
+                                    referencedTable: $$CategoriesTableReferences
+                                        ._parentIdTable(db),
+                                    referencedColumn:
+                                        $$CategoriesTableReferences
+                                            ._parentIdTable(db)
+                                            .id,
+                                  )
+                                  as T;
+                        }
+
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (mediaCategoriesRefs)
+                        await $_getPrefetchedData<
+                          Category,
+                          $CategoriesTable,
+                          MediaCategory
+                        >(
+                          currentTable: table,
+                          referencedTable: $$CategoriesTableReferences
+                              ._mediaCategoriesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$CategoriesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).mediaCategoriesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.categoryId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -5031,7 +5214,7 @@ typedef $$CategoriesTableProcessedTableManager =
       $$CategoriesTableUpdateCompanionBuilder,
       (Category, $$CategoriesTableReferences),
       Category,
-      PrefetchHooks Function({bool mediaCategoriesRefs})
+      PrefetchHooks Function({bool parentId, bool mediaCategoriesRefs})
     >;
 typedef $$MediaCategoriesTableCreateCompanionBuilder =
     MediaCategoriesCompanion Function({

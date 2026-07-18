@@ -76,9 +76,20 @@ class Categories extends Table {
 
   TextColumn get name => text()();
 
-  TextColumn get normalizedName => text().unique()();
+  TextColumn get normalizedName => text()();
+
+  IntColumn get parentId => integer().nullable().references(
+    Categories,
+    #id,
+    onDelete: KeyAction.restrict,
+  )();
 
   DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  List<String> get customConstraints => const [
+    'CHECK (parent_id IS NULL OR parent_id <> id)',
+  ];
 }
 
 class MediaCategories extends Table {
@@ -154,13 +165,14 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) async {
       await migrator.createAll();
       await _createMediaHashIndex();
+      await _createCategoryNameIndexes();
     },
     onUpgrade: (migrator, from, to) async {
       if (from < 2) {
@@ -198,6 +210,14 @@ class ContextoDatabase extends _$ContextoDatabase {
         await migrator.createTable(tags);
         await migrator.createTable(mediaTags);
       }
+      if (from >= 6 && from < 11) {
+        await migrator.alterTable(
+          TableMigration(categories, newColumns: [categories.parentId]),
+        );
+      }
+      if (from < 11) {
+        await _createCategoryNameIndexes();
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -209,6 +229,18 @@ class ContextoDatabase extends _$ContextoDatabase {
     return customStatement(
       'CREATE UNIQUE INDEX IF NOT EXISTS media_items_media_hash_unique '
       'ON media_items (media_hash) WHERE media_hash IS NOT NULL',
+    );
+  }
+
+  Future<void> _createCategoryNameIndexes() async {
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS categories_root_name_unique '
+      'ON categories (normalized_name) WHERE parent_id IS NULL',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS categories_child_name_unique '
+      'ON categories (parent_id, normalized_name) '
+      'WHERE parent_id IS NOT NULL',
     );
   }
 
