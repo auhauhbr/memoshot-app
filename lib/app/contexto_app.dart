@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../core/media/screenshot_picker.dart';
+import '../core/automatic_import/automatic_screenshot_source.dart';
 import '../core/sharing/incoming_share_source.dart';
 import '../core/theme/app_theme.dart';
 import '../features/categories/data/category_repository.dart';
+import '../features/automatic_import/data/automatic_import_settings_repository.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/library/data/media_item_repository.dart';
 import '../features/ocr/data/ocr_repository.dart';
@@ -18,6 +20,8 @@ class ContextoApp extends StatelessWidget {
     this.ocrQueue,
     this.categoryRepository,
     this.incomingShareSource,
+    this.automaticScreenshotSource,
+    this.automaticImportSettingsRepository,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -26,6 +30,8 @@ class ContextoApp extends StatelessWidget {
   final OcrQueue? ocrQueue;
   final CategoryRepository? categoryRepository;
   final IncomingShareSource? incomingShareSource;
+  final AutomaticScreenshotSource? automaticScreenshotSource;
+  final AutomaticImportSettingsRepository? automaticImportSettingsRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +47,8 @@ class ContextoApp extends StatelessWidget {
         ocrQueue: ocrQueue,
         categoryRepository: categoryRepository,
         incomingShareSource: incomingShareSource,
+        automaticScreenshotSource: automaticScreenshotSource,
+        automaticImportSettingsRepository: automaticImportSettingsRepository,
       ),
     );
   }

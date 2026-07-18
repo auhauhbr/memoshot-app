@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/automatic_import/automatic_screenshot_source.dart';
+import '../../../core/automatic_import/method_channel_automatic_screenshot_source.dart';
 import '../../../core/database/contexto_database.dart' show ContextoDatabase;
 import '../../../core/media/image_picker_screenshot_picker.dart';
 import '../../../core/media/screenshot_picker.dart';
@@ -27,6 +29,8 @@ import '../../processing/data/ocr_queue_processor.dart';
 import '../../processing/data/processing_job_store.dart';
 import '../../processing/domain/processing_job.dart';
 import '../../sharing/shared_image_import_coordinator.dart';
+import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
+import '../../automatic_import/data/automatic_import_settings_repository.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -37,6 +41,8 @@ class HomePage extends StatefulWidget {
     this.ocrQueue,
     this.categoryRepository,
     this.incomingShareSource,
+    this.automaticScreenshotSource,
+    this.automaticImportSettingsRepository,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -45,12 +51,14 @@ class HomePage extends StatefulWidget {
   final OcrQueue? ocrQueue;
   final CategoryRepository? categoryRepository;
   final IncomingShareSource? incomingShareSource;
+  final AutomaticScreenshotSource? automaticScreenshotSource;
+  final AutomaticImportSettingsRepository? automaticImportSettingsRepository;
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final ScreenshotPicker _screenshotPicker;
   late final MediaItemRepository _mediaRepository;
   late final OcrRepository _ocrRepository;
@@ -60,6 +68,7 @@ class _HomePageState extends State<HomePage> {
   ContextoDatabase? _ownedAuxiliaryDatabase;
   StreamSubscription<int>? _queueSubscription;
   late final SharedImageImportCoordinator _sharedImportCoordinator;
+  late final AutomaticScreenshotImportCoordinator _automaticImportCoordinator;
   final TextEditingController _searchController = TextEditingController();
   final TextNormalizer _textNormalizer = const TextNormalizer();
   Timer? _searchDebounce;
@@ -74,10 +83,13 @@ class _HomePageState extends State<HomePage> {
   String? _duplicateMessage;
   String? _searchErrorMessage;
   int _categoryCount = 0;
+  AutomaticImportUiState _automaticImportState =
+      AutomaticImportUiState.disabled;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _screenshotPicker =
         widget.screenshotPicker ?? ImagePickerScreenshotPicker();
     _ownsMediaRepository = widget.mediaRepository == null;
@@ -85,7 +97,8 @@ class _HomePageState extends State<HomePage> {
         widget.mediaRepository == null ||
             widget.ocrRepository == null ||
             widget.ocrQueue == null ||
-            widget.categoryRepository == null
+            widget.categoryRepository == null ||
+            widget.automaticImportSettingsRepository == null
         ? ContextoDatabase()
         : null;
     final jobStore = database == null
@@ -115,6 +128,9 @@ class _HomePageState extends State<HomePage> {
     _categoryRepository =
         widget.categoryRepository ??
         LocalCategoryRepository(store: DriftCategoryStore(database!));
+    final automaticSettingsRepository =
+        widget.automaticImportSettingsRepository ??
+        DriftAutomaticImportSettingsRepository(database!);
     if (!_ownsMediaRepository) {
       _ownedAuxiliaryDatabase = database;
     }
@@ -125,14 +141,33 @@ class _HomePageState extends State<HomePage> {
       onCompleted: _handleSharedImport,
       onError: _handleSharedImportError,
     );
+    _automaticImportCoordinator = AutomaticScreenshotImportCoordinator(
+      source:
+          widget.automaticScreenshotSource ??
+          const MethodChannelAutomaticScreenshotSource(),
+      settingsRepository: automaticSettingsRepository,
+      mediaRepository: _mediaRepository,
+      onStateChanged: _handleAutomaticImportState,
+      onImported: _handleAutomaticImport,
+      onError: _handleAutomaticImportError,
+    );
     _initialize();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_sharedImportCoordinator.start());
+      unawaited(_automaticImportCoordinator.initialize());
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_automaticImportCoordinator.resume());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchDebounce?.cancel();
     _searchController.dispose();
     unawaited(_disposeResources());
@@ -140,6 +175,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _disposeResources() async {
+    await _automaticImportCoordinator.dispose();
     await _sharedImportCoordinator.dispose();
     await _queueSubscription?.cancel();
     await _ocrQueue.close();
@@ -148,6 +184,77 @@ class _HomePageState extends State<HomePage> {
     } else if (_ownedAuxiliaryDatabase != null) {
       await _ownedAuxiliaryDatabase!.close();
     }
+  }
+
+  void _handleAutomaticImportState(AutomaticImportUiState state) {
+    if (!mounted) return;
+    setState(() => _automaticImportState = state);
+  }
+
+  Future<void> _handleAutomaticImport(ImportResult result) async {
+    if (!mounted) return;
+    await _reloadItemsIgnoringErrors();
+    _ocrQueue.signal();
+    if (_searchActive) await _searchNow();
+    if (!mounted) return;
+    if (result.importedItems.isEmpty) {
+      if (result.rejectedCount > 0) _handleAutomaticImportError();
+      return;
+    }
+    final count = result.importedItems.length;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            count == 1
+                ? 'Screenshot importado automaticamente.'
+                : '$count screenshots importados automaticamente.',
+          ),
+        ),
+      );
+  }
+
+  void _handleAutomaticImportError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível verificar novos screenshots.'),
+        ),
+      );
+  }
+
+  Future<void> _changeAutomaticImport(bool enabled) async {
+    if (!enabled) {
+      await _automaticImportCoordinator.disable();
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ativar importação automática?'),
+        content: const Text(
+          'O Contexto precisará acessar suas imagens para identificar novos '
+          'screenshots. Somente capturas novas serão importadas; imagens antigas '
+          'não serão adicionadas. Todo o processamento permanece neste dispositivo '
+          'e o recurso pode ser desligado a qualquer momento.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Continuar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _automaticImportCoordinator.enable();
   }
 
   Future<void> _handleSharedImport(ImportResult result) async {
@@ -559,6 +666,14 @@ class _HomePageState extends State<HomePage> {
                     infoMessage: _duplicateMessage,
                     onPressed: _isLoading ? null : _pickScreenshots,
                   ),
+                  const SizedBox(height: 12),
+                  _AutomaticImportCard(
+                    state: _automaticImportState,
+                    onChanged: _changeAutomaticImport,
+                    onOpenSettings: () => unawaited(
+                      _automaticImportCoordinator.openAppSettings(),
+                    ),
+                  ),
                   if (_searchActive) ...[
                     const SizedBox(height: 12),
                     _SearchSummary(
@@ -876,6 +991,125 @@ class _ImportCard extends StatelessWidget {
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AutomaticImportCard extends StatelessWidget {
+  const _AutomaticImportCard({
+    required this.state,
+    required this.onChanged,
+    required this.onOpenSettings,
+  });
+
+  final AutomaticImportUiState state;
+  final ValueChanged<bool> onChanged;
+  final VoidCallback onOpenSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final active = state == AutomaticImportUiState.active;
+    final status = switch (state) {
+      AutomaticImportUiState.disabled => 'Desativada',
+      AutomaticImportUiState.active => 'Ativa',
+      AutomaticImportUiState.accessRequired => 'Acesso às imagens necessário',
+      AutomaticImportUiState.limitedAccess => 'Acesso limitado',
+      AutomaticImportUiState.unavailable => 'Verificação indisponível',
+    };
+
+    return Card(
+      key: const Key('automatic-import-card'),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.screenshot_monitor_outlined,
+                  color: colors.secondary,
+                  size: 21,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Importação automática',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Adicione novos screenshots ao Contexto automaticamente.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Semantics(
+                  label: 'Ativar importação automática',
+                  child: Switch(
+                    key: const Key('automatic-import-switch'),
+                    value: active,
+                    onChanged: onChanged,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              status,
+              key: const Key('automatic-import-status'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color:
+                    state == AutomaticImportUiState.accessRequired ||
+                        state == AutomaticImportUiState.limitedAccess ||
+                        state == AutomaticImportUiState.unavailable
+                    ? colors.error
+                    : colors.secondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (state == AutomaticImportUiState.limitedAccess) ...[
+              const SizedBox(height: 5),
+              Text(
+                'O Android autorizou apenas imagens escolhidas. Novos '
+                'screenshots não podem ser acompanhados com segurança.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ],
+            if (state == AutomaticImportUiState.accessRequired ||
+                state == AutomaticImportUiState.limitedAccess) ...[
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: onOpenSettings,
+                  child: const Text('Abrir configurações do aplicativo'),
+                ),
+              ),
+            ],
+            const SizedBox(height: 5),
+            Text(
+              'Com o app encerrado, novas capturas serão verificadas na próxima abertura.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
       ),
