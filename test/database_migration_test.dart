@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 8 para 10 preservando dados e criando etiquetas', () async {
+  test('migra schema 8 para 11 preservando dados e hierarquia', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_test_',
     );
@@ -100,7 +100,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 10);
+    expect(version.read<int>('user_version'), 11);
     expect(rows, hasLength(2));
     expect(rows.first.internalName, 'copia.png');
     expect(rows.first.mediaHash, isNull);
@@ -112,8 +112,18 @@ void main() {
     expect(ocrRows.single.fullText, 'Texto fictício preservado');
     expect(ocrRows.single.normalizedText, 'texto ficticio preservado');
     expect(await migrated.select(migrated.processingJobs).get(), hasLength(1));
-    expect(await migrated.select(migrated.categories).get(), hasLength(1));
-    expect(await migrated.select(migrated.mediaCategories).get(), hasLength(1));
+    final categories = await migrated.select(migrated.categories).get();
+    expect(categories, hasLength(1));
+    expect(categories.single.id, 1);
+    expect(categories.single.name, 'Teste');
+    expect(categories.single.normalizedName, 'teste');
+    expect(categories.single.parentId, isNull);
+    final mediaCategories = await migrated
+        .select(migrated.mediaCategories)
+        .get();
+    expect(mediaCategories, hasLength(1));
+    expect(mediaCategories.single.mediaItemId, 1);
+    expect(mediaCategories.single.categoryId, 1);
     expect(await migrated.select(migrated.tags).get(), isEmpty);
     expect(await migrated.select(migrated.mediaTags).get(), isEmpty);
     final settings = await migrated
@@ -203,6 +213,75 @@ void main() {
       sharedId,
     );
     await reopened.close();
+    directory.deleteSync(recursive: true);
+  });
+
+  test('migra schema 10 para 11 preservando IDs e associações', () async {
+    final directory = Directory.systemTemp.createTempSync(
+      'memoshot_migration_10_test_',
+    );
+    final databaseFile = File('${directory.path}/contexto.sqlite');
+    final legacy = _LegacyDatabase(NativeDatabase(databaseFile));
+    await legacy.customSelect('SELECT 1').get();
+    await legacy.customStatement(
+      'ALTER TABLE media_items ADD COLUMN captured_at INTEGER NULL',
+    );
+    await legacy.customStatement('''
+      CREATE TABLE tags (
+        id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        normalized_name TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
+    await legacy.customStatement('''
+      CREATE TABLE media_tags (
+        media_item_id INTEGER NOT NULL
+          REFERENCES media_items (id) ON DELETE CASCADE,
+        tag_id INTEGER NOT NULL
+          REFERENCES tags (id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (media_item_id, tag_id)
+      )
+    ''');
+    await legacy.customStatement(
+      '''
+      INSERT INTO media_items (
+        id, private_path, internal_name, imported_at, source_mode, status
+      ) VALUES (3, '/tmp/preservada.png', 'preservada.png', ?, 'photoPicker', 'ready')
+      ''',
+      [DateTime(2025).millisecondsSinceEpoch ~/ 1000],
+    );
+    await legacy.customStatement(
+      "INSERT INTO categories (id, name, normalized_name, created_at) VALUES (7, 'Livros', 'livros', ?)",
+      [DateTime(2025).millisecondsSinceEpoch ~/ 1000],
+    );
+    await legacy.customStatement(
+      'INSERT INTO media_categories (media_item_id, category_id, created_at) VALUES (3, 7, ?)',
+      [DateTime(2025).millisecondsSinceEpoch ~/ 1000],
+    );
+    await legacy.customStatement('PRAGMA user_version = 10');
+    await legacy.close();
+
+    final migrated = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
+    final version = await migrated
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    final category = await migrated.select(migrated.categories).getSingle();
+    final relation = await migrated
+        .select(migrated.mediaCategories)
+        .getSingle();
+
+    expect(version.read<int>('user_version'), 11);
+    expect(category.id, 7);
+    expect(category.name, 'Livros');
+    expect(category.parentId, isNull);
+    expect(relation.mediaItemId, 3);
+    expect(relation.categoryId, 7);
+    expect(await migrated.select(migrated.mediaItems).get(), hasLength(1));
+
+    await migrated.close();
     directory.deleteSync(recursive: true);
   });
 }

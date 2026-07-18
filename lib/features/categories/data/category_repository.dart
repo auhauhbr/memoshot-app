@@ -13,10 +13,52 @@ class CategoryValidationException implements Exception {
   final CategoryValidationError error;
 }
 
+enum CategoryHierarchyError {
+  categoryNotFound,
+  parentNotFound,
+  selfParent,
+  cycle,
+  hasChildren,
+}
+
+class CategoryHierarchyException implements Exception {
+  const CategoryHierarchyException(this.error);
+
+  final CategoryHierarchyError error;
+}
+
 abstract interface class CategoryRepository {
   Future<List<CategorySummary>> loadCategories();
 
   Future<Category> createCategory(String name);
+
+  Future<Category> createRootCategory(String name);
+
+  Future<Category> createSubcategory({
+    required int parentId,
+    required String name,
+  });
+
+  Future<List<Category>> loadRootCategories();
+
+  Future<List<Category>> loadChildCategories(int parentId);
+
+  Future<Category?> findCategoryById(int id);
+
+  Future<List<Category>> loadAncestors(int categoryId);
+
+  Future<CategoryPath> loadPath(int categoryId);
+
+  Future<List<Category>> loadDescendants(int categoryId);
+
+  Future<Category> moveCategory(Category category, {required int? parentId});
+
+  Future<bool> hasChildren(int categoryId);
+
+  Future<bool> wouldCreateCycle({
+    required int categoryId,
+    required int? parentId,
+  });
 
   Future<List<Category>> loadForMedia(int mediaItemId);
 
@@ -47,6 +89,31 @@ class LocalCategoryRepository implements CategoryRepository {
 
   @override
   Future<Category> createCategory(String name) async {
+    return createRootCategory(name);
+  }
+
+  @override
+  Future<Category> createRootCategory(String name) {
+    return _createCategory(name: name, parentId: null);
+  }
+
+  @override
+  Future<Category> createSubcategory({
+    required int parentId,
+    required String name,
+  }) async {
+    if (await _store.findById(parentId) == null) {
+      throw const CategoryHierarchyException(
+        CategoryHierarchyError.parentNotFound,
+      );
+    }
+    return _createCategory(name: name, parentId: parentId);
+  }
+
+  Future<Category> _createCategory({
+    required String name,
+    required int? parentId,
+  }) async {
     final visibleName = name.trim();
     final normalizedName = _normalizer.normalize(visibleName);
     if (normalizedName.isEmpty) {
@@ -55,7 +122,8 @@ class LocalCategoryRepository implements CategoryRepository {
     if (visibleName.length > 40) {
       throw const CategoryValidationException(CategoryValidationError.tooLong);
     }
-    if (await _store.findByNormalizedName(normalizedName) != null) {
+    if (await _store.findByNormalizedName(normalizedName, parentId: parentId) !=
+        null) {
       throw const CategoryValidationException(
         CategoryValidationError.duplicate,
       );
@@ -67,21 +135,153 @@ class LocalCategoryRepository implements CategoryRepository {
         name: visibleName,
         normalizedName: normalizedName,
         createdAt: createdAt,
+        parentId: parentId,
       );
       return Category(
         id: id,
         name: visibleName,
         normalizedName: normalizedName,
         createdAt: createdAt,
+        parentId: parentId,
       );
     } catch (_) {
-      if (await _store.findByNormalizedName(normalizedName) != null) {
+      if (parentId != null && await _store.findById(parentId) == null) {
+        throw const CategoryHierarchyException(
+          CategoryHierarchyError.parentNotFound,
+        );
+      }
+      if (await _store.findByNormalizedName(
+            normalizedName,
+            parentId: parentId,
+          ) !=
+          null) {
         throw const CategoryValidationException(
           CategoryValidationError.duplicate,
         );
       }
       rethrow;
     }
+  }
+
+  @override
+  Future<List<Category>> loadRootCategories() => _store.listRoots();
+
+  @override
+  Future<List<Category>> loadChildCategories(int parentId) async {
+    if (await _store.findById(parentId) == null) {
+      throw const CategoryHierarchyException(
+        CategoryHierarchyError.parentNotFound,
+      );
+    }
+    return _store.listChildren(parentId);
+  }
+
+  @override
+  Future<Category?> findCategoryById(int id) => _store.findById(id);
+
+  @override
+  Future<List<Category>> loadAncestors(int categoryId) async {
+    final category = await _requireCategory(categoryId);
+    final ancestors = <Category>[];
+    final visited = <int>{category.id};
+    var parentId = category.parentId;
+    while (parentId != null) {
+      if (!visited.add(parentId)) {
+        throw const CategoryHierarchyException(CategoryHierarchyError.cycle);
+      }
+      final parent = await _store.findById(parentId);
+      if (parent == null) {
+        throw const CategoryHierarchyException(
+          CategoryHierarchyError.parentNotFound,
+        );
+      }
+      ancestors.add(parent);
+      parentId = parent.parentId;
+    }
+    return ancestors.reversed.toList(growable: false);
+  }
+
+  @override
+  Future<CategoryPath> loadPath(int categoryId) async {
+    final category = await _requireCategory(categoryId);
+    return CategoryPath([...await loadAncestors(categoryId), category]);
+  }
+
+  @override
+  Future<List<Category>> loadDescendants(int categoryId) async {
+    await _requireCategory(categoryId);
+    final descendants = <Category>[];
+    final visited = <int>{categoryId};
+    final firstChildren = await _store.listChildren(categoryId);
+    final pending = <Category>[...firstChildren.reversed];
+    while (pending.isNotEmpty) {
+      final current = pending.removeLast();
+      if (!visited.add(current.id)) {
+        throw const CategoryHierarchyException(CategoryHierarchyError.cycle);
+      }
+      descendants.add(current);
+      final children = await _store.listChildren(current.id);
+      pending.addAll(children.reversed);
+    }
+    return descendants;
+  }
+
+  @override
+  Future<Category> moveCategory(
+    Category category, {
+    required int? parentId,
+  }) async {
+    final result = await _store.moveCategory(
+      id: category.id,
+      parentId: parentId,
+    );
+    switch (result) {
+      case CategoryMoveStoreResult.moved:
+        final moved = await _store.findById(category.id);
+        if (moved != null) return moved;
+        throw const CategoryHierarchyException(
+          CategoryHierarchyError.categoryNotFound,
+        );
+      case CategoryMoveStoreResult.categoryNotFound:
+        throw const CategoryHierarchyException(
+          CategoryHierarchyError.categoryNotFound,
+        );
+      case CategoryMoveStoreResult.parentNotFound:
+        throw const CategoryHierarchyException(
+          CategoryHierarchyError.parentNotFound,
+        );
+      case CategoryMoveStoreResult.selfParent:
+        throw const CategoryHierarchyException(
+          CategoryHierarchyError.selfParent,
+        );
+      case CategoryMoveStoreResult.cycle:
+        throw const CategoryHierarchyException(CategoryHierarchyError.cycle);
+      case CategoryMoveStoreResult.duplicate:
+        throw const CategoryValidationException(
+          CategoryValidationError.duplicate,
+        );
+    }
+  }
+
+  @override
+  Future<bool> hasChildren(int categoryId) async {
+    await _requireCategory(categoryId);
+    return _store.hasChildren(categoryId);
+  }
+
+  @override
+  Future<bool> wouldCreateCycle({
+    required int categoryId,
+    required int? parentId,
+  }) async {
+    await _requireCategory(categoryId);
+    if (parentId == null) return false;
+    if (await _store.findById(parentId) == null) {
+      throw const CategoryHierarchyException(
+        CategoryHierarchyError.parentNotFound,
+      );
+    }
+    return _store.wouldCreateCycle(categoryId: categoryId, parentId: parentId);
   }
 
   @override
@@ -96,8 +296,12 @@ class LocalCategoryRepository implements CategoryRepository {
 
   @override
   Future<Category> renameCategory(Category category, String name) async {
+    final current = await _requireCategory(category.id);
     final (visibleName, normalizedName) = _validateName(name);
-    final existing = await _store.findByNormalizedName(normalizedName);
+    final existing = await _store.findByNormalizedName(
+      normalizedName,
+      parentId: current.parentId,
+    );
     if (existing != null && existing.id != category.id) {
       throw const CategoryValidationException(
         CategoryValidationError.duplicate,
@@ -110,7 +314,10 @@ class LocalCategoryRepository implements CategoryRepository {
         normalizedName: normalizedName,
       );
     } catch (_) {
-      final conflict = await _store.findByNormalizedName(normalizedName);
+      final conflict = await _store.findByNormalizedName(
+        normalizedName,
+        parentId: current.parentId,
+      );
       if (conflict != null && conflict.id != category.id) {
         throw const CategoryValidationException(
           CategoryValidationError.duplicate,
@@ -122,13 +329,39 @@ class LocalCategoryRepository implements CategoryRepository {
       id: category.id,
       name: visibleName,
       normalizedName: normalizedName,
-      createdAt: category.createdAt,
+      createdAt: current.createdAt,
+      parentId: current.parentId,
     );
   }
 
   @override
-  Future<void> deleteCategory(int categoryId) {
-    return _store.deleteCategory(categoryId);
+  Future<void> deleteCategory(int categoryId) async {
+    await _requireCategory(categoryId);
+    if (await _store.hasChildren(categoryId)) {
+      throw const CategoryHierarchyException(
+        CategoryHierarchyError.hasChildren,
+      );
+    }
+    try {
+      await _store.deleteCategory(categoryId);
+    } catch (_) {
+      if (await _store.hasChildren(categoryId)) {
+        throw const CategoryHierarchyException(
+          CategoryHierarchyError.hasChildren,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<Category> _requireCategory(int id) async {
+    final category = await _store.findById(id);
+    if (category == null) {
+      throw const CategoryHierarchyException(
+        CategoryHierarchyError.categoryNotFound,
+      );
+    }
+    return category;
   }
 
   @override

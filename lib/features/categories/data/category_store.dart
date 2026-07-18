@@ -4,14 +4,33 @@ import '../../../core/database/contexto_database.dart';
 import '../../library/domain/media_item.dart' as media_domain;
 import '../domain/category.dart' as domain;
 
+enum CategoryMoveStoreResult {
+  moved,
+  categoryNotFound,
+  parentNotFound,
+  selfParent,
+  cycle,
+  duplicate,
+}
+
 abstract interface class CategoryStore {
   Future<int> insertCategory({
     required String name,
     required String normalizedName,
     required DateTime createdAt,
+    required int? parentId,
   });
 
-  Future<domain.Category?> findByNormalizedName(String normalizedName);
+  Future<domain.Category?> findByNormalizedName(
+    String normalizedName, {
+    required int? parentId,
+  });
+
+  Future<domain.Category?> findById(int id);
+
+  Future<List<domain.Category>> listRoots();
+
+  Future<List<domain.Category>> listChildren(int parentId);
 
   Future<List<domain.CategorySummary>> listWithMediaCounts();
 
@@ -23,6 +42,18 @@ abstract interface class CategoryStore {
     required int id,
     required String name,
     required String normalizedName,
+  });
+
+  Future<CategoryMoveStoreResult> moveCategory({
+    required int id,
+    required int? parentId,
+  });
+
+  Future<bool> hasChildren(int id);
+
+  Future<bool> wouldCreateCycle({
+    required int categoryId,
+    required int parentId,
   });
 
   Future<void> deleteCategory(int id);
@@ -40,6 +71,7 @@ class DriftCategoryStore implements CategoryStore {
     required String name,
     required String normalizedName,
     required DateTime createdAt,
+    required int? parentId,
   }) {
     return _database
         .into(_database.categories)
@@ -47,19 +79,56 @@ class DriftCategoryStore implements CategoryStore {
           CategoriesCompanion.insert(
             name: name,
             normalizedName: normalizedName,
+            parentId: Value(parentId),
             createdAt: createdAt,
           ),
         );
   }
 
   @override
-  Future<domain.Category?> findByNormalizedName(String normalizedName) async {
-    final row =
-        await (_database.select(_database.categories)..where(
-              (category) => category.normalizedName.equals(normalizedName),
-            ))
-            .getSingleOrNull();
+  Future<domain.Category?> findByNormalizedName(
+    String normalizedName, {
+    required int? parentId,
+  }) async {
+    final query = _database.select(_database.categories)
+      ..where((category) => category.normalizedName.equals(normalizedName));
+    query.where(
+      (category) => parentId == null
+          ? category.parentId.isNull()
+          : category.parentId.equals(parentId),
+    );
+    final row = await query.getSingleOrNull();
     return row == null ? null : _toDomain(row);
+  }
+
+  @override
+  Future<domain.Category?> findById(int id) async {
+    final row = await (_database.select(
+      _database.categories,
+    )..where((category) => category.id.equals(id))).getSingleOrNull();
+    return row == null ? null : _toDomain(row);
+  }
+
+  @override
+  Future<List<domain.Category>> listRoots() => _listByParent(null);
+
+  @override
+  Future<List<domain.Category>> listChildren(int parentId) =>
+      _listByParent(parentId);
+
+  Future<List<domain.Category>> _listByParent(int? parentId) async {
+    final query = _database.select(_database.categories);
+    query
+      ..where(
+        (category) => parentId == null
+            ? category.parentId.isNull()
+            : category.parentId.equals(parentId),
+      )
+      ..orderBy([
+        (category) => OrderingTerm.asc(category.normalizedName),
+        (category) => OrderingTerm.asc(category.id),
+      ]);
+    return (await query.get()).map(_toDomain).toList(growable: false);
   }
 
   @override
@@ -99,7 +168,10 @@ class DriftCategoryStore implements CategoryStore {
     ]);
     query
       ..where(_database.mediaCategories.mediaItemId.equals(mediaItemId))
-      ..orderBy([OrderingTerm.asc(_database.categories.normalizedName)]);
+      ..orderBy([
+        OrderingTerm.asc(_database.categories.normalizedName),
+        OrderingTerm.asc(_database.categories.id),
+      ]);
     final rows = await query.get();
     return rows
         .map((row) => _toDomain(row.readTable(_database.categories)))
@@ -141,6 +213,84 @@ class DriftCategoryStore implements CategoryStore {
         normalizedName: Value(normalizedName),
       ),
     );
+  }
+
+  @override
+  Future<CategoryMoveStoreResult> moveCategory({
+    required int id,
+    required int? parentId,
+  }) {
+    return _database.transaction(() async {
+      final category = await findById(id);
+      if (category == null) return CategoryMoveStoreResult.categoryNotFound;
+      if (parentId == id) return CategoryMoveStoreResult.selfParent;
+      if (parentId != null) {
+        if (await findById(parentId) == null) {
+          return CategoryMoveStoreResult.parentNotFound;
+        }
+        if (await wouldCreateCycle(categoryId: id, parentId: parentId)) {
+          return CategoryMoveStoreResult.cycle;
+        }
+      }
+      if (await findByNormalizedName(
+            category.normalizedName,
+            parentId: parentId,
+          )
+          case final conflict? when conflict.id != id) {
+        return CategoryMoveStoreResult.duplicate;
+      }
+      try {
+        await (_database.update(_database.categories)
+              ..where((row) => row.id.equals(id)))
+            .write(CategoriesCompanion(parentId: Value(parentId)));
+      } catch (_) {
+        final conflict = await findByNormalizedName(
+          category.normalizedName,
+          parentId: parentId,
+        );
+        if (conflict != null && conflict.id != id) {
+          return CategoryMoveStoreResult.duplicate;
+        }
+        rethrow;
+      }
+      return CategoryMoveStoreResult.moved;
+    });
+  }
+
+  @override
+  Future<bool> hasChildren(int id) async {
+    final child =
+        await (_database.select(_database.categories)
+              ..where((category) => category.parentId.equals(id))
+              ..limit(1))
+            .getSingleOrNull();
+    return child != null;
+  }
+
+  @override
+  Future<bool> wouldCreateCycle({
+    required int categoryId,
+    required int parentId,
+  }) async {
+    final row = await _database
+        .customSelect(
+          '''
+      WITH RECURSIVE descendants(id) AS (
+        VALUES (?)
+        UNION
+        SELECT categories.id
+        FROM categories
+        JOIN descendants ON categories.parent_id = descendants.id
+      )
+      SELECT EXISTS(
+        SELECT 1 FROM descendants WHERE id = ?
+      ) AS creates_cycle
+      ''',
+          variables: [Variable<int>(categoryId), Variable<int>(parentId)],
+          readsFrom: {_database.categories},
+        )
+        .getSingle();
+    return row.read<int>('creates_cycle') != 0;
   }
 
   @override
@@ -187,6 +337,7 @@ class DriftCategoryStore implements CategoryStore {
       name: row.name,
       normalizedName: row.normalizedName,
       createdAt: row.createdAt,
+      parentId: row.parentId,
     );
   }
 
