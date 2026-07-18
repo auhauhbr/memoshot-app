@@ -8,6 +8,8 @@ import 'package:contexto/features/library/data/media_item_store.dart';
 import 'package:contexto/features/library/domain/media_item.dart';
 import 'package:contexto/features/ocr/data/ocr_result_store.dart';
 import 'package:contexto/features/ocr/domain/ocr_result.dart';
+import 'package:contexto/features/tags/data/tag_repository.dart';
+import 'package:contexto/features/tags/data/tag_store.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,6 +19,7 @@ void main() {
   late DriftMediaItemStore mediaStore;
   late DriftOcrResultStore ocrStore;
   late LocalMediaItemRepository repository;
+  late LocalTagRepository tagRepository;
 
   setUp(() {
     temporaryDirectory = Directory.systemTemp.createTempSync(
@@ -31,6 +34,7 @@ void main() {
         documentsDirectory: () async => temporaryDirectory,
       ),
     );
+    tagRepository = LocalTagRepository(store: DriftTagStore(database));
   });
 
   tearDown(() async {
@@ -196,6 +200,162 @@ void main() {
     expect(await repository.searchRecognizedText(''), isEmpty);
     expect(await repository.searchRecognizedText('   \n  '), isEmpty);
   });
+
+  test('consulta sem tagId preserva todos os itens', () async {
+    final older = await persistItem(
+      mediaStore,
+      ocrStore,
+      temporaryDirectory,
+      idMarker: 40,
+      importedAt: DateTime(2026, 1),
+      text: 'texto comum',
+    );
+    final newer = await persistItem(
+      mediaStore,
+      ocrStore,
+      temporaryDirectory,
+      idMarker: 41,
+      importedAt: DateTime(2026, 2),
+      text: 'texto comum',
+    );
+
+    expect((await repository.loadAvailableItems()).map((item) => item.id), [
+      newer.id,
+      older.id,
+    ]);
+  });
+
+  test(
+    'tagId filtra texto vazio e tag inexistente não retorna itens',
+    () async {
+      final item = await persistItem(
+        mediaStore,
+        ocrStore,
+        temporaryDirectory,
+        idMarker: 42,
+        importedAt: DateTime(2026),
+        text: 'conteúdo',
+      );
+      final tag = await tagRepository.createTag('Trabalho');
+      await tagRepository.addToMedia(tagId: tag.id, mediaItemId: item.id);
+
+      expect(
+        (await repository.loadAvailableItems(tagId: tag.id)).single.id,
+        item.id,
+      );
+      expect(await repository.loadAvailableItems(tagId: 9999), isEmpty);
+    },
+  );
+
+  test('pesquisa textual e tagId são combinados com AND', () async {
+    final matching = await persistItem(
+      mediaStore,
+      ocrStore,
+      temporaryDirectory,
+      idMarker: 43,
+      importedAt: DateTime(2026, 2),
+      text: 'projeto azul',
+    );
+    final onlyText = await persistItem(
+      mediaStore,
+      ocrStore,
+      temporaryDirectory,
+      idMarker: 44,
+      importedAt: DateTime(2026, 3),
+      text: 'projeto verde',
+    );
+    final onlyTag = await persistItem(
+      mediaStore,
+      ocrStore,
+      temporaryDirectory,
+      idMarker: 45,
+      importedAt: DateTime(2026, 4),
+      text: 'outro conteúdo',
+    );
+    final tag = await tagRepository.createTag('Projetos');
+    await tagRepository.addToMedia(tagId: tag.id, mediaItemId: matching.id);
+    await tagRepository.addToMedia(tagId: tag.id, mediaItemId: onlyTag.id);
+
+    final results = await repository.searchRecognizedText(
+      'projeto',
+      tagId: tag.id,
+    );
+
+    expect(results.map((result) => result.mediaItem.id), [matching.id]);
+    expect(
+      results.map((result) => result.mediaItem.id),
+      isNot(contains(onlyText.id)),
+    );
+  });
+
+  test(
+    'item com várias etiquetas aparece uma vez e mantém ordenação',
+    () async {
+      final older = await persistItem(
+        mediaStore,
+        ocrStore,
+        temporaryDirectory,
+        idMarker: 46,
+        importedAt: DateTime(2026, 4),
+        capturedAt: DateTime(2026, 1),
+        text: 'termo compartilhado',
+      );
+      final newer = await persistItem(
+        mediaStore,
+        ocrStore,
+        temporaryDirectory,
+        idMarker: 47,
+        importedAt: DateTime(2026, 1),
+        capturedAt: DateTime(2026, 2),
+        text: 'termo compartilhado',
+      );
+      final selected = await tagRepository.createTag('Selecionada');
+      final extra = await tagRepository.createTag('Extra');
+      for (final item in [older, newer]) {
+        await tagRepository.addToMedia(
+          tagId: selected.id,
+          mediaItemId: item.id,
+        );
+      }
+      await tagRepository.addToMedia(tagId: extra.id, mediaItemId: newer.id);
+
+      final results = await repository.searchRecognizedText(
+        'termo',
+        tagId: selected.id,
+      );
+
+      expect(results.map((result) => result.mediaItem.id), [
+        newer.id,
+        older.id,
+      ]);
+    },
+  );
+
+  test(
+    'remover vínculo retira resultado e excluir tag preserva item',
+    () async {
+      final item = await persistItem(
+        mediaStore,
+        ocrStore,
+        temporaryDirectory,
+        idMarker: 48,
+        importedAt: DateTime(2026),
+        text: 'preservar screenshot',
+      );
+      final tag = await tagRepository.createTag('Temporária');
+      await tagRepository.addToMedia(tagId: tag.id, mediaItemId: item.id);
+      expect(await repository.loadAvailableItems(tagId: tag.id), hasLength(1));
+
+      await tagRepository.removeFromMedia(tagId: tag.id, mediaItemId: item.id);
+      expect(await repository.loadAvailableItems(tagId: tag.id), isEmpty);
+      await tagRepository.addToMedia(tagId: tag.id, mediaItemId: item.id);
+      await tagRepository.deleteTag(tag.id);
+
+      expect(await repository.loadAvailableItems(tagId: tag.id), isEmpty);
+      expect((await repository.loadAvailableItems()).single.id, item.id);
+      expect(File(item.privatePath).existsSync(), isTrue);
+    },
+  );
 }
 
 Future<MediaItem> persistItem(

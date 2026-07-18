@@ -1368,6 +1368,329 @@ void main() {
     expect(find.text('1 etiqueta'), findsOneWidget);
   });
 
+  testWidgets(
+    'seletor lista etiquetas ordenadas, quantidades e permite cancelar',
+    (tester) async {
+      final tags = FakeTagRepository();
+      final zeta = await tags.createTag('Zeta');
+      await tags.createTag('Ação');
+      tags.seedAssociation(tagId: zeta.id, mediaItemId: 1);
+      tags.seedAssociation(tagId: zeta.id, mediaItemId: 2);
+
+      await tester.pumpWidget(
+        buildTestApp(FakeScreenshotPicker(), tagRepository: tags),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('open-tag-filter')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Todas as etiquetas'), findsOneWidget);
+      expect(find.text('Nenhum screenshot'), findsOneWidget);
+      expect(find.text('2 screenshots'), findsOneWidget);
+      final actionTop = tester.getTopLeft(find.text('Ação')).dy;
+      final zetaTop = tester.getTopLeft(find.text('Zeta')).dy;
+      expect(actionTop, lessThan(zetaTop));
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('active-tag-filter-chip')), findsNothing);
+    },
+  );
+
+  testWidgets('seleciona etiqueta, filtra imediatamente e permite limpar', (
+    tester,
+  ) async {
+    final firstFile = createTestImage(temporaryDirectory, 'filtro-a.png');
+    final secondFile = createTestImage(temporaryDirectory, 'filtro-b.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [
+        createMediaItem(1, firstFile.path, importedAt: DateTime(2026, 1)),
+        createMediaItem(2, secondFile.path, importedAt: DateTime(2026, 2)),
+      ],
+    );
+    final tags = FakeTagRepository();
+    final selected = await tags.createTag('Importante');
+    tags.seedAssociation(tagId: selected.id, mediaItemId: 1);
+
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        tagRepository: tags,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-tag-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('tag-filter-option-${selected.id}')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Etiqueta: Importante'), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-2')), findsNothing);
+
+    await tester.tap(find.byTooltip('Limpar filtro'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('active-tag-filter-chip')), findsNothing);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-2')), findsOneWidget);
+  });
+
+  testWidgets('pesquisa textual e etiqueta usam lógica AND', (tester) async {
+    final firstFile = createTestImage(temporaryDirectory, 'and-a.png');
+    final secondFile = createTestImage(temporaryDirectory, 'and-b.png');
+    final thirdFile = createTestImage(temporaryDirectory, 'and-c.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [
+        createMediaItem(1, firstFile.path),
+        createMediaItem(2, secondFile.path),
+        createMediaItem(3, thirdFile.path),
+      ],
+      recognizedTexts: const {
+        1: 'projeto importante',
+        2: 'projeto sem etiqueta',
+        3: 'outro conteúdo',
+      },
+    );
+    final tags = FakeTagRepository();
+    final selected = await tags.createTag('Trabalho');
+    tags.seedAssociation(tagId: selected.id, mediaItemId: 1);
+    tags.seedAssociation(tagId: selected.id, mediaItemId: 3);
+
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        tagRepository: tags,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-tag-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('tag-filter-option-${selected.id}')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'projeto');
+    await tester.pump(const Duration(milliseconds: 301));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-2')), findsNothing);
+    expect(find.byKey(const ValueKey('screenshot-tile-3')), findsNothing);
+  });
+
+  testWidgets('consulta antiga não sobrescreve filtro mais recente', (
+    tester,
+  ) async {
+    final firstFile = createTestImage(temporaryDirectory, 'concorrente-a.png');
+    final secondFile = createTestImage(temporaryDirectory, 'concorrente-b.png');
+    final oldSearch = Completer<List<ScreenshotSearchResult>>();
+    final first = createMediaItem(1, firstFile.path);
+    final second = createMediaItem(2, secondFile.path);
+    final repository = FakeMediaItemRepository(
+      initialItems: [first, second],
+      recognizedTexts: const {1: 'projeto filtrado', 2: 'projeto antigo'},
+      searchCompleters: {'all:projeto': oldSearch},
+    );
+    final tags = FakeTagRepository();
+    final selected = await tags.createTag('Atual');
+    tags.seedAssociation(tagId: selected.id, mediaItemId: 1);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        tagRepository: tags,
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).first, 'projeto');
+    await tester.pump(const Duration(milliseconds: 301));
+    await tester.tap(find.byKey(const Key('open-tag-filter')));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byKey(Key('tag-filter-option-${selected.id}')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+
+    oldSearch.complete([
+      ScreenshotSearchResult(mediaItem: second, snippet: 'projeto antigo'),
+    ]);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-2')), findsNothing);
+  });
+
+  testWidgets('descarte durante consulta filtrada não atualiza Home fechada', (
+    tester,
+  ) async {
+    final file = createTestImage(temporaryDirectory, 'dispose-filtro.png');
+    final pending = Completer<List<ScreenshotSearchResult>>();
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, file.path)],
+      recognizedTexts: const {1: 'consulta pendente'},
+      searchCompleters: {'1:consulta': pending},
+    );
+    final tags = FakeTagRepository();
+    final selected = await tags.createTag('Pendente');
+    tags.seedAssociation(tagId: selected.id, mediaItemId: 1);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        tagRepository: tags,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-tag-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('tag-filter-option-${selected.id}')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'consulta');
+    await tester.pump(const Duration(milliseconds: 301));
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+    pending.complete(const []);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('filtro sem resultados mostra mensagem e ação para limpar', (
+    tester,
+  ) async {
+    final tags = FakeTagRepository();
+    final selected = await tags.createTag('Vazia');
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), tagRepository: tags),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-tag-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('tag-filter-option-${selected.id}')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Nenhum screenshot encontrado com esta etiqueta.'),
+      findsOneWidget,
+    );
+    expect(find.text('Limpar filtro'), findsOneWidget);
+  });
+
+  testWidgets('erros ao listar etiquetas e carregar filtro permitem repetir', (
+    tester,
+  ) async {
+    final failingTags = FakeTagRepository(failLoadSummaries: true);
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), tagRepository: failingTags),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-tag-filter')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Não foi possível carregar as etiquetas.'),
+      findsOneWidget,
+    );
+    expect(find.text('Tentar novamente'), findsOneWidget);
+
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    final tags = FakeTagRepository();
+    final selected = await tags.createTag('Falha');
+    final repository = FakeMediaItemRepository(failFilteredLoad: true);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        tagRepository: tags,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-tag-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('tag-filter-option-${selected.id}')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Não foi possível carregar os screenshots.'),
+      findsOneWidget,
+    );
+    expect(find.text('Tentar novamente'), findsOneWidget);
+  });
+
+  testWidgets(
+    'etiqueta selecionada excluída é limpa ao voltar do gerenciamento',
+    (tester) async {
+      final file = createTestImage(temporaryDirectory, 'tag-excluida.png');
+      final repository = FakeMediaItemRepository(
+        initialItems: [createMediaItem(1, file.path)],
+      );
+      final tags = FakeTagRepository();
+      final selected = await tags.createTag('Descartável');
+      tags.seedAssociation(tagId: selected.id, mediaItemId: 1);
+      await tester.pumpWidget(
+        buildTestApp(
+          FakeScreenshotPicker(),
+          repository: repository,
+          tagRepository: tags,
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('open-tag-filter')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(Key('tag-filter-option-${selected.id}')));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const Key('tags-summary')));
+      await tester.tap(find.byKey(const Key('tags-summary')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Ações da etiqueta Descartável'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Excluir etiqueta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm-tag-deletion')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('active-tag-filter-chip')), findsNothing);
+      expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+    },
+  );
+
+  testWidgets('voltar dos detalhes atualiza associação do filtro ativo', (
+    tester,
+  ) async {
+    final file = createTestImage(temporaryDirectory, 'tag-detalhe.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, file.path)],
+    );
+    final tags = FakeTagRepository();
+    final selected = await tags.createTag('Revisar');
+    tags.seedAssociation(tagId: selected.id, mediaItemId: 1);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        tagRepository: tags,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-tag-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('tag-filter-option-${selected.id}')));
+    await tester.pumpAndSettle();
+    await openFirstScreenshot(tester);
+    await tester.ensureVisible(find.byTooltip('Remover etiqueta Revisar'));
+    await tester.tap(find.byTooltip('Remover etiqueta Revisar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Nenhum screenshot encontrado com esta etiqueta.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('criar categoria atualiza lista e contador da Home', (
     tester,
   ) async {
@@ -2122,7 +2445,9 @@ Widget buildTestApp(
   final resolvedMediaRepository = repository ?? FakeMediaItemRepository();
   final resolvedCategoryRepository =
       categoryRepository ?? FakeCategoryRepository();
+  final resolvedTagRepository = tagRepository ?? FakeTagRepository();
   resolvedCategoryRepository.mediaItems = resolvedMediaRepository._items;
+  resolvedMediaRepository.tagAssociations = resolvedTagRepository._associations;
   return ContextoApp(
     key: UniqueKey(),
     screenshotPicker: picker,
@@ -2130,7 +2455,7 @@ Widget buildTestApp(
     ocrRepository: resolvedOcrRepository,
     ocrQueue: ocrQueue ?? FakeOcrQueue(resolvedOcrRepository),
     categoryRepository: resolvedCategoryRepository,
-    tagRepository: tagRepository ?? FakeTagRepository(),
+    tagRepository: resolvedTagRepository,
     incomingShareSource: incomingShareSource ?? FakeIncomingShareSource(),
     automaticScreenshotSource:
         automaticScreenshotSource ?? FakeAutomaticScreenshotSource(),
@@ -2146,6 +2471,7 @@ class FakeTagRepository implements TagRepository {
     this.failRemove = false,
     this.loadForMediaCompleter,
     this.addCompleter,
+    this.failLoadSummaries = false,
   });
 
   final List<Tag> _tags = [];
@@ -2155,6 +2481,7 @@ class FakeTagRepository implements TagRepository {
   final bool failRemove;
   final Completer<List<Tag>>? loadForMediaCompleter;
   final Completer<void>? addCompleter;
+  final bool failLoadSummaries;
   int createCallCount = 0;
   int addCallCount = 0;
   int removeCallCount = 0;
@@ -2195,6 +2522,7 @@ class FakeTagRepository implements TagRepository {
 
   @override
   Future<List<TagSummary>> loadTagSummaries() async {
+    if (failLoadSummaries) throw StateError('Falha privada ao listar');
     final summaries = [
       for (final tag in _tags)
         TagSummary(
@@ -2232,6 +2560,9 @@ class FakeTagRepository implements TagRepository {
   Future<void> deleteTag(int tagId) async {
     deleteCallCount++;
     _tags.removeWhere((tag) => tag.id == tagId);
+    for (final tagIds in _associations.values) {
+      tagIds.remove(tagId);
+    }
   }
 
   @override
@@ -2581,6 +2912,8 @@ class FakeMediaItemRepository implements MediaItemRepository {
     Map<String, Completer<List<ScreenshotSearchResult>>> searchCompleters =
         const {},
     Object? searchError,
+    Object? loadError,
+    bool failFilteredLoad = false,
     Set<String> rejectedPaths = const {},
   }) : this._(
          initialItems,
@@ -2588,6 +2921,8 @@ class FakeMediaItemRepository implements MediaItemRepository {
          recognizedTexts,
          searchCompleters,
          searchError,
+         loadError,
+         failFilteredLoad,
          rejectedPaths,
        );
 
@@ -2597,6 +2932,8 @@ class FakeMediaItemRepository implements MediaItemRepository {
     Map<int, String> recognizedTexts,
     this._searchCompleters,
     this._searchError,
+    this._loadError,
+    this._failFilteredLoad,
     Set<String> rejectedPaths,
   ) : _items = [...initialItems],
       _sourcePaths = {for (final item in initialItems) item.privatePath},
@@ -2610,6 +2947,9 @@ class FakeMediaItemRepository implements MediaItemRepository {
   final Map<int, String> _recognizedTexts;
   final Map<String, Completer<List<ScreenshotSearchResult>>> _searchCompleters;
   final Object? _searchError;
+  final Object? _loadError;
+  final bool _failFilteredLoad;
+  Map<int, Set<int>> tagAssociations = {};
   final List<String> searchQueries = [];
   int loadCallCount = 0;
   int removeCallCount = 0;
@@ -2650,9 +2990,20 @@ class FakeMediaItemRepository implements MediaItemRepository {
   }
 
   @override
-  Future<List<MediaItem>> loadAvailableItems() async {
+  Future<List<MediaItem>> loadAvailableItems({int? tagId}) async {
     loadCallCount++;
-    return [..._items]..sort(compareMediaItemsRecentFirst);
+    if (_loadError != null) throw _loadError;
+    if (tagId != null && _failFilteredLoad) {
+      throw StateError('Falha privada ao filtrar');
+    }
+    final items = tagId == null
+        ? [..._items]
+        : _items
+              .where(
+                (item) => tagAssociations[item.id]?.contains(tagId) ?? false,
+              )
+              .toList();
+    return items..sort(compareMediaItemsRecentFirst);
   }
 
   @override
@@ -2672,6 +3023,7 @@ class FakeMediaItemRepository implements MediaItemRepository {
   @override
   Future<List<ScreenshotSearchResult>> searchRecognizedText(
     String query, {
+    int? tagId,
     int limit = 100,
   }) async {
     const normalizer = TextNormalizer();
@@ -2685,7 +3037,9 @@ class FakeMediaItemRepository implements MediaItemRepository {
     if (_searchError != null) {
       throw _searchError;
     }
-    final controlled = _searchCompleters[normalizedQuery];
+    final controlled =
+        _searchCompleters['${tagId ?? 'all'}:$normalizedQuery'] ??
+        _searchCompleters[normalizedQuery];
     if (controlled != null) {
       return controlled.future;
     }
@@ -2693,6 +3047,8 @@ class FakeMediaItemRepository implements MediaItemRepository {
     for (final item in _items) {
       final text = _recognizedTexts[item.id];
       if (text != null &&
+          (tagId == null ||
+              (tagAssociations[item.id]?.contains(tagId) ?? false)) &&
           normalizer.normalize(text).contains(normalizedQuery) &&
           File(item.privatePath).existsSync()) {
         results.add(

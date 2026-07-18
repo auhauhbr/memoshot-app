@@ -198,7 +198,7 @@ class RecordingMediaRepository implements MediaItemRepository {
   }
 
   @override
-  Future<List<MediaItem>> loadAvailableItems() async => const [];
+  Future<List<MediaItem>> loadAvailableItems({int? tagId}) async => const [];
 
   @override
   Future<void> removeItem(MediaItem item) async {}
@@ -206,6 +206,7 @@ class RecordingMediaRepository implements MediaItemRepository {
   @override
   Future<List<ScreenshotSearchResult>> searchRecognizedText(
     String query, {
+    int? tagId,
     int limit = 100,
   }) async => const [];
 

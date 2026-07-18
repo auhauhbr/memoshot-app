@@ -23,7 +23,7 @@ class ImportResult {
 }
 
 abstract interface class MediaItemRepository {
-  Future<List<MediaItem>> loadAvailableItems();
+  Future<List<MediaItem>> loadAvailableItems({int? tagId});
 
   Future<ImportResult> importScreenshots(
     List<SelectedScreenshot> screenshots, {
@@ -34,6 +34,7 @@ abstract interface class MediaItemRepository {
 
   Future<List<ScreenshotSearchResult>> searchRecognizedText(
     String query, {
+    int? tagId,
     int limit = 100,
   });
 
@@ -74,9 +75,9 @@ class LocalMediaItemRepository implements MediaItemRepository {
   final SearchSnippetBuilder _snippetBuilder;
 
   @override
-  Future<List<MediaItem>> loadAvailableItems() async {
+  Future<List<MediaItem>> loadAvailableItems({int? tagId}) async {
     await _repairLibrary();
-    final items = await _store.readItems();
+    final items = await _store.readItems(tagId: tagId);
     final available = <MediaItem>[];
     for (final item in items) {
       if (await File(item.privatePath).exists()) {
@@ -232,6 +233,7 @@ class LocalMediaItemRepository implements MediaItemRepository {
   @override
   Future<List<ScreenshotSearchResult>> searchRecognizedText(
     String query, {
+    int? tagId,
     int limit = 100,
   }) async {
     final normalizedQuery = _normalizer.normalize(query);
@@ -240,6 +242,7 @@ class LocalMediaItemRepository implements MediaItemRepository {
     }
     final matches = await _store.searchRecognizedText(
       normalizedQuery,
+      tagId: tagId,
       limit: limit.clamp(1, 100).toInt(),
     );
     final available = <ScreenshotSearchResult>[];

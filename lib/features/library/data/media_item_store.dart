@@ -16,7 +16,7 @@ abstract interface class MediaItemStore {
     domain.ImportOrigin importOrigin = domain.ImportOrigin.picker,
   });
 
-  Future<List<domain.MediaItem>> readItems();
+  Future<List<domain.MediaItem>> readItems({int? tagId});
 
   Future<domain.MediaItem?> findByHash(String mediaHash);
 
@@ -26,6 +26,7 @@ abstract interface class MediaItemStore {
 
   Future<List<RecognizedTextMatch>> searchRecognizedText(
     String normalizedQuery, {
+    int? tagId,
     required int limit,
   });
 
@@ -74,33 +75,34 @@ class DriftMediaItemStore implements MediaItemStore {
   }
 
   @override
-  Future<List<domain.MediaItem>> readItems() async {
-    final rows =
-        await (_database.select(_database.mediaItems)..orderBy([
-              (_) => OrderingTerm.desc(
-                const CustomExpression<DateTime>(
-                  'COALESCE(media_items.captured_at, media_items.imported_at)',
+  Future<List<domain.MediaItem>> readItems({int? tagId}) async {
+    if (tagId == null) {
+      final rows =
+          await (_database.select(_database.mediaItems)..orderBy([
+                (_) => OrderingTerm.desc(
+                  const CustomExpression<DateTime>(
+                    'COALESCE(media_items.captured_at, media_items.imported_at)',
+                  ),
                 ),
-              ),
-              (item) => OrderingTerm.desc(item.importedAt),
-              (item) => OrderingTerm.desc(item.id),
-            ]))
-            .get();
+                (item) => OrderingTerm.desc(item.importedAt),
+                (item) => OrderingTerm.desc(item.id),
+              ]))
+              .get();
+      return rows.map(_toDomain).toList(growable: false);
+    }
+
+    final query = _database.select(_database.mediaItems).join([
+      innerJoin(
+        _database.mediaTags,
+        _database.mediaTags.mediaItemId.equalsExp(_database.mediaItems.id),
+      ),
+    ]);
+    query
+      ..where(_database.mediaTags.tagId.equals(tagId))
+      ..orderBy(_recentFirstOrdering);
+    final rows = await query.get();
     return rows
-        .map(
-          (row) => domain.MediaItem(
-            id: row.id,
-            privatePath: row.privatePath,
-            internalName: row.internalName,
-            mimeType: row.mimeType,
-            mediaHash: row.mediaHash,
-            importedAt: row.importedAt,
-            capturedAt: row.capturedAt,
-            sourceMode: row.sourceMode,
-            status: row.status,
-            importOrigin: domain.ImportOrigin.fromDatabase(row.importOrigin),
-          ),
-        )
+        .map((row) => _toDomain(row.readTable(_database.mediaItems)))
         .toList(growable: false);
   }
 
@@ -129,34 +131,47 @@ class DriftMediaItemStore implements MediaItemStore {
   @override
   Future<List<RecognizedTextMatch>> searchRecognizedText(
     String normalizedQuery, {
+    int? tagId,
     required int limit,
   }) async {
     final escaped = normalizedQuery
         .replaceAll(r'\', r'\\')
         .replaceAll('%', r'\%')
         .replaceAll('_', r'\_');
-    final query = _database.select(_database.mediaItems).join([
-      innerJoin(
-        _database.ocrResults,
-        _database.ocrResults.mediaItemId.equalsExp(_database.mediaItems.id),
-      ),
-    ]);
+    final query = tagId == null
+        ? _database.select(_database.mediaItems).join([
+            innerJoin(
+              _database.ocrResults,
+              _database.ocrResults.mediaItemId.equalsExp(
+                _database.mediaItems.id,
+              ),
+            ),
+          ])
+        : _database.select(_database.mediaItems).join([
+            innerJoin(
+              _database.ocrResults,
+              _database.ocrResults.mediaItemId.equalsExp(
+                _database.mediaItems.id,
+              ),
+            ),
+            innerJoin(
+              _database.mediaTags,
+              _database.mediaTags.mediaItemId.equalsExp(
+                _database.mediaItems.id,
+              ),
+            ),
+          ]);
     query
       ..where(
         _database.ocrResults.normalizedText.like(
-          '%$escaped%',
-          escapeChar: r'\',
-        ),
+              '%$escaped%',
+              escapeChar: r'\',
+            ) &
+            (tagId == null
+                ? const Constant(true)
+                : _database.mediaTags.tagId.equals(tagId)),
       )
-      ..orderBy([
-        OrderingTerm.desc(
-          const CustomExpression<DateTime>(
-            'COALESCE(media_items.captured_at, media_items.imported_at)',
-          ),
-        ),
-        OrderingTerm.desc(_database.mediaItems.importedAt),
-        OrderingTerm.desc(_database.mediaItems.id),
-      ])
+      ..orderBy(_recentFirstOrdering)
       ..limit(limit);
     final rows = await query.get();
     return rows
@@ -170,6 +185,16 @@ class DriftMediaItemStore implements MediaItemStore {
         })
         .toList(growable: false);
   }
+
+  List<OrderingTerm> get _recentFirstOrdering => [
+    OrderingTerm.desc(
+      const CustomExpression<DateTime>(
+        'COALESCE(media_items.captured_at, media_items.imported_at)',
+      ),
+    ),
+    OrderingTerm.desc(_database.mediaItems.importedAt),
+    OrderingTerm.desc(_database.mediaItems.id),
+  ];
 
   domain.MediaItem _toDomain(MediaItem row) {
     return domain.MediaItem(

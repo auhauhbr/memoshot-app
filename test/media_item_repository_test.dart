@@ -633,7 +633,7 @@ class FailingMediaItemStore implements MediaItemStore {
   }
 
   @override
-  Future<List<MediaItem>> readItems() async => const [];
+  Future<List<MediaItem>> readItems({int? tagId}) async => const [];
 
   @override
   Future<MediaItem?> findByHash(String mediaHash) async => null;
@@ -647,6 +647,7 @@ class FailingMediaItemStore implements MediaItemStore {
   @override
   Future<List<RecognizedTextMatch>> searchRecognizedText(
     String normalizedQuery, {
+    int? tagId,
     required int limit,
   }) async => const [];
 

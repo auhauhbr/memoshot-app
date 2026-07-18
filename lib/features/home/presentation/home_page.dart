@@ -33,6 +33,8 @@ import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
 import '../../automatic_import/data/automatic_import_settings_repository.dart';
 import '../../tags/data/tag_repository.dart';
 import '../../tags/data/tag_store.dart';
+import '../../tags/domain/tag.dart';
+import '../../tags/presentation/tag_filter_dialog.dart';
 import '../../tags/presentation/tags_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -88,6 +90,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String? _errorMessage;
   String? _duplicateMessage;
   String? _searchErrorMessage;
+  Tag? _selectedTag;
+  bool _isFiltering = false;
+  String? _filterErrorMessage;
   int _categoryCount = 0;
   int _tagCount = 0;
   AutomaticImportUiState _automaticImportState =
@@ -391,9 +396,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       return;
     }
     setState(() {
-      _mediaItems.insertAll(0, result.importedItems.reversed);
+      if (_selectedTag == null) {
+        _mediaItems.insertAll(0, result.importedItems.reversed);
+      }
       _duplicateMessage = _duplicateText(result.duplicateCount);
     });
+    if (_selectedTag != null) {
+      await _refreshLibraryForCurrentFilter();
+    }
   }
 
   String? _duplicateText(int count) {
@@ -406,13 +416,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return '$count screenshots já estavam na biblioteca.';
   }
 
-  Future<void> _reloadItems() async {
-    final items = await _mediaRepository.loadAvailableItems();
+  Future<void> _reloadItems({int? generation}) async {
+    final tagId = _selectedTag?.id;
+    final items = await _mediaRepository.loadAvailableItems(tagId: tagId);
     final states = <int, OcrItemState>{};
     for (final item in items) {
       states[item.id] = await _ocrQueue.loadState(item.id);
     }
-    if (mounted) {
+    if (mounted &&
+        (generation == null || generation == _searchGeneration) &&
+        tagId == _selectedTag?.id) {
       setState(() {
         _mediaItems
           ..clear()
@@ -459,6 +472,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _searchResults = const [];
         _searchErrorMessage = null;
       });
+      unawaited(_refreshLibraryForCurrentFilter(generation: generation));
       return;
     }
     setState(() {
@@ -507,7 +521,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       });
     }
     try {
-      final results = await _mediaRepository.searchRecognizedText(query);
+      final tagId = _selectedTag?.id;
+      final results = await _mediaRepository.searchRecognizedText(
+        query,
+        tagId: tagId,
+      );
       if (!mounted || generation != _searchGeneration) {
         return;
       }
@@ -529,7 +547,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   void _clearSearch() {
     _searchDebounce?.cancel();
-    _searchGeneration++;
+    final generation = ++_searchGeneration;
     _searchController.clear();
     setState(() {
       _searchActive = false;
@@ -537,6 +555,73 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _searchResults = const [];
       _searchErrorMessage = null;
     });
+    unawaited(_refreshLibraryForCurrentFilter(generation: generation));
+  }
+
+  Future<void> _refreshLibraryForCurrentFilter({int? generation}) async {
+    final currentGeneration = generation ?? ++_searchGeneration;
+    if (mounted) {
+      setState(() {
+        _isFiltering = true;
+        _filterErrorMessage = null;
+      });
+    }
+    try {
+      await _reloadItems(generation: currentGeneration);
+      if (!mounted || currentGeneration != _searchGeneration) return;
+      setState(() => _isFiltering = false);
+    } catch (_) {
+      if (!mounted || currentGeneration != _searchGeneration) return;
+      setState(() {
+        _isFiltering = false;
+        _filterErrorMessage = 'Não foi possível carregar os screenshots.';
+      });
+    }
+  }
+
+  Future<void> _openTagFilter() async {
+    final selection = await showDialog<TagFilterSelection>(
+      context: context,
+      builder: (_) => TagFilterDialog(
+        repository: _tagRepository,
+        selectedTagId: _selectedTag?.id,
+      ),
+    );
+    if (!mounted || selection == null) return;
+    await _applyTagFilter(selection.tag);
+  }
+
+  Future<void> _applyTagFilter(Tag? tag) async {
+    if (_selectedTag?.id == tag?.id) return;
+    _searchDebounce?.cancel();
+    setState(() {
+      _selectedTag = tag;
+      _filterErrorMessage = null;
+      if (_textNormalizer.normalize(_searchController.text).isEmpty) {
+        _mediaItems.clear();
+      } else {
+        _searchResults = const [];
+      }
+    });
+    if (_textNormalizer.normalize(_searchController.text).isEmpty) {
+      await _refreshLibraryForCurrentFilter();
+    } else {
+      final generation = ++_searchGeneration;
+      setState(() {
+        _searchActive = true;
+        _isSearching = true;
+        _searchErrorMessage = null;
+      });
+      await _performSearch(_searchController.text, generation);
+    }
+  }
+
+  Future<void> _retryCurrentResults() async {
+    if (_searchActive) {
+      await _searchNow();
+    } else {
+      await _refreshLibraryForCurrentFilter();
+    }
   }
 
   Future<void> _reloadItemsIgnoringErrors() async {
@@ -560,9 +645,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _reloadTagCount() async {
+  Future<bool> _reloadTagCount() async {
     final tags = await _tagRepository.loadTagSummaries();
-    if (mounted) setState(() => _tagCount = tags.length);
+    final selected = _selectedTag;
+    final refreshed = selected == null
+        ? null
+        : tags
+              .where((summary) => summary.tag.id == selected.id)
+              .map((summary) => summary.tag)
+              .firstOrNull;
+    final invalid = selected != null && refreshed == null;
+    if (mounted) {
+      setState(() {
+        _tagCount = tags.length;
+        if (invalid) {
+          _selectedTag = null;
+        } else if (refreshed != null) {
+          _selectedTag = refreshed;
+        }
+      });
+    }
+    return invalid;
   }
 
   Future<void> _reloadTagCountIgnoringErrors() async {
@@ -592,7 +695,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(builder: (_) => TagsPage(repository: _tagRepository)),
     );
-    await _reloadTagCountIgnoringErrors();
+    try {
+      final invalid = await _reloadTagCount();
+      if (invalid) await _retryCurrentResults();
+    } catch (_) {
+      // Uma falha no contador não impede o uso da biblioteca.
+    }
   }
 
   Future<void> _openDetails(MediaItem item) async {
@@ -609,6 +717,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ),
     );
     await _reloadCategoryCountIgnoringErrors();
+    await _reloadTagCountIgnoringErrors();
+    if (_selectedTag != null) {
+      await _reloadItemsIgnoringErrors();
+    }
     if (removed == true) {
       await _reloadItemsIgnoringErrors();
       if (_searchActive) {
@@ -617,7 +729,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } else {
       final state = await _refreshOcrState(item.id);
       if (_searchActive &&
-          (state == OcrItemState.completedWithText ||
+          (_selectedTag != null ||
+              state == OcrItemState.completedWithText ||
               state == OcrItemState.completedWithoutText)) {
         await _searchNow();
       }
@@ -658,13 +771,40 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  _SearchField(
-                    controller: _searchController,
-                    showClearAction: _searchController.text.isNotEmpty,
-                    onChanged: _onSearchChanged,
-                    onSubmitted: _submitSearch,
-                    onClear: _clearSearch,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _SearchField(
+                          controller: _searchController,
+                          showClearAction: _searchController.text.isNotEmpty,
+                          onChanged: _onSearchChanged,
+                          onSubmitted: _submitSearch,
+                          onClear: _clearSearch,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filledTonal(
+                        key: const Key('open-tag-filter'),
+                        onPressed: _openTagFilter,
+                        tooltip: _selectedTag == null
+                            ? 'Filtrar biblioteca por etiqueta'
+                            : 'Alterar filtro de etiqueta',
+                        isSelected: _selectedTag != null,
+                        icon: const Icon(Icons.filter_alt_outlined),
+                        selectedIcon: const Icon(Icons.filter_alt),
+                      ),
+                    ],
                   ),
+                  if (_selectedTag != null || _filterErrorMessage != null) ...[
+                    const SizedBox(height: 8),
+                    _ActiveTagFilter(
+                      tag: _selectedTag,
+                      isLoading: _isFiltering,
+                      errorMessage: _filterErrorMessage,
+                      onClear: () => unawaited(_applyTagFilter(null)),
+                      onRetry: () => unawaited(_retryCurrentResults()),
+                    ),
+                  ],
                   const SizedBox(height: 18),
                   const _SectionTitle('Biblioteca'),
                   const SizedBox(height: 8),
@@ -732,11 +872,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             state == OcrItemState.pending ||
                             state == OcrItemState.processing,
                       ),
+                      onRetry: () => unawaited(_retryCurrentResults()),
                     ),
                     if (!_isSearching &&
                         _searchErrorMessage == null &&
                         _searchResults.isEmpty)
-                      const _EmptySearchState()
+                      _EmptySearchState(
+                        message: _selectedTag == null
+                            ? 'Nenhum screenshot encontrado.'
+                            : 'Nenhum screenshot corresponde à pesquisa e à etiqueta selecionada.',
+                        onClearFilter: _selectedTag == null
+                            ? null
+                            : () => unawaited(_applyTagFilter(null)),
+                      )
                     else if (_searchResults.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       ScreenshotGrid(
@@ -757,6 +905,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       mediaItems: _mediaItems,
                       ocrStates: _ocrStates,
                       onItemTap: _openDetails,
+                    ),
+                  ] else if (!_isLoading && !_isFiltering) ...[
+                    const SizedBox(height: 12),
+                    _EmptySearchState(
+                      message: _selectedTag == null
+                          ? 'Nenhum screenshot salvo.'
+                          : 'Nenhum screenshot encontrado com esta etiqueta.',
+                      onClearFilter: _selectedTag == null
+                          ? null
+                          : () => unawaited(_applyTagFilter(null)),
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -1174,6 +1332,7 @@ class _SearchSummary extends StatelessWidget {
     required this.isSearching,
     required this.errorMessage,
     required this.hasPendingItems,
+    required this.onRetry,
   });
 
   final String query;
@@ -1181,6 +1340,7 @@ class _SearchSummary extends StatelessWidget {
   final bool isSearching;
   final String? errorMessage;
   final bool hasPendingItems;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1235,6 +1395,14 @@ class _SearchSummary extends StatelessWidget {
               errorMessage!,
               style: theme.textTheme.bodySmall?.copyWith(color: colors.error),
             ),
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: onRetry,
+                child: const Text('Tentar novamente'),
+              ),
+            ),
           ],
         ],
       ),
@@ -1243,7 +1411,10 @@ class _SearchSummary extends StatelessWidget {
 }
 
 class _EmptySearchState extends StatelessWidget {
-  const _EmptySearchState();
+  const _EmptySearchState({required this.message, this.onClearFilter});
+
+  final String message;
+  final VoidCallback? onClearFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -1258,13 +1429,81 @@ class _EmptySearchState extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            'Nenhum screenshot encontrado.',
+            message,
+            textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
+          if (onClearFilter != null) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: onClearFilter,
+              icon: const Icon(Icons.filter_alt_off_outlined),
+              label: const Text('Limpar filtro'),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _ActiveTagFilter extends StatelessWidget {
+  const _ActiveTagFilter({
+    required this.tag,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.onClear,
+    required this.onRetry,
+  });
+
+  final Tag? tag;
+  final bool isLoading;
+  final String? errorMessage;
+  final VoidCallback onClear;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (tag != null)
+          Semantics(
+            label: 'Filtro ativo: etiqueta ${tag!.name}',
+            child: InputChip(
+              key: const Key('active-tag-filter-chip'),
+              avatar: isLoading
+                  ? const SizedBox.square(
+                      dimension: 14,
+                      child: CircularProgressIndicator(strokeWidth: 1.7),
+                    )
+                  : const Icon(Icons.label_outline, size: 18),
+              label: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: Text(
+                  'Etiqueta: ${tag!.name}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              deleteIcon: const Icon(Icons.close, size: 18),
+              deleteButtonTooltipMessage: 'Limpar filtro',
+              onDeleted: isLoading ? null : onClear,
+            ),
+          ),
+        if (errorMessage != null) ...[
+          Text(
+            errorMessage!,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.error),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Tentar novamente')),
+        ],
+      ],
     );
   }
 }
