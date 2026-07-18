@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 8 para 9 preservando dados e cronologia', () async {
+  test('migra schema 8 para 10 preservando dados e criando etiquetas', () async {
     final directory = Directory.systemTemp.createTempSync(
       'contexto_migration_test_',
     );
@@ -100,7 +100,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 9);
+    expect(version.read<int>('user_version'), 10);
     expect(rows, hasLength(2));
     expect(rows.first.internalName, 'copia.png');
     expect(rows.first.mediaHash, isNull);
@@ -114,6 +114,8 @@ void main() {
     expect(await migrated.select(migrated.processingJobs).get(), hasLength(1));
     expect(await migrated.select(migrated.categories).get(), hasLength(1));
     expect(await migrated.select(migrated.mediaCategories).get(), hasLength(1));
+    expect(await migrated.select(migrated.tags).get(), isEmpty);
+    expect(await migrated.select(migrated.mediaTags).get(), isEmpty);
     final settings = await migrated
         .select(migrated.automaticImportSettings)
         .getSingle();
@@ -156,6 +158,25 @@ void main() {
     await (migrated.update(migrated.mediaItems)
           ..where((item) => item.id.equals(sharedId)))
         .write(MediaItemsCompanion(capturedAt: Value(persistedCapture)));
+    final tagId = await migrated
+        .into(migrated.tags)
+        .insert(
+          TagsCompanion.insert(
+            name: 'Urgente',
+            normalizedName: 'urgente',
+            createdAt: DateTime(2026),
+            updatedAt: DateTime(2026),
+          ),
+        );
+    await migrated
+        .into(migrated.mediaTags)
+        .insert(
+          MediaTagsCompanion.insert(
+            mediaItemId: sharedId,
+            tagId: tagId,
+            createdAt: DateTime(2026),
+          ),
+        );
     expect(
       (await (migrated.select(
         migrated.mediaItems,
@@ -176,6 +197,11 @@ void main() {
       persistedCapture,
     );
     expect(await reopened.select(reopened.processingJobs).get(), hasLength(1));
+    expect((await reopened.select(reopened.tags).getSingle()).name, 'Urgente');
+    expect(
+      (await reopened.select(reopened.mediaTags).getSingle()).mediaItemId,
+      sharedId,
+    );
     await reopened.close();
     directory.deleteSync(recursive: true);
   });

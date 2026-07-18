@@ -94,6 +94,31 @@ class MediaCategories extends Table {
   Set<Column<Object>> get primaryKey => {mediaItemId, categoryId};
 }
 
+class Tags extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  TextColumn get name => text()();
+
+  TextColumn get normalizedName => text().unique()();
+
+  DateTimeColumn get createdAt => dateTime()();
+
+  DateTimeColumn get updatedAt => dateTime()();
+}
+
+class MediaTags extends Table {
+  IntColumn get mediaItemId =>
+      integer().references(MediaItems, #id, onDelete: KeyAction.cascade)();
+
+  IntColumn get tagId =>
+      integer().references(Tags, #id, onDelete: KeyAction.cascade)();
+
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {mediaItemId, tagId};
+}
+
 class AutomaticImportSettings extends Table {
   IntColumn get id => integer()();
 
@@ -118,6 +143,8 @@ class AutomaticImportSettings extends Table {
     ProcessingJobs,
     Categories,
     MediaCategories,
+    Tags,
+    MediaTags,
     AutomaticImportSettings,
   ],
 )
@@ -127,7 +154,7 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -166,6 +193,10 @@ class ContextoDatabase extends _$ContextoDatabase {
           'UPDATE media_items SET captured_at = imported_at '
           'WHERE captured_at IS NULL',
         );
+      }
+      if (from < 10) {
+        await migrator.createTable(tags);
+        await migrator.createTable(mediaTags);
       }
     },
     beforeOpen: (details) async {
