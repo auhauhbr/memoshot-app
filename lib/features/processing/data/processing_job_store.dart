@@ -244,6 +244,7 @@ class DriftProcessingJobStore implements ProcessingJobStore {
       mimeType: row.mimeType,
       mediaHash: row.mediaHash,
       importedAt: row.importedAt,
+      capturedAt: row.capturedAt,
       sourceMode: row.sourceMode,
       status: row.status,
       importOrigin: domain_media.ImportOrigin.fromDatabase(row.importOrigin),

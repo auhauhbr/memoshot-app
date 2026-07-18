@@ -152,6 +152,7 @@ class LocalMediaItemRepository implements MediaItemRepository {
 
         final copy = await _storage.copyToPrivate(screenshot.path);
         final importedAt = DateTime.now();
+        final capturedAt = _validCapturedAt(screenshot.capturedAt, importedAt);
         try {
           final id = await _store.insertItem(
             privatePath: copy.privatePath,
@@ -159,6 +160,7 @@ class LocalMediaItemRepository implements MediaItemRepository {
             mimeType: screenshot.mimeType,
             mediaHash: hash,
             importedAt: importedAt,
+            capturedAt: capturedAt,
             sourceMode: 'photoPicker',
             status: 'ready',
             importOrigin: origin,
@@ -170,6 +172,7 @@ class LocalMediaItemRepository implements MediaItemRepository {
             mimeType: screenshot.mimeType,
             mediaHash: hash,
             importedAt: importedAt,
+            capturedAt: capturedAt,
             sourceMode: 'photoPicker',
             status: 'ready',
             importOrigin: origin,
@@ -208,6 +211,16 @@ class LocalMediaItemRepository implements MediaItemRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  DateTime _validCapturedAt(DateTime? candidate, DateTime importedAt) {
+    if (candidate == null) return importedAt;
+    final milliseconds = candidate.millisecondsSinceEpoch;
+    final latestReasonable = importedAt.add(const Duration(days: 1));
+    if (milliseconds <= 0 || candidate.isAfter(latestReasonable)) {
+      return importedAt;
+    }
+    return candidate;
   }
 
   @override

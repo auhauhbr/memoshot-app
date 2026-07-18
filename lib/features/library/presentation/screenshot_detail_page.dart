@@ -256,7 +256,9 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                   ),
                   const SizedBox(height: 14),
                   _MetadataCard(
-                    importedAt: _formatImportedAt(widget.mediaItem.importedAt),
+                    capturedAt: _formatImportedAt(
+                      widget.mediaItem.effectiveCapturedAt,
+                    ),
                     importOrigin: widget.mediaItem.importOrigin,
                   ),
                   const SizedBox(height: 12),
@@ -650,9 +652,9 @@ class _DetailOcrStatus extends StatelessWidget {
 }
 
 class _MetadataCard extends StatelessWidget {
-  const _MetadataCard({required this.importedAt, required this.importOrigin});
+  const _MetadataCard({required this.capturedAt, required this.importOrigin});
 
-  final String importedAt;
+  final String capturedAt;
   final ImportOrigin importOrigin;
 
   @override
@@ -668,7 +670,7 @@ class _MetadataCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _MetadataRow(label: 'Importado em', value: importedAt),
+          _MetadataRow(label: 'Capturado em', value: capturedAt),
           const Divider(height: 20),
           _MetadataRow(
             label: 'Origem',

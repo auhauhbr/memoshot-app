@@ -212,7 +212,12 @@ void main() {
     final image = createTestImage(temporaryDirectory, 'detalhe.png');
     final repository = FakeMediaItemRepository(
       initialItems: [
-        createMediaItem(1, image.path, importedAt: DateTime(2026, 1, 2, 3, 4)),
+        createMediaItem(
+          1,
+          image.path,
+          importedAt: DateTime(2026, 1, 2, 3, 4),
+          capturedAt: DateTime(2025, 12, 31, 23, 59),
+        ),
       ],
     );
     await tester.pumpWidget(
@@ -223,7 +228,9 @@ void main() {
     await openFirstScreenshot(tester);
 
     expect(find.text('Detalhes do screenshot'), findsOneWidget);
-    expect(find.text('02 de janeiro de 2026, às 03:04'), findsOneWidget);
+    expect(find.text('Capturado em'), findsOneWidget);
+    expect(find.text('31 de dezembro de 2025, às 23:59'), findsOneWidget);
+    expect(find.text('02 de janeiro de 2026, às 03:04'), findsNothing);
     expect(find.text('Selecionado no dispositivo'), findsOneWidget);
     expect(find.text('Salvo neste dispositivo'), findsOneWidget);
     expect(
@@ -1599,6 +1606,108 @@ void main() {
 
     expect(find.text('Importado automaticamente'), findsOneWidget);
   });
+
+  testWidgets('Home abre antes de terminar consumo da caixa de entrada', (
+    tester,
+  ) async {
+    final inboxCompleter = Completer<List<BackgroundScreenshotEntry>>();
+    final source = FakeAutomaticScreenshotSource(
+      inboxCompleter: inboxCompleter,
+    );
+
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), automaticScreenshotSource: source),
+    );
+    await tester.pump();
+
+    expect(find.text('Contexto'), findsOneWidget);
+    expect(find.text('Biblioteca'), findsOneWidget);
+
+    inboxCompleter.complete(const []);
+    await tester.pump();
+  });
+
+  testWidgets('entrada em segundo plano preserva pesquisa ativa', (
+    tester,
+  ) async {
+    final existing = createTestImage(temporaryDirectory, 'busca-inbox-a.png');
+    final incoming = createTestImage(temporaryDirectory, 'busca-inbox-b.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, existing.path)],
+      recognizedTexts: const {1: 'Conteúdo pesquisável'},
+    );
+    final inboxCompleter = Completer<List<BackgroundScreenshotEntry>>();
+    final source = FakeAutomaticScreenshotSource(
+      inboxCompleter: inboxCompleter,
+    );
+    final settings = FakeAutomaticImportSettingsRepository(
+      enabled: true,
+      marker: 4,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'pesquisável');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    inboxCompleter.complete([
+      BackgroundScreenshotEntry(
+        entryId: 'background-1',
+        mediaId: 5,
+        privatePath: incoming.path,
+        mimeType: 'image/png',
+      ),
+    ]);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 resultado para “pesquisável”'), findsOneWidget);
+    expect(repository.itemCount, 2);
+  });
+
+  testWidgets('Home mostra screenshots pela captura real', (tester) async {
+    final first = createTestImage(temporaryDirectory, 'home-order-a.png');
+    final second = createTestImage(temporaryDirectory, 'home-order-b.png');
+    final third = createTestImage(temporaryDirectory, 'home-order-c.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [
+        createMediaItem(
+          1,
+          first.path,
+          importedAt: DateTime(2026, 3, 3),
+          capturedAt: DateTime(2026, 3, 1),
+        ),
+        createMediaItem(
+          2,
+          second.path,
+          importedAt: DateTime(2026, 3, 1),
+          capturedAt: DateTime(2026, 3, 3),
+        ),
+        createMediaItem(
+          3,
+          third.path,
+          importedAt: DateTime(2026, 3, 2),
+          capturedAt: DateTime(2026, 3, 2),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+
+    final grid = tester.widget<ScreenshotGrid>(find.byType(ScreenshotGrid));
+    expect(grid.mediaItems.map((item) => item.id), [2, 3, 1]);
+  });
 }
 
 Widget buildTestApp(
@@ -1634,6 +1743,7 @@ class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
   FakeAutomaticScreenshotSource({
     this.permission = MediaPermissionStatus.fullAccess,
     this.maxMediaId = 0,
+    this.inboxCompleter,
     List<AutomaticScreenshotBatch> batches = const [],
   }) : batches = [...batches];
 
@@ -1644,10 +1754,38 @@ class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
   int stopCount = 0;
   final List<AutomaticScreenshotBatch> batches;
   final List<String> deletedPaths = [];
+  final List<BackgroundScreenshotEntry> inbox = [];
+  final Completer<List<BackgroundScreenshotEntry>>? inboxCompleter;
+  int backgroundMarker = 0;
+
+  @override
+  Future<void> acknowledgeBackgroundEntry(String entryId) async {
+    inbox.removeWhere((entry) => entry.entryId == entryId);
+  }
+
+  @override
+  Future<BackgroundMonitorStatus> configureBackgroundMonitoring({
+    required bool enabled,
+    required int lastMediaId,
+    bool resetBaseline = false,
+  }) async {
+    backgroundMarker = resetBaseline || lastMediaId > backgroundMarker
+        ? lastMediaId
+        : backgroundMarker;
+    return BackgroundMonitorStatus(
+      available: true,
+      enabled: enabled,
+      lastMediaId: backgroundMarker,
+    );
+  }
+
   final StreamController<void> controller = StreamController<void>.broadcast();
 
   @override
   Stream<void> get changes => controller.stream;
+
+  @override
+  Future<int> backgroundInboxPendingCount() async => inbox.length;
 
   @override
   Future<int> currentMaxMediaId() async => maxMediaId;
@@ -1659,12 +1797,21 @@ class FakeAutomaticScreenshotSource implements AutomaticScreenshotSource {
   Future<void> openAppSettings() async {}
 
   @override
+  Future<List<BackgroundScreenshotEntry>> loadBackgroundInbox() async =>
+      inboxCompleter?.future ?? [...inbox];
+
+  @override
   Future<MediaPermissionStatus> permissionStatus() async => permission;
 
   @override
   Future<MediaPermissionStatus> requestPermission() async {
     requestCount++;
     return permission;
+  }
+
+  @override
+  Future<void> rejectBackgroundEntry(String entryId) async {
+    inbox.removeWhere((entry) => entry.entryId == entryId);
   }
 
   @override
@@ -1849,7 +1996,7 @@ class FakeCategoryRepository implements CategoryRepository {
               mediaIds.contains(item.id) && File(item.privatePath).existsSync(),
         )
         .toList()
-      ..sort((first, second) => second.importedAt.compareTo(first.importedAt));
+      ..sort(compareMediaItemsRecentFirst);
   }
 
   List<MediaItem> mediaItems = [];
@@ -1940,6 +2087,7 @@ class FakeMediaItemRepository implements MediaItemRepository {
         _items.length + 1,
         screenshot.path,
         importOrigin: origin,
+        capturedAt: screenshot.capturedAt,
       );
       _items.insert(0, item);
       imported.add(item);
@@ -1954,7 +2102,7 @@ class FakeMediaItemRepository implements MediaItemRepository {
   @override
   Future<List<MediaItem>> loadAvailableItems() async {
     loadCallCount++;
-    return [..._items];
+    return [..._items]..sort(compareMediaItemsRecentFirst);
   }
 
   @override
@@ -2007,7 +2155,7 @@ class FakeMediaItemRepository implements MediaItemRepository {
     }
     results.sort(
       (first, second) =>
-          second.mediaItem.importedAt.compareTo(first.mediaItem.importedAt),
+          compareMediaItemsRecentFirst(first.mediaItem, second.mediaItem),
     );
     return results.take(limit).toList(growable: false);
   }
@@ -2145,6 +2293,7 @@ MediaItem createMediaItem(
   String path, {
   DateTime? importedAt,
   ImportOrigin importOrigin = ImportOrigin.picker,
+  DateTime? capturedAt,
 }) {
   return MediaItem(
     id: id,
@@ -2153,10 +2302,21 @@ MediaItem createMediaItem(
     mimeType: 'image/png',
     mediaHash: 'hash-secreto',
     importedAt: importedAt ?? DateTime(2026),
+    capturedAt: capturedAt,
     sourceMode: 'photoPicker',
     status: 'ready',
     importOrigin: importOrigin,
   );
+}
+
+int compareMediaItemsRecentFirst(MediaItem first, MediaItem second) {
+  final byCapture = second.effectiveCapturedAt.compareTo(
+    first.effectiveCapturedAt,
+  );
+  if (byCapture != 0) return byCapture;
+  final byImport = second.importedAt.compareTo(first.importedAt);
+  if (byImport != 0) return byImport;
+  return second.id.compareTo(first.id);
 }
 
 OcrResult createOcrResult(int mediaItemId, String text) {

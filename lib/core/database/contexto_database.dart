@@ -18,6 +18,8 @@ class MediaItems extends Table {
 
   DateTimeColumn get importedAt => dateTime()();
 
+  DateTimeColumn get capturedAt => dateTime().nullable()();
+
   TextColumn get sourceMode => text()();
 
   TextColumn get importOrigin => text().withDefault(const Constant('picker'))();
@@ -125,7 +127,7 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -157,6 +159,13 @@ class ContextoDatabase extends _$ContextoDatabase {
       }
       if (from < 8) {
         await migrator.createTable(automaticImportSettings);
+      }
+      if (from < 9) {
+        await migrator.addColumn(mediaItems, mediaItems.capturedAt);
+        await customStatement(
+          'UPDATE media_items SET captured_at = imported_at '
+          'WHERE captured_at IS NULL',
+        );
       }
     },
     beforeOpen: (details) async {

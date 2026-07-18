@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 7 para 8 preservando as tabelas existentes', () async {
+  test('migra schema 8 para 9 preservando dados e cronologia', () async {
     final directory = Directory.systemTemp.createTempSync(
       'contexto_migration_test_',
     );
@@ -26,6 +26,21 @@ void main() {
         DateTime(2025).millisecondsSinceEpoch ~/ 1000,
         'photoPicker',
         'ready',
+      ],
+    );
+    await legacy.customStatement(
+      '''
+      INSERT INTO automatic_import_settings (
+        id, enabled, last_media_id, enabled_at, last_scan_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    ''',
+      [
+        1,
+        1,
+        42,
+        DateTime(2025).millisecondsSinceEpoch ~/ 1000,
+        DateTime(2025).millisecondsSinceEpoch ~/ 1000,
+        DateTime(2025).millisecondsSinceEpoch ~/ 1000,
       ],
     );
     await legacy.customStatement(
@@ -85,22 +100,25 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 8);
+    expect(version.read<int>('user_version'), 9);
     expect(rows, hasLength(2));
     expect(rows.first.internalName, 'copia.png');
     expect(rows.first.mediaHash, isNull);
     expect(rows.first.importOrigin, 'picker');
+    expect(rows.first.capturedAt, rows.first.importedAt);
     expect(rows.last.importOrigin, 'shared');
+    expect(rows.last.capturedAt, rows.last.importedAt);
     final ocrRows = await migrated.select(migrated.ocrResults).get();
     expect(ocrRows.single.fullText, 'Texto fictício preservado');
     expect(ocrRows.single.normalizedText, 'texto ficticio preservado');
     expect(await migrated.select(migrated.processingJobs).get(), hasLength(1));
     expect(await migrated.select(migrated.categories).get(), hasLength(1));
     expect(await migrated.select(migrated.mediaCategories).get(), hasLength(1));
-    expect(
-      await migrated.select(migrated.automaticImportSettings).get(),
-      isEmpty,
-    );
+    final settings = await migrated
+        .select(migrated.automaticImportSettings)
+        .getSingle();
+    expect(settings.enabled, isTrue);
+    expect(settings.lastMediaId, 42);
 
     await (migrated.update(migrated.mediaItems)
           ..where((item) => item.id.equals(rows.first.id)))
@@ -134,6 +152,10 @@ void main() {
             importOrigin: const Value('shared'),
           ),
         );
+    final persistedCapture = DateTime(2024, 7, 8, 9, 10);
+    await (migrated.update(migrated.mediaItems)
+          ..where((item) => item.id.equals(sharedId)))
+        .write(MediaItemsCompanion(capturedAt: Value(persistedCapture)));
     expect(
       (await (migrated.select(
         migrated.mediaItems,
@@ -147,6 +169,12 @@ void main() {
     final reopenedOcr = await reopened.select(reopened.ocrResults).getSingle();
     expect(reopenedOcr.normalizedText, 'texto ficticio preservado');
     expect(await reopened.select(reopened.mediaItems).get(), hasLength(3));
+    expect(
+      (await (reopened.select(
+        reopened.mediaItems,
+      )..where((item) => item.id.equals(sharedId))).getSingle()).capturedAt,
+      persistedCapture,
+    );
     expect(await reopened.select(reopened.processingJobs).get(), hasLength(1));
     await reopened.close();
     directory.deleteSync(recursive: true);
@@ -160,7 +188,7 @@ class _LegacyDatabase extends GeneratedDatabase {
   final List<TableInfo> allTables = const [];
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -176,6 +204,16 @@ class _LegacyDatabase extends GeneratedDatabase {
           source_mode TEXT NOT NULL,
           import_origin TEXT NOT NULL DEFAULT 'picker',
           status TEXT NOT NULL
+        )
+      ''');
+      await customStatement('''
+        CREATE TABLE automatic_import_settings (
+          id INTEGER NOT NULL PRIMARY KEY,
+          enabled INTEGER NOT NULL DEFAULT 0,
+          last_media_id INTEGER NULL,
+          enabled_at INTEGER NULL,
+          last_scan_at INTEGER NULL,
+          updated_at INTEGER NOT NULL
         )
       ''');
       await customStatement('''

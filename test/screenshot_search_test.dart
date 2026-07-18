@@ -121,6 +121,45 @@ void main() {
     },
   );
 
+  test('resultados seguem captured_at e desempates determinísticos', () async {
+    final sameCapture = DateTime(2026, 3, 2);
+    final oldestCapture = await persistItem(
+      mediaStore,
+      ocrStore,
+      temporaryDirectory,
+      idMarker: 30,
+      importedAt: DateTime(2026, 3, 5),
+      capturedAt: DateTime(2026, 3, 1),
+      text: 'ordenação cronológica',
+    );
+    final olderImport = await persistItem(
+      mediaStore,
+      ocrStore,
+      temporaryDirectory,
+      idMarker: 31,
+      importedAt: DateTime(2026, 3, 3),
+      capturedAt: sameCapture,
+      text: 'ordenação cronológica',
+    );
+    final newerImport = await persistItem(
+      mediaStore,
+      ocrStore,
+      temporaryDirectory,
+      idMarker: 32,
+      importedAt: DateTime(2026, 3, 4),
+      capturedAt: sameCapture,
+      text: 'ordenação cronológica',
+    );
+
+    final results = await repository.searchRecognizedText('cronologica');
+
+    expect(results.map((result) => result.mediaItem.id), [
+      newerImport.id,
+      olderImport.id,
+      oldestCapture.id,
+    ]);
+  });
+
   test('respeita limite seguro de resultados', () async {
     for (var marker = 7; marker < 12; marker++) {
       await persistItem(
@@ -165,6 +204,7 @@ Future<MediaItem> persistItem(
   Directory directory, {
   required int idMarker,
   required DateTime importedAt,
+  DateTime? capturedAt,
   required String text,
 }) async {
   final file = File('${directory.path}/search-$idMarker.png')
@@ -175,6 +215,7 @@ Future<MediaItem> persistItem(
     mimeType: 'image/png',
     mediaHash: 'search-hash-$idMarker',
     importedAt: importedAt,
+    capturedAt: capturedAt,
     sourceMode: 'photoPicker',
     status: 'ready',
   );
@@ -194,6 +235,7 @@ Future<MediaItem> persistItem(
     mimeType: 'image/png',
     mediaHash: 'search-hash-$idMarker',
     importedAt: importedAt,
+    capturedAt: capturedAt,
     sourceMode: 'photoPicker',
     status: 'ready',
   );

@@ -274,7 +274,7 @@ void main() {
     );
   });
 
-  test('lista screenshots recentes e ignora cópia ausente', () async {
+  test('lista categoria pela captura real e ignora cópia ausente', () async {
     final directory = Directory.systemTemp.createTempSync('contexto_filter_');
     addTearDown(() => directory.deleteSync(recursive: true));
     final oldFile = File('${directory.path}/old.png')..writeAsStringSync('old');
@@ -286,6 +286,7 @@ void main() {
             privatePath: oldFile.path,
             internalName: 'old.png',
             importedAt: DateTime(2024),
+            capturedAt: Value(DateTime(2027)),
             sourceMode: 'photoPicker',
             status: 'ready',
           ),
@@ -297,6 +298,7 @@ void main() {
             privatePath: newFile.path,
             internalName: 'new.png',
             importedAt: DateTime(2026),
+            capturedAt: Value(DateTime(2025)),
             sourceMode: 'photoPicker',
             status: 'ready',
           ),
@@ -308,6 +310,6 @@ void main() {
 
     final items = await repository.loadMediaForCategory(category.id);
 
-    expect(items.map((item) => item.id), [newId, oldId]);
+    expect(items.map((item) => item.id), [oldId, newId]);
   });
 }

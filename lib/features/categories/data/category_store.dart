@@ -166,7 +166,15 @@ class DriftCategoryStore implements CategoryStore {
     ]);
     query
       ..where(_database.mediaCategories.categoryId.equals(categoryId))
-      ..orderBy([OrderingTerm.desc(_database.mediaItems.importedAt)]);
+      ..orderBy([
+        OrderingTerm.desc(
+          const CustomExpression<DateTime>(
+            'COALESCE(media_items.captured_at, media_items.imported_at)',
+          ),
+        ),
+        OrderingTerm.desc(_database.mediaItems.importedAt),
+        OrderingTerm.desc(_database.mediaItems.id),
+      ]);
     final rows = await query.get();
     return rows
         .map((row) => _mediaToDomain(row.readTable(_database.mediaItems)))
@@ -190,6 +198,7 @@ class DriftCategoryStore implements CategoryStore {
       mimeType: row.mimeType,
       mediaHash: row.mediaHash,
       importedAt: row.importedAt,
+      capturedAt: row.capturedAt,
       sourceMode: row.sourceMode,
       status: row.status,
       importOrigin: media_domain.ImportOrigin.fromDatabase(row.importOrigin),

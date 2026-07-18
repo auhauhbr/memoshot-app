@@ -77,6 +77,17 @@ class $MediaItemsTable extends MediaItems
     type: DriftSqlType.dateTime,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _capturedAtMeta = const VerificationMeta(
+    'capturedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> capturedAt = GeneratedColumn<DateTime>(
+    'captured_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _sourceModeMeta = const VerificationMeta(
     'sourceMode',
   );
@@ -117,6 +128,7 @@ class $MediaItemsTable extends MediaItems
     mimeType,
     mediaHash,
     importedAt,
+    capturedAt,
     sourceMode,
     importOrigin,
     status,
@@ -178,6 +190,12 @@ class $MediaItemsTable extends MediaItems
     } else if (isInserting) {
       context.missing(_importedAtMeta);
     }
+    if (data.containsKey('captured_at')) {
+      context.handle(
+        _capturedAtMeta,
+        capturedAt.isAcceptableOrUnknown(data['captured_at']!, _capturedAtMeta),
+      );
+    }
     if (data.containsKey('source_mode')) {
       context.handle(
         _sourceModeMeta,
@@ -236,6 +254,10 @@ class $MediaItemsTable extends MediaItems
         DriftSqlType.dateTime,
         data['${effectivePrefix}imported_at'],
       )!,
+      capturedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}captured_at'],
+      ),
       sourceMode: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}source_mode'],
@@ -264,6 +286,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
   final String? mimeType;
   final String? mediaHash;
   final DateTime importedAt;
+  final DateTime? capturedAt;
   final String sourceMode;
   final String importOrigin;
   final String status;
@@ -274,6 +297,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     this.mimeType,
     this.mediaHash,
     required this.importedAt,
+    this.capturedAt,
     required this.sourceMode,
     required this.importOrigin,
     required this.status,
@@ -291,6 +315,9 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       map['media_hash'] = Variable<String>(mediaHash);
     }
     map['imported_at'] = Variable<DateTime>(importedAt);
+    if (!nullToAbsent || capturedAt != null) {
+      map['captured_at'] = Variable<DateTime>(capturedAt);
+    }
     map['source_mode'] = Variable<String>(sourceMode);
     map['import_origin'] = Variable<String>(importOrigin);
     map['status'] = Variable<String>(status);
@@ -309,6 +336,9 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
           ? const Value.absent()
           : Value(mediaHash),
       importedAt: Value(importedAt),
+      capturedAt: capturedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(capturedAt),
       sourceMode: Value(sourceMode),
       importOrigin: Value(importOrigin),
       status: Value(status),
@@ -327,6 +357,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       mimeType: serializer.fromJson<String?>(json['mimeType']),
       mediaHash: serializer.fromJson<String?>(json['mediaHash']),
       importedAt: serializer.fromJson<DateTime>(json['importedAt']),
+      capturedAt: serializer.fromJson<DateTime?>(json['capturedAt']),
       sourceMode: serializer.fromJson<String>(json['sourceMode']),
       importOrigin: serializer.fromJson<String>(json['importOrigin']),
       status: serializer.fromJson<String>(json['status']),
@@ -342,6 +373,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       'mimeType': serializer.toJson<String?>(mimeType),
       'mediaHash': serializer.toJson<String?>(mediaHash),
       'importedAt': serializer.toJson<DateTime>(importedAt),
+      'capturedAt': serializer.toJson<DateTime?>(capturedAt),
       'sourceMode': serializer.toJson<String>(sourceMode),
       'importOrigin': serializer.toJson<String>(importOrigin),
       'status': serializer.toJson<String>(status),
@@ -355,6 +387,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     Value<String?> mimeType = const Value.absent(),
     Value<String?> mediaHash = const Value.absent(),
     DateTime? importedAt,
+    Value<DateTime?> capturedAt = const Value.absent(),
     String? sourceMode,
     String? importOrigin,
     String? status,
@@ -365,6 +398,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     mimeType: mimeType.present ? mimeType.value : this.mimeType,
     mediaHash: mediaHash.present ? mediaHash.value : this.mediaHash,
     importedAt: importedAt ?? this.importedAt,
+    capturedAt: capturedAt.present ? capturedAt.value : this.capturedAt,
     sourceMode: sourceMode ?? this.sourceMode,
     importOrigin: importOrigin ?? this.importOrigin,
     status: status ?? this.status,
@@ -383,6 +417,9 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       importedAt: data.importedAt.present
           ? data.importedAt.value
           : this.importedAt,
+      capturedAt: data.capturedAt.present
+          ? data.capturedAt.value
+          : this.capturedAt,
       sourceMode: data.sourceMode.present
           ? data.sourceMode.value
           : this.sourceMode,
@@ -402,6 +439,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
           ..write('mimeType: $mimeType, ')
           ..write('mediaHash: $mediaHash, ')
           ..write('importedAt: $importedAt, ')
+          ..write('capturedAt: $capturedAt, ')
           ..write('sourceMode: $sourceMode, ')
           ..write('importOrigin: $importOrigin, ')
           ..write('status: $status')
@@ -417,6 +455,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     mimeType,
     mediaHash,
     importedAt,
+    capturedAt,
     sourceMode,
     importOrigin,
     status,
@@ -431,6 +470,7 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
           other.mimeType == this.mimeType &&
           other.mediaHash == this.mediaHash &&
           other.importedAt == this.importedAt &&
+          other.capturedAt == this.capturedAt &&
           other.sourceMode == this.sourceMode &&
           other.importOrigin == this.importOrigin &&
           other.status == this.status);
@@ -443,6 +483,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
   final Value<String?> mimeType;
   final Value<String?> mediaHash;
   final Value<DateTime> importedAt;
+  final Value<DateTime?> capturedAt;
   final Value<String> sourceMode;
   final Value<String> importOrigin;
   final Value<String> status;
@@ -453,6 +494,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     this.mimeType = const Value.absent(),
     this.mediaHash = const Value.absent(),
     this.importedAt = const Value.absent(),
+    this.capturedAt = const Value.absent(),
     this.sourceMode = const Value.absent(),
     this.importOrigin = const Value.absent(),
     this.status = const Value.absent(),
@@ -464,6 +506,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     this.mimeType = const Value.absent(),
     this.mediaHash = const Value.absent(),
     required DateTime importedAt,
+    this.capturedAt = const Value.absent(),
     required String sourceMode,
     this.importOrigin = const Value.absent(),
     required String status,
@@ -479,6 +522,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     Expression<String>? mimeType,
     Expression<String>? mediaHash,
     Expression<DateTime>? importedAt,
+    Expression<DateTime>? capturedAt,
     Expression<String>? sourceMode,
     Expression<String>? importOrigin,
     Expression<String>? status,
@@ -490,6 +534,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
       if (mimeType != null) 'mime_type': mimeType,
       if (mediaHash != null) 'media_hash': mediaHash,
       if (importedAt != null) 'imported_at': importedAt,
+      if (capturedAt != null) 'captured_at': capturedAt,
       if (sourceMode != null) 'source_mode': sourceMode,
       if (importOrigin != null) 'import_origin': importOrigin,
       if (status != null) 'status': status,
@@ -503,6 +548,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     Value<String?>? mimeType,
     Value<String?>? mediaHash,
     Value<DateTime>? importedAt,
+    Value<DateTime?>? capturedAt,
     Value<String>? sourceMode,
     Value<String>? importOrigin,
     Value<String>? status,
@@ -514,6 +560,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
       mimeType: mimeType ?? this.mimeType,
       mediaHash: mediaHash ?? this.mediaHash,
       importedAt: importedAt ?? this.importedAt,
+      capturedAt: capturedAt ?? this.capturedAt,
       sourceMode: sourceMode ?? this.sourceMode,
       importOrigin: importOrigin ?? this.importOrigin,
       status: status ?? this.status,
@@ -541,6 +588,9 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     if (importedAt.present) {
       map['imported_at'] = Variable<DateTime>(importedAt.value);
     }
+    if (capturedAt.present) {
+      map['captured_at'] = Variable<DateTime>(capturedAt.value);
+    }
     if (sourceMode.present) {
       map['source_mode'] = Variable<String>(sourceMode.value);
     }
@@ -562,6 +612,7 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
           ..write('mimeType: $mimeType, ')
           ..write('mediaHash: $mediaHash, ')
           ..write('importedAt: $importedAt, ')
+          ..write('capturedAt: $capturedAt, ')
           ..write('sourceMode: $sourceMode, ')
           ..write('importOrigin: $importOrigin, ')
           ..write('status: $status')
@@ -2624,6 +2675,7 @@ typedef $$MediaItemsTableCreateCompanionBuilder =
       Value<String?> mimeType,
       Value<String?> mediaHash,
       required DateTime importedAt,
+      Value<DateTime?> capturedAt,
       required String sourceMode,
       Value<String> importOrigin,
       required String status,
@@ -2636,6 +2688,7 @@ typedef $$MediaItemsTableUpdateCompanionBuilder =
       Value<String?> mimeType,
       Value<String?> mediaHash,
       Value<DateTime> importedAt,
+      Value<DateTime?> capturedAt,
       Value<String> sourceMode,
       Value<String> importOrigin,
       Value<String> status,
@@ -2740,6 +2793,11 @@ class $$MediaItemsTableFilterComposer
 
   ColumnFilters<DateTime> get importedAt => $composableBuilder(
     column: $table.importedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2873,6 +2931,11 @@ class $$MediaItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get sourceMode => $composableBuilder(
     column: $table.sourceMode,
     builder: (column) => ColumnOrderings(column),
@@ -2919,6 +2982,11 @@ class $$MediaItemsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get importedAt => $composableBuilder(
     column: $table.importedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
     builder: (column) => column,
   );
 
@@ -3049,6 +3117,7 @@ class $$MediaItemsTableTableManager
                 Value<String?> mimeType = const Value.absent(),
                 Value<String?> mediaHash = const Value.absent(),
                 Value<DateTime> importedAt = const Value.absent(),
+                Value<DateTime?> capturedAt = const Value.absent(),
                 Value<String> sourceMode = const Value.absent(),
                 Value<String> importOrigin = const Value.absent(),
                 Value<String> status = const Value.absent(),
@@ -3059,6 +3128,7 @@ class $$MediaItemsTableTableManager
                 mimeType: mimeType,
                 mediaHash: mediaHash,
                 importedAt: importedAt,
+                capturedAt: capturedAt,
                 sourceMode: sourceMode,
                 importOrigin: importOrigin,
                 status: status,
@@ -3071,6 +3141,7 @@ class $$MediaItemsTableTableManager
                 Value<String?> mimeType = const Value.absent(),
                 Value<String?> mediaHash = const Value.absent(),
                 required DateTime importedAt,
+                Value<DateTime?> capturedAt = const Value.absent(),
                 required String sourceMode,
                 Value<String> importOrigin = const Value.absent(),
                 required String status,
@@ -3081,6 +3152,7 @@ class $$MediaItemsTableTableManager
                 mimeType: mimeType,
                 mediaHash: mediaHash,
                 importedAt: importedAt,
+                capturedAt: capturedAt,
                 sourceMode: sourceMode,
                 importOrigin: importOrigin,
                 status: status,

@@ -121,6 +121,140 @@ void main() {
     expect(await repository.loadAvailableItems(), hasLength(2));
   });
 
+  test(
+    'ordena pela captura mesmo quando o processamento ocorre fora de ordem',
+    () async {
+      final firstProcessed = createTestImage(
+        temporaryDirectory,
+        'processed-first.png',
+        21,
+      );
+      final secondProcessed = createTestImage(
+        temporaryDirectory,
+        'processed-second.png',
+        22,
+      );
+      final thirdProcessed = createTestImage(
+        temporaryDirectory,
+        'processed-third.png',
+        23,
+      );
+
+      await repository.importScreenshots([
+        SelectedScreenshot(
+          path: firstProcessed.path,
+          capturedAt: DateTime(2026, 1, 3, 10),
+        ),
+        SelectedScreenshot(
+          path: secondProcessed.path,
+          capturedAt: DateTime(2026, 1, 1, 10),
+        ),
+        SelectedScreenshot(
+          path: thirdProcessed.path,
+          capturedAt: DateTime(2026, 1, 2, 10),
+        ),
+      ]);
+
+      final firstLoad = await repository.loadAvailableItems();
+      final secondLoad = await repository.loadAvailableItems();
+      expect(firstLoad.map((item) => item.effectiveCapturedAt.day), [3, 2, 1]);
+      expect(
+        secondLoad.map((item) => item.id),
+        firstLoad.map((item) => item.id),
+      );
+    },
+  );
+
+  test('capturas empatadas usam imported_at e id como desempate', () async {
+    final capturedAt = DateTime(2026, 2, 1);
+    final firstId = await store.insertItem(
+      privatePath: createPrivateImage(privateDirectory, 'tie-a.png').path,
+      internalName: 'tie-a.png',
+      mimeType: 'image/png',
+      mediaHash: 'tie-a',
+      importedAt: DateTime(2026, 2, 2),
+      capturedAt: capturedAt,
+      sourceMode: 'photoPicker',
+      status: 'ready',
+    );
+    final secondId = await store.insertItem(
+      privatePath: createPrivateImage(privateDirectory, 'tie-b.png').path,
+      internalName: 'tie-b.png',
+      mimeType: 'image/png',
+      mediaHash: 'tie-b',
+      importedAt: DateTime(2026, 2, 3),
+      capturedAt: capturedAt,
+      sourceMode: 'photoPicker',
+      status: 'ready',
+    );
+    final thirdId = await store.insertItem(
+      privatePath: createPrivateImage(privateDirectory, 'tie-c.png').path,
+      internalName: 'tie-c.png',
+      mimeType: 'image/png',
+      mediaHash: 'tie-c',
+      importedAt: DateTime(2026, 2, 3),
+      capturedAt: capturedAt,
+      sourceMode: 'photoPicker',
+      status: 'ready',
+    );
+
+    expect((await store.readItems()).map((item) => item.id), [
+      thirdId,
+      secondId,
+      firstId,
+    ]);
+  });
+
+  test(
+    'picker usa imported_at como captura e duplicata não altera a data',
+    () async {
+      final original = createTestImage(
+        temporaryDirectory,
+        'capture-fallback.png',
+      );
+      final capturedAt = DateTime(2025, 5, 20);
+      final first = await repository.importScreenshots([
+        SelectedScreenshot(path: original.path, capturedAt: capturedAt),
+      ]);
+      await repository.importScreenshots([
+        SelectedScreenshot(path: original.path, capturedAt: DateTime(2026)),
+      ], origin: ImportOrigin.shared);
+
+      final persisted = (await repository.loadAvailableItems()).single;
+      expect(first.importedItems.single.capturedAt, capturedAt);
+      expect(persisted.capturedAt, capturedAt);
+
+      final pickerOnly = createTestImage(
+        temporaryDirectory,
+        'picker-fallback.png',
+        24,
+      );
+      final picker = await repository.importScreenshots([
+        SelectedScreenshot(path: pickerOnly.path),
+      ]);
+      expect(
+        picker.importedItems.single.capturedAt,
+        picker.importedItems.single.importedAt,
+      );
+
+      final invalidSource = createTestImage(
+        temporaryDirectory,
+        'invalid-capture.png',
+        25,
+      );
+      final invalid = await repository.importScreenshots([
+        SelectedScreenshot(
+          path: invalidSource.path,
+          capturedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        ),
+      ]);
+      expect(
+        invalid.importedItems.single.capturedAt,
+        invalid.importedItems.single.importedAt,
+      );
+    },
+  );
+
   test('nova importação cria um job e duplicata não cria outro', () async {
     final jobStore = DriftProcessingJobStore(database);
     repository = LocalMediaItemRepository(
@@ -490,6 +624,7 @@ class FailingMediaItemStore implements MediaItemStore {
     required String? mimeType,
     required String? mediaHash,
     required DateTime importedAt,
+    DateTime? capturedAt,
     required String sourceMode,
     required String status,
     ImportOrigin importOrigin = ImportOrigin.picker,

@@ -10,6 +10,7 @@ abstract interface class MediaItemStore {
     required String? mimeType,
     required String? mediaHash,
     required DateTime importedAt,
+    DateTime? capturedAt,
     required String sourceMode,
     required String status,
     domain.ImportOrigin importOrigin = domain.ImportOrigin.picker,
@@ -50,6 +51,7 @@ class DriftMediaItemStore implements MediaItemStore {
     required String? mimeType,
     required String? mediaHash,
     required DateTime importedAt,
+    DateTime? capturedAt,
     required String sourceMode,
     required String status,
     domain.ImportOrigin importOrigin = domain.ImportOrigin.picker,
@@ -63,6 +65,7 @@ class DriftMediaItemStore implements MediaItemStore {
             mimeType: Value(mimeType),
             mediaHash: Value(mediaHash),
             importedAt: importedAt,
+            capturedAt: Value(capturedAt),
             sourceMode: sourceMode,
             status: status,
             importOrigin: Value(importOrigin.databaseValue),
@@ -72,9 +75,17 @@ class DriftMediaItemStore implements MediaItemStore {
 
   @override
   Future<List<domain.MediaItem>> readItems() async {
-    final rows = await (_database.select(
-      _database.mediaItems,
-    )..orderBy([(item) => OrderingTerm.desc(item.importedAt)])).get();
+    final rows =
+        await (_database.select(_database.mediaItems)..orderBy([
+              (_) => OrderingTerm.desc(
+                const CustomExpression<DateTime>(
+                  'COALESCE(media_items.captured_at, media_items.imported_at)',
+                ),
+              ),
+              (item) => OrderingTerm.desc(item.importedAt),
+              (item) => OrderingTerm.desc(item.id),
+            ]))
+            .get();
     return rows
         .map(
           (row) => domain.MediaItem(
@@ -84,6 +95,7 @@ class DriftMediaItemStore implements MediaItemStore {
             mimeType: row.mimeType,
             mediaHash: row.mediaHash,
             importedAt: row.importedAt,
+            capturedAt: row.capturedAt,
             sourceMode: row.sourceMode,
             status: row.status,
             importOrigin: domain.ImportOrigin.fromDatabase(row.importOrigin),
@@ -136,7 +148,15 @@ class DriftMediaItemStore implements MediaItemStore {
           escapeChar: r'\',
         ),
       )
-      ..orderBy([OrderingTerm.desc(_database.mediaItems.importedAt)])
+      ..orderBy([
+        OrderingTerm.desc(
+          const CustomExpression<DateTime>(
+            'COALESCE(media_items.captured_at, media_items.imported_at)',
+          ),
+        ),
+        OrderingTerm.desc(_database.mediaItems.importedAt),
+        OrderingTerm.desc(_database.mediaItems.id),
+      ])
       ..limit(limit);
     final rows = await query.get();
     return rows
@@ -159,6 +179,7 @@ class DriftMediaItemStore implements MediaItemStore {
       mimeType: row.mimeType,
       mediaHash: row.mediaHash,
       importedAt: row.importedAt,
+      capturedAt: row.capturedAt,
       sourceMode: row.sourceMode,
       status: row.status,
       importOrigin: domain.ImportOrigin.fromDatabase(row.importOrigin),

@@ -9,6 +9,7 @@ class MediaItem {
     this.importOrigin = ImportOrigin.picker,
     this.mimeType,
     this.mediaHash,
+    this.capturedAt,
   });
 
   final int id;
@@ -17,9 +18,12 @@ class MediaItem {
   final String? mimeType;
   final String? mediaHash;
   final DateTime importedAt;
+  final DateTime? capturedAt;
   final String sourceMode;
   final String status;
   final ImportOrigin importOrigin;
+
+  DateTime get effectiveCapturedAt => capturedAt ?? importedAt;
 }
 
 enum ImportOrigin {
