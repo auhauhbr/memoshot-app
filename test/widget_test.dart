@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:contexto/app/contexto_app.dart';
 import 'package:contexto/core/media/screenshot_picker.dart';
+import 'package:contexto/core/sharing/incoming_share_source.dart';
 import 'package:contexto/core/theme/app_theme.dart';
 import 'package:contexto/core/text/search_snippet_builder.dart';
 import 'package:contexto/core/text/text_normalizer.dart';
@@ -1102,6 +1103,7 @@ void main() {
     expect(find.text('1 screenshot'), findsOneWidget);
     expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('screenshot-tile-2')), findsNothing);
+    await tester.ensureVisible(find.byKey(const ValueKey('screenshot-tile-1')));
     await tester.tap(find.byKey(const ValueKey('screenshot-tile-1')));
     await tester.pumpAndSettle();
     expect(find.text('Detalhes do screenshot'), findsOneWidget);
@@ -1296,6 +1298,172 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Nenhuma categoria atribuída.'), findsOneWidget);
   });
+
+  testWidgets('observação sobre o menu Compartilhar aparece na importação', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
+    await tester.pump();
+
+    expect(
+      find.text('Você também pode enviar imagens pelo menu Compartilhar.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'compartilhamento inicial atualiza Home e mostra feedback singular',
+    (tester) async {
+      final image = createTestImage(temporaryDirectory, 'inicial-shared.png');
+      final source = FakeIncomingShareSource(
+        initialMedia: [
+          IncomingSharedMedia(
+            path: image.path,
+            type: IncomingMediaType.image,
+            mimeType: 'image/png',
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        buildTestApp(FakeScreenshotPicker(), incomingShareSource: source),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 item'), findsOneWidget);
+      expect(find.text('Screenshot adicionado ao Contexto.'), findsOneWidget);
+      expect(source.resetCount, 1);
+    },
+  );
+
+  testWidgets('compartilhamento aberto mostra feedback plural', (tester) async {
+    final first = createTestImage(temporaryDirectory, 'shared-a.png');
+    final second = createTestImage(temporaryDirectory, 'shared-b.png');
+    final source = FakeIncomingShareSource();
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), incomingShareSource: source),
+    );
+    await tester.pump();
+
+    source.emit([
+      IncomingSharedMedia(path: first.path, type: IncomingMediaType.image),
+      IncomingSharedMedia(path: second.path, type: IncomingMediaType.image),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 itens'), findsOneWidget);
+    expect(find.text('2 screenshots adicionados ao Contexto.'), findsOneWidget);
+  });
+
+  testWidgets('compartilhamento duplicado mostra feedback correto', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'shared-duplicada.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final source = FakeIncomingShareSource();
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        incomingShareSource: source,
+      ),
+    );
+    await tester.pump();
+    source.emit([
+      IncomingSharedMedia(path: image.path, type: IncomingMediaType.image),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Esta imagem já estava no Contexto.'), findsOneWidget);
+    expect(repository.itemCount, 1);
+  });
+
+  testWidgets('resultado parcial informa importada e duplicada', (
+    tester,
+  ) async {
+    final existing = createTestImage(temporaryDirectory, 'shared-existe.png');
+    final fresh = createTestImage(temporaryDirectory, 'shared-nova.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, existing.path)],
+    );
+    final source = FakeIncomingShareSource();
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        incomingShareSource: source,
+      ),
+    );
+    await tester.pump();
+    source.emit([
+      IncomingSharedMedia(path: existing.path, type: IncomingMediaType.image),
+      IncomingSharedMedia(path: fresh.path, type: IncomingMediaType.image),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('1 imagem adicionada e 1 já estava no Contexto.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('compartilhamento preserva pesquisa ativa', (tester) async {
+    final existing = createTestImage(temporaryDirectory, 'busca-shared-a.png');
+    final incoming = createTestImage(temporaryDirectory, 'busca-shared-b.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, existing.path)],
+      recognizedTexts: const {1: 'Conteúdo pesquisável'},
+    );
+    final source = FakeIncomingShareSource();
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        incomingShareSource: source,
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'pesquisável');
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+
+    source.emit([
+      IncomingSharedMedia(path: incoming.path, type: IncomingMediaType.image),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 resultado para “pesquisável”'), findsOneWidget);
+    expect(repository.itemCount, 2);
+  });
+
+  testWidgets('detalhes distinguem origem picker e compartilhada', (
+    tester,
+  ) async {
+    final pickerImage = createTestImage(temporaryDirectory, 'picker.png');
+    final sharedImage = createTestImage(temporaryDirectory, 'shared.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [
+        createMediaItem(1, pickerImage.path),
+        createMediaItem(2, sharedImage.path, importOrigin: ImportOrigin.shared),
+      ],
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+
+    await tester.ensureVisible(find.byKey(const ValueKey('screenshot-tile-1')));
+    await tester.tap(find.byKey(const ValueKey('screenshot-tile-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Selecionado no dispositivo'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('screenshot-tile-2')));
+    await tester.tap(find.byKey(const ValueKey('screenshot-tile-2')));
+    await tester.pumpAndSettle();
+    expect(find.text('Compartilhado com o Contexto'), findsOneWidget);
+  });
 }
 
 Widget buildTestApp(
@@ -1304,6 +1472,7 @@ Widget buildTestApp(
   FakeOcrRepository? ocrRepository,
   FakeOcrQueue? ocrQueue,
   FakeCategoryRepository? categoryRepository,
+  IncomingShareSource? incomingShareSource,
 }) {
   final resolvedOcrRepository = ocrRepository ?? FakeOcrRepository();
   final resolvedMediaRepository = repository ?? FakeMediaItemRepository();
@@ -1316,7 +1485,32 @@ Widget buildTestApp(
     ocrRepository: resolvedOcrRepository,
     ocrQueue: ocrQueue ?? FakeOcrQueue(resolvedOcrRepository),
     categoryRepository: resolvedCategoryRepository,
+    incomingShareSource: incomingShareSource ?? FakeIncomingShareSource(),
   );
+}
+
+class FakeIncomingShareSource implements IncomingShareSource {
+  FakeIncomingShareSource({this.initialMedia = const []});
+
+  final List<IncomingSharedMedia> initialMedia;
+  final StreamController<List<IncomingSharedMedia>> controller =
+      StreamController.broadcast();
+  int resetCount = 0;
+
+  @override
+  Future<List<IncomingSharedMedia>> getInitialMedia() async => initialMedia;
+
+  @override
+  Stream<List<IncomingSharedMedia>> get mediaStream => controller.stream;
+
+  @override
+  Future<void> reset() async {
+    resetCount++;
+  }
+
+  void emit(List<IncomingSharedMedia> media) => controller.add(media);
+
+  Future<void> close() => controller.close();
 }
 
 class FakeCategoryRepository implements CategoryRepository {
@@ -1465,12 +1659,14 @@ class FakeMediaItemRepository implements MediaItemRepository {
     Map<String, Completer<List<ScreenshotSearchResult>>> searchCompleters =
         const {},
     Object? searchError,
+    Set<String> rejectedPaths = const {},
   }) : this._(
          initialItems,
          failRemoval,
          recognizedTexts,
          searchCompleters,
          searchError,
+         rejectedPaths,
        );
 
   FakeMediaItemRepository._(
@@ -1479,11 +1675,15 @@ class FakeMediaItemRepository implements MediaItemRepository {
     Map<int, String> recognizedTexts,
     this._searchCompleters,
     this._searchError,
+    Set<String> rejectedPaths,
   ) : _items = [...initialItems],
+      _sourcePaths = {for (final item in initialItems) item.privatePath},
+      _rejectedPaths = {...rejectedPaths},
       _recognizedTexts = {...recognizedTexts};
 
   final List<MediaItem> _items;
-  final Set<String> _sourcePaths = {};
+  final Set<String> _sourcePaths;
+  final Set<String> _rejectedPaths;
   final bool failRemoval;
   final Map<int, String> _recognizedTexts;
   final Map<String, Completer<List<ScreenshotSearchResult>>> _searchCompleters;
@@ -1496,22 +1696,33 @@ class FakeMediaItemRepository implements MediaItemRepository {
 
   @override
   Future<ImportResult> importScreenshots(
-    List<SelectedScreenshot> screenshots,
-  ) async {
+    List<SelectedScreenshot> screenshots, {
+    ImportOrigin origin = ImportOrigin.picker,
+  }) async {
     final imported = <MediaItem>[];
     var duplicateCount = 0;
+    var rejectedCount = 0;
     for (final screenshot in screenshots) {
+      if (_rejectedPaths.contains(screenshot.path)) {
+        rejectedCount++;
+        continue;
+      }
       if (!_sourcePaths.add(screenshot.path)) {
         duplicateCount++;
         continue;
       }
-      final item = createMediaItem(_items.length + 1, screenshot.path);
+      final item = createMediaItem(
+        _items.length + 1,
+        screenshot.path,
+        importOrigin: origin,
+      );
       _items.insert(0, item);
       imported.add(item);
     }
     return ImportResult(
       importedItems: imported,
       duplicateCount: duplicateCount,
+      rejectedCount: rejectedCount,
     );
   }
 
@@ -1704,7 +1915,12 @@ class FakeOcrQueue implements OcrQueue {
   Future<void> close() => _changes.close();
 }
 
-MediaItem createMediaItem(int id, String path, {DateTime? importedAt}) {
+MediaItem createMediaItem(
+  int id,
+  String path, {
+  DateTime? importedAt,
+  ImportOrigin importOrigin = ImportOrigin.picker,
+}) {
   return MediaItem(
     id: id,
     privatePath: path,
@@ -1714,6 +1930,7 @@ MediaItem createMediaItem(int id, String path, {DateTime? importedAt}) {
     importedAt: importedAt ?? DateTime(2026),
     sourceMode: 'photoPicker',
     status: 'ready',
+    importOrigin: importOrigin,
   );
 }
 
