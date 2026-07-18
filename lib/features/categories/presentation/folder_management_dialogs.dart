@@ -499,6 +499,85 @@ class FolderDestinationSelection {
   final int? parentId;
 }
 
+Future<Category?> showCategoryPickerSheet(
+  BuildContext context, {
+  required List<CategoryTreeEntry> entries,
+  required int? selectedCategoryId,
+}) {
+  return showModalBottomSheet<Category>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                'Escolher pasta',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            Flexible(
+              child: entries.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text('Nenhuma pasta criada.'),
+                      ),
+                    )
+                  : ListView(
+                      key: const Key('review-folder-list'),
+                      children: [
+                        for (final entry in entries)
+                          ListTile(
+                            key: ValueKey(
+                              'review-folder-${entry.summary.category.id}',
+                            ),
+                            contentPadding: EdgeInsets.only(
+                              left: 16 + entry.depth.clamp(0, 6) * 12,
+                              right: 16,
+                            ),
+                            leading: Icon(
+                              entry.depth == 0
+                                  ? Icons.folder_outlined
+                                  : Icons.subdirectory_arrow_right,
+                            ),
+                            title: Text(
+                              entry.path,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing:
+                                selectedCategoryId == entry.summary.category.id
+                                ? const Icon(Icons.check)
+                                : null,
+                            onTap: () =>
+                                Navigator.pop(context, entry.summary.category),
+                          ),
+                      ],
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 Future<FolderDestinationSelection?> showFolderDestinationSheet(
   BuildContext context, {
   required List<CategoryTreeEntry> entries,

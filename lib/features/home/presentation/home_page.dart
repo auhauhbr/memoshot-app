@@ -19,6 +19,7 @@ import '../../categories/presentation/categories_page.dart';
 import '../../categories/presentation/category_detail_page.dart';
 import '../../classification/application/classification_composition.dart';
 import '../../classification/application/review_queue.dart';
+import '../../classification/application/review_decision.dart';
 import '../../classification/data/classification_suggestion_repository.dart';
 import '../../classification/presentation/review_queue_page.dart';
 import '../../library/data/media_item_repository.dart';
@@ -53,6 +54,7 @@ class HomePage extends StatefulWidget {
     this.ocrQueue,
     this.categoryRepository,
     this.classificationSuggestionRepository,
+    this.reviewDecisionProcessor,
     this.tagRepository,
     this.incomingShareSource,
     this.automaticScreenshotSource,
@@ -65,6 +67,7 @@ class HomePage extends StatefulWidget {
   final OcrQueue? ocrQueue;
   final CategoryRepository? categoryRepository;
   final ClassificationSuggestionRepository? classificationSuggestionRepository;
+  final ReviewDecisionProcessor? reviewDecisionProcessor;
   final TagRepository? tagRepository;
   final IncomingShareSource? incomingShareSource;
   final AutomaticScreenshotSource? automaticScreenshotSource;
@@ -82,6 +85,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final CategoryRepository _categoryRepository;
   late final ClassificationSuggestionRepository _classificationRepository;
   late final ReviewQueueLoader _reviewQueueLoader;
+  late final ReviewDecisionProcessor _reviewDecisionProcessor;
   late final TagRepository _tagRepository;
   late final bool _ownsMediaRepository;
   ContextoDatabase? _ownedAuxiliaryDatabase;
@@ -126,6 +130,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             widget.ocrQueue == null ||
             widget.categoryRepository == null ||
             widget.classificationSuggestionRepository == null ||
+            widget.reviewDecisionProcessor == null ||
             widget.tagRepository == null ||
             widget.automaticImportSettingsRepository == null
         ? ContextoDatabase()
@@ -137,6 +142,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _classificationRepository =
         widget.classificationSuggestionRepository ??
         createLocalClassificationRepository(database!);
+    _reviewDecisionProcessor =
+        widget.reviewDecisionProcessor ??
+        createLocalReviewDecisionProcessor(database!);
     _mediaRepository =
         widget.mediaRepository ??
         LocalMediaItemRepository(
@@ -800,6 +808,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       MaterialPageRoute(
         builder: (_) => ReviewQueuePage(
           loader: _reviewQueueLoader,
+          decisionProcessor: _reviewDecisionProcessor,
           mediaRepository: _mediaRepository,
           ocrRepository: _ocrRepository,
           ocrQueue: _ocrQueue,
@@ -808,7 +817,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
       ),
     );
-    if (mounted) await _reloadPendingReviewCount();
+    if (!mounted) return;
+    await Future.wait([
+      _reloadPendingReviewCount(),
+      _reloadCategories(),
+      _reloadTagCountIgnoringErrors(),
+    ]);
+    if (_selectedTag != null) await _reloadItemsIgnoringErrors();
   }
 
   @override

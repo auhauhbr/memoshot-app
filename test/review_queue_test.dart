@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memoshot/core/theme/app_theme.dart';
 import 'package:memoshot/features/categories/data/category_repository.dart';
+import 'package:memoshot/features/categories/domain/category.dart';
 import 'package:memoshot/features/classification/application/review_queue.dart';
+import 'package:memoshot/features/classification/application/review_decision.dart';
 import 'package:memoshot/features/classification/data/classification_suggestion_repository.dart';
 import 'package:memoshot/features/classification/domain/classification_models.dart';
 import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
@@ -19,6 +21,7 @@ import 'package:memoshot/features/ocr/domain/ocr_result.dart';
 import 'package:memoshot/features/processing/data/ocr_queue_processor.dart';
 import 'package:memoshot/features/processing/domain/processing_job.dart';
 import 'package:memoshot/features/tags/data/tag_repository.dart';
+import 'package:memoshot/features/tags/domain/tag.dart';
 
 void main() {
   late Directory temporaryDirectory;
@@ -266,12 +269,127 @@ void main() {
     expect(find.text('Tudo organizado'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('ações são reais e revisar depois mantém sugestão pendente', (
+    tester,
+  ) async {
+    final image = _image(temporaryDirectory, 'actions.png');
+    final suggestions = _SuggestionRepository(pending: [_suggestion(1)]);
+    final decisions = _DecisionProcessor(suggestions);
+    await tester.pumpWidget(
+      _app(
+        suggestions,
+        _MediaRepository([_media(1, image.path)]),
+        decisionProcessor: decisions,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('review-item-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirmar organização'), findsOneWidget);
+    expect(find.text('Ajustar'), findsOneWidget);
+    expect(find.text('Rejeitar sugestão'), findsOneWidget);
+    expect(find.text('Revisar depois'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('review-later')));
+    await tester.tap(find.byKey(const Key('review-later')));
+    await tester.pumpAndSettle();
+
+    expect(decisions.decisions, isEmpty);
+    expect(find.byKey(const ValueKey('review-item-1')), findsOneWidget);
+  });
+
+  testWidgets('confirma seleção prévia e retira último item da fila', (
+    tester,
+  ) async {
+    final image = _image(temporaryDirectory, 'confirm.png');
+    final suggestions = _SuggestionRepository(
+      pending: [
+        _suggestion(1, tags: ['Urgente']),
+      ],
+    );
+    final decisions = _DecisionProcessor(suggestions);
+    final category = Category(
+      id: 7,
+      name: 'Carreira',
+      normalizedName: 'carreira',
+      createdAt: DateTime(2026),
+    );
+    final tag = Tag(
+      id: 8,
+      name: 'Urgente',
+      normalizedName: 'urgente',
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+    await tester.pumpWidget(
+      _app(
+        suggestions,
+        _MediaRepository([_media(1, image.path)]),
+        decisionProcessor: decisions,
+        categoryRepository: _CategoryRepository(roots: [category]),
+        tagRepository: _TagRepository(tags: [tag]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('review-item-1')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('confirm-organization')));
+    await tester.tap(find.byKey(const Key('confirm-organization')));
+    await tester.pumpAndSettle();
+
+    expect(decisions.decisions.single.type, ReviewDecisionType.confirm);
+    expect(decisions.decisions.single.selectedCategoryId, 7);
+    expect(decisions.decisions.single.selectedTagIds, {8});
+    expect(find.text('Tudo organizado'), findsOneWidget);
+    expect(find.text('Organização aplicada.'), findsOneWidget);
+  });
+
+  testWidgets('rejeição exige confirmação e não aplica organização', (
+    tester,
+  ) async {
+    final image = _image(temporaryDirectory, 'reject.png');
+    final suggestions = _SuggestionRepository(pending: [_suggestion(1)]);
+    final decisions = _DecisionProcessor(suggestions);
+    await tester.pumpWidget(
+      _app(
+        suggestions,
+        _MediaRepository([_media(1, image.path)]),
+        decisionProcessor: decisions,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('review-item-1')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('reject-suggestion')));
+    await tester.tap(find.byKey(const Key('reject-suggestion')));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('O print e sua organização atual'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(decisions.decisions, isEmpty);
+
+    await tester.tap(find.byKey(const Key('reject-suggestion')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-review-rejection')));
+    await tester.pumpAndSettle();
+
+    expect(decisions.decisions.single.type, ReviewDecisionType.reject);
+    expect(find.text('Tudo organizado'), findsOneWidget);
+    expect(find.text('Sugestão rejeitada.'), findsOneWidget);
+  });
 }
 
 Widget _app(
   _SuggestionRepository suggestions,
   _MediaRepository media, {
   Key? pageKey,
+  ReviewDecisionProcessor? decisionProcessor,
+  CategoryRepository? categoryRepository,
+  TagRepository? tagRepository,
 }) {
   final ocr = _OcrRepository();
   return MaterialApp(
@@ -282,11 +400,12 @@ Widget _app(
         suggestionRepository: suggestions,
         mediaRepository: media,
       ),
+      decisionProcessor: decisionProcessor ?? _DecisionProcessor(suggestions),
       mediaRepository: media,
       ocrRepository: ocr,
       ocrQueue: _OcrQueue(),
-      categoryRepository: _CategoryRepository(),
-      tagRepository: _TagRepository(),
+      categoryRepository: categoryRepository ?? _CategoryRepository(),
+      tagRepository: tagRepository ?? _TagRepository(),
     ),
   );
 }
@@ -319,6 +438,32 @@ class _SuggestionRepository implements ClassificationSuggestionRepository {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _DecisionProcessor implements ReviewDecisionProcessor {
+  _DecisionProcessor(this.repository);
+
+  final _SuggestionRepository repository;
+  final List<ReviewDecision> decisions = [];
+
+  @override
+  Future<StoredClassificationSuggestion> resolve(
+    ReviewDecision decision,
+  ) async {
+    decisions.add(decision);
+    final suggestion = repository._pending.singleWhere(
+      (item) => item.mediaItemId == decision.mediaItemId,
+    );
+    repository._pending.remove(suggestion);
+    final status = decision.type == ReviewDecisionType.confirm
+        ? ClassificationSuggestionStatus.accepted
+        : ClassificationSuggestionStatus.rejected;
+    return suggestion.copyWith(
+      status: status,
+      updatedAt: DateTime(2026),
+      resolvedAt: DateTime(2026),
+    );
+  }
 }
 
 class _MediaRepository implements MediaItemRepository {
@@ -380,11 +525,31 @@ class _OcrQueue implements OcrQueue {
 }
 
 class _CategoryRepository implements CategoryRepository {
+  _CategoryRepository({this.roots = const []});
+
+  final List<Category> roots;
+
+  @override
+  Future<List<Category>> loadRootCategories() async => [...roots];
+
+  @override
+  Future<List<CategorySummary>> loadCategories() async => [
+    for (final category in roots)
+      CategorySummary(category: category, mediaCount: 0),
+  ];
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _TagRepository implements TagRepository {
+  _TagRepository({this.tags = const []});
+
+  final List<Tag> tags;
+
+  @override
+  Future<List<Tag>> loadTags() async => [...tags];
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

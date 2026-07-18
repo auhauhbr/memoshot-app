@@ -13,6 +13,7 @@ import 'package:memoshot/features/categories/data/category_repository.dart';
 import 'package:memoshot/features/categories/domain/category.dart';
 import 'package:memoshot/features/categories/presentation/category_detail_page.dart';
 import 'package:memoshot/features/classification/data/classification_suggestion_repository.dart';
+import 'package:memoshot/features/classification/application/review_decision.dart';
 import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
 import 'package:memoshot/features/automatic_import/data/automatic_import_settings_repository.dart';
 import 'package:memoshot/features/automatic_import/domain/automatic_import_settings.dart';
@@ -3915,6 +3916,7 @@ Widget buildTestApp(
     categoryRepository: resolvedCategoryRepository,
     classificationSuggestionRepository:
         classificationRepository ?? FakeClassificationSuggestionRepository(),
+    reviewDecisionProcessor: FakeReviewDecisionProcessor(),
     tagRepository: resolvedTagRepository,
     incomingShareSource: incomingShareSource ?? FakeIncomingShareSource(),
     automaticScreenshotSource:
@@ -3924,6 +3926,13 @@ Widget buildTestApp(
     onboardingRepository:
         onboardingRepository ?? FakeOnboardingRepository(completed: true),
   );
+}
+
+class FakeReviewDecisionProcessor implements ReviewDecisionProcessor {
+  @override
+  Future<StoredClassificationSuggestion> resolve(ReviewDecision decision) {
+    throw UnsupportedError('Não usado neste teste.');
+  }
 }
 
 class FakeClassificationSuggestionRepository

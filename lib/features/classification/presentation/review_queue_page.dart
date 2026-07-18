@@ -9,11 +9,13 @@ import '../../ocr/data/ocr_repository.dart';
 import '../../processing/data/ocr_queue_processor.dart';
 import '../../tags/data/tag_repository.dart';
 import '../application/review_queue.dart';
+import '../application/review_decision.dart';
 import 'review_suggestion_page.dart';
 
 class ReviewQueuePage extends StatefulWidget {
   const ReviewQueuePage({
     required this.loader,
+    required this.decisionProcessor,
     required this.mediaRepository,
     required this.ocrRepository,
     required this.ocrQueue,
@@ -23,6 +25,7 @@ class ReviewQueuePage extends StatefulWidget {
   });
 
   final ReviewQueueLoader loader;
+  final ReviewDecisionProcessor decisionProcessor;
   final MediaItemRepository mediaRepository;
   final OcrRepository ocrRepository;
   final OcrQueue ocrQueue;
@@ -72,10 +75,11 @@ class ReviewQueuePageState extends State<ReviewQueuePage> {
   }
 
   Future<void> _openSuggestion(ReviewQueueItem item) async {
-    await Navigator.of(context).push<bool>(
+    final result = await Navigator.of(context).push<ReviewPageResult>(
       MaterialPageRoute(
         builder: (_) => ReviewSuggestionPage(
           item: item,
+          decisionProcessor: widget.decisionProcessor,
           mediaRepository: widget.mediaRepository,
           ocrRepository: widget.ocrRepository,
           ocrQueue: widget.ocrQueue,
@@ -84,7 +88,27 @@ class ReviewQueuePageState extends State<ReviewQueuePage> {
         ),
       ),
     );
-    if (mounted) await reload(showLoading: false);
+    if (!mounted) return;
+    if (result != null) {
+      setState(() {
+        _items = _items
+            .where((candidate) => candidate.mediaItem.id != item.mediaItem.id)
+            .toList(growable: false);
+      });
+      if (result == ReviewPageResult.accepted ||
+          result == ReviewPageResult.rejected) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result == ReviewPageResult.accepted
+                  ? 'Organização aplicada.'
+                  : 'Sugestão rejeitada.',
+            ),
+          ),
+        );
+      }
+    }
+    await reload(showLoading: false);
   }
 
   @override
