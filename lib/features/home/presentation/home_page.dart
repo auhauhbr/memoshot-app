@@ -18,6 +18,9 @@ import '../../categories/domain/category.dart';
 import '../../categories/presentation/categories_page.dart';
 import '../../categories/presentation/category_detail_page.dart';
 import '../../classification/application/classification_composition.dart';
+import '../../classification/application/review_queue.dart';
+import '../../classification/data/classification_suggestion_repository.dart';
+import '../../classification/presentation/review_queue_page.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
@@ -49,6 +52,7 @@ class HomePage extends StatefulWidget {
     this.ocrRepository,
     this.ocrQueue,
     this.categoryRepository,
+    this.classificationSuggestionRepository,
     this.tagRepository,
     this.incomingShareSource,
     this.automaticScreenshotSource,
@@ -60,6 +64,7 @@ class HomePage extends StatefulWidget {
   final OcrRepository? ocrRepository;
   final OcrQueue? ocrQueue;
   final CategoryRepository? categoryRepository;
+  final ClassificationSuggestionRepository? classificationSuggestionRepository;
   final TagRepository? tagRepository;
   final IncomingShareSource? incomingShareSource;
   final AutomaticScreenshotSource? automaticScreenshotSource;
@@ -75,6 +80,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final OcrRepository _ocrRepository;
   late final OcrQueue _ocrQueue;
   late final CategoryRepository _categoryRepository;
+  late final ClassificationSuggestionRepository _classificationRepository;
+  late final ReviewQueueLoader _reviewQueueLoader;
   late final TagRepository _tagRepository;
   late final bool _ownsMediaRepository;
   ContextoDatabase? _ownedAuxiliaryDatabase;
@@ -101,6 +108,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<CategorySummary> _categories = const [];
   bool _areCategoriesLoading = true;
   String? _categoriesErrorMessage;
+  int? _pendingReviewCount;
+  int _reviewCountGeneration = 0;
   AutomaticImportUiState _automaticImportState =
       AutomaticImportUiState.disabled;
 
@@ -116,6 +125,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             widget.ocrRepository == null ||
             widget.ocrQueue == null ||
             widget.categoryRepository == null ||
+            widget.classificationSuggestionRepository == null ||
             widget.tagRepository == null ||
             widget.automaticImportSettingsRepository == null
         ? ContextoDatabase()
@@ -124,6 +134,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ? null
         : DriftProcessingJobStore(database);
     final resultStore = database == null ? null : DriftOcrResultStore(database);
+    _classificationRepository =
+        widget.classificationSuggestionRepository ??
+        createLocalClassificationRepository(database!);
     _mediaRepository =
         widget.mediaRepository ??
         LocalMediaItemRepository(
@@ -131,6 +144,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           storage: PrivateScreenshotStorage(),
           ocrJobScheduler: LocalOcrJobScheduler(jobStore!),
         );
+    _reviewQueueLoader = ReviewQueueLoader(
+      suggestionRepository: _classificationRepository,
+      mediaRepository: _mediaRepository,
+    );
     _ocrRepository =
         widget.ocrRepository ??
         LocalOcrRepository(
@@ -144,7 +161,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           resultStore: resultStore!,
           recognitionService: const MlKitTextRecognitionService(),
           classificationProcessor: createLocalClassificationProcessor(
-            database!,
+            _classificationRepository,
           ),
         );
     _categoryRepository =
@@ -187,6 +204,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_automaticImportCoordinator.resume());
+      unawaited(_reloadPendingReviewCount());
     }
   }
 
@@ -220,6 +238,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     await _reloadItemsIgnoringErrors();
     _ocrQueue.signal();
+    await _reloadPendingReviewCount();
     if (_searchActive) await _searchNow();
     if (!mounted) return;
     if (result.importedItems.isEmpty) {
@@ -255,6 +274,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     await _reloadItemsIgnoringErrors();
     _ocrQueue.signal();
+    await _reloadPendingReviewCount();
     if (_searchActive) await _searchNow();
     if (!mounted) return;
     final message = _sharedImportMessage(result);
@@ -315,6 +335,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _reloadItems();
       await _reloadCategories();
       await _reloadTagCountIgnoringErrors();
+      await _reloadPendingReviewCount();
       unawaited(_ocrQueue.recoverAndStart());
       final lost = await _screenshotPicker.retrieveLostScreenshots();
       if (lost.isNotEmpty) {
@@ -370,6 +391,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _refreshOcrState(item.id);
     }
     _ocrQueue.signal();
+    await _reloadPendingReviewCount();
     if (!mounted) {
       return;
     }
@@ -436,6 +458,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         (state == OcrItemState.completedWithText ||
             state == OcrItemState.completedWithoutText)) {
       await _searchNow();
+    }
+    if (state == OcrItemState.completedWithText ||
+        state == OcrItemState.completedWithoutText) {
+      await _reloadPendingReviewCount();
+    }
+  }
+
+  Future<void> _reloadPendingReviewCount() async {
+    final generation = ++_reviewCountGeneration;
+    try {
+      final count = await _classificationRepository.countPendingReview();
+      if (!mounted || generation != _reviewCountGeneration) return;
+      setState(() => _pendingReviewCount = count);
+    } catch (_) {
+      if (!mounted || generation != _reviewCountGeneration) return;
+      setState(() => _pendingReviewCount = null);
     }
   }
 
@@ -718,6 +756,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _reloadItemsIgnoringErrors();
     await _reloadCategories();
     await _reloadTagCountIgnoringErrors();
+    await _reloadPendingReviewCount();
     if (_searchActive) await _searchNow();
   }
 
@@ -736,6 +775,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     await _reloadCategories();
     await _reloadTagCountIgnoringErrors();
+    await _reloadPendingReviewCount();
     if (_selectedTag != null) {
       await _reloadItemsIgnoringErrors();
     }
@@ -753,6 +793,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         await _searchNow();
       }
     }
+  }
+
+  Future<void> _openReviewQueue() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => ReviewQueuePage(
+          loader: _reviewQueueLoader,
+          mediaRepository: _mediaRepository,
+          ocrRepository: _ocrRepository,
+          ocrQueue: _ocrQueue,
+          categoryRepository: _categoryRepository,
+          tagRepository: _tagRepository,
+        ),
+      ),
+    );
+    if (mounted) await _reloadPendingReviewCount();
   }
 
   @override
@@ -836,6 +892,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                   ],
                   const SizedBox(height: 20),
+                  if ((_pendingReviewCount ?? 0) > 0) ...[
+                    _ReviewSummary(
+                      count: _pendingReviewCount!,
+                      onReview: _openReviewQueue,
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                   _SectionHeader(
                     title: 'Pastas',
                     actionLabel: 'Gerenciar pastas',
@@ -931,6 +994,60 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewSummary extends StatelessWidget {
+  const _ReviewSummary({required this.count, required this.onReview});
+
+  final int count;
+  final VoidCallback onReview;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      container: true,
+      label:
+          'Para revisar. $count ${count == 1 ? 'print precisa' : 'prints precisam'} de confirmação.',
+      child: Container(
+        key: const Key('pending-review-summary'),
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.rate_review_outlined, color: theme.colorScheme.primary),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Para revisar',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$count ${count == 1 ? 'print precisa' : 'prints precisam'} de confirmação',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              key: const Key('open-review-queue'),
+              onPressed: onReview,
+              child: const Text('Revisar'),
+            ),
+          ],
         ),
       ),
     );

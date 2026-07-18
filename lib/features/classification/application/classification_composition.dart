@@ -5,14 +5,20 @@ import '../domain/local_classification_engine.dart';
 import '../domain/stored_classification_suggestion.dart';
 import 'classification_processor.dart';
 
-ClassificationProcessor createLocalClassificationProcessor(
+ClassificationSuggestionRepository createLocalClassificationRepository(
   ContextoDatabase database,
+) {
+  return LocalClassificationSuggestionRepository(
+    DriftClassificationSuggestionStore(database),
+  );
+}
+
+ClassificationProcessor createLocalClassificationProcessor(
+  ClassificationSuggestionRepository repository,
 ) {
   return LocalClassificationProcessor(
     engine: const LocalClassificationEngine(),
-    repository: LocalClassificationSuggestionRepository(
-      DriftClassificationSuggestionStore(database),
-    ),
+    repository: repository,
     now: DateTime.now,
     engineVersion: currentClassificationEngineVersion,
   );

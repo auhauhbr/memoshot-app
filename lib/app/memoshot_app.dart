@@ -6,6 +6,7 @@ import '../core/automatic_import/method_channel_automatic_screenshot_source.dart
 import '../core/sharing/incoming_share_source.dart';
 import '../core/theme/app_theme.dart';
 import '../features/categories/data/category_repository.dart';
+import '../features/classification/data/classification_suggestion_repository.dart';
 import '../features/automatic_import/data/automatic_import_settings_repository.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/library/data/media_item_repository.dart';
@@ -23,6 +24,7 @@ class MemoShotApp extends StatelessWidget {
     this.ocrRepository,
     this.ocrQueue,
     this.categoryRepository,
+    this.classificationSuggestionRepository,
     this.tagRepository,
     this.incomingShareSource,
     this.automaticScreenshotSource,
@@ -35,6 +37,7 @@ class MemoShotApp extends StatelessWidget {
   final OcrRepository? ocrRepository;
   final OcrQueue? ocrQueue;
   final CategoryRepository? categoryRepository;
+  final ClassificationSuggestionRepository? classificationSuggestionRepository;
   final TagRepository? tagRepository;
   final IncomingShareSource? incomingShareSource;
   final AutomaticScreenshotSource? automaticScreenshotSource;
@@ -61,6 +64,8 @@ class MemoShotApp extends StatelessWidget {
           ocrRepository: ocrRepository,
           ocrQueue: ocrQueue,
           categoryRepository: categoryRepository,
+          classificationSuggestionRepository:
+              classificationSuggestionRepository,
           tagRepository: tagRepository,
           incomingShareSource: incomingShareSource,
           automaticScreenshotSource: automaticSource,

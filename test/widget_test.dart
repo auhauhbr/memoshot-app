@@ -12,6 +12,8 @@ import 'package:memoshot/core/text/text_normalizer.dart';
 import 'package:memoshot/features/categories/data/category_repository.dart';
 import 'package:memoshot/features/categories/domain/category.dart';
 import 'package:memoshot/features/categories/presentation/category_detail_page.dart';
+import 'package:memoshot/features/classification/data/classification_suggestion_repository.dart';
+import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
 import 'package:memoshot/features/automatic_import/data/automatic_import_settings_repository.dart';
 import 'package:memoshot/features/automatic_import/domain/automatic_import_settings.dart';
 import 'package:memoshot/features/library/data/media_item_repository.dart';
@@ -81,6 +83,143 @@ void main() {
     expect(searchField.enabled, isTrue);
     expect(searchField.textInputAction, TextInputAction.search);
     expect(importButton.onPressed, isNotNull);
+  });
+
+  testWidgets('Home oculta Para revisar quando não há pendências', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
+    await tester.pump();
+
+    expect(find.byKey(const Key('pending-review-summary')), findsNothing);
+  });
+
+  testWidgets('Home mostra contador real singular e plural', (tester) async {
+    final singular = FakeClassificationSuggestionRepository(counts: [1]);
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), classificationRepository: singular),
+    );
+    await tester.pump();
+    expect(find.text('1 print precisa de confirmação'), findsOneWidget);
+
+    final plural = FakeClassificationSuggestionRepository(counts: [4]);
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), classificationRepository: plural),
+    );
+    await tester.pump();
+    expect(find.text('4 prints precisam de confirmação'), findsOneWidget);
+  });
+
+  testWidgets('falha do contador não bloqueia a Home', (tester) async {
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        classificationRepository: FakeClassificationSuggestionRepository(
+          countError: StateError('detalhe privado'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('MemoShot'), findsOneWidget);
+    expect(find.text('Pastas'), findsOneWidget);
+    expect(find.textContaining('detalhe privado'), findsNothing);
+    expect(find.byKey(const Key('pending-review-summary')), findsNothing);
+  });
+
+  testWidgets('Revisar abre fila e contador atualiza ao voltar', (
+    tester,
+  ) async {
+    final repository = FakeClassificationSuggestionRepository(counts: [1, 2]);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        classificationRepository: repository,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('open-review-queue')));
+    await tester.pumpAndSettle();
+    expect(find.text('Tudo organizado'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pump();
+
+    expect(find.text('2 prints precisam de confirmação'), findsOneWidget);
+  });
+
+  testWidgets('classificação concluída atualiza contador sem polling', (
+    tester,
+  ) async {
+    final ocr = FakeOcrRepository();
+    final queue = FakeOcrQueue(ocr);
+    final repository = FakeClassificationSuggestionRepository(counts: [0, 1]);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        ocrRepository: ocr,
+        ocrQueue: queue,
+        classificationRepository: repository,
+      ),
+    );
+    await tester.pump();
+
+    queue.emitState(1, OcrItemState.completedWithText);
+    await tester.pump();
+
+    expect(find.text('1 print precisa de confirmação'), findsOneWidget);
+    expect(repository.countCallCount, 2);
+  });
+
+  testWidgets('importação solicita atualização do contador', (tester) async {
+    final image = createTestImage(temporaryDirectory, 'review-import.png');
+    final classification = FakeClassificationSuggestionRepository(
+      counts: [0, 1],
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(
+          selections: [SelectedScreenshot(path: image.path)],
+        ),
+        classificationRepository: classification,
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('add-print-button')));
+    await tester.pump();
+
+    expect(find.text('1 print precisa de confirmação'), findsOneWidget);
+    expect(classification.countCallCount, 2);
+  });
+
+  testWidgets('remoção de screenshot atualiza contador de revisão', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'review-remove.png');
+    final media = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final classification = FakeClassificationSuggestionRepository(
+      counts: [1, 0],
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: media,
+        classificationRepository: classification,
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('pending-review-summary')), findsOneWidget);
+
+    await openFirstScreenshot(tester);
+    await tapRemoveFromMemoShot(tester);
+    await tester.tap(find.text('Remover'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('pending-review-summary')), findsNothing);
+    expect(classification.countCallCount, 2);
   });
 
   testWidgets('cancelar seleção não altera a biblioteca', (tester) async {
@@ -3754,6 +3893,7 @@ Widget buildTestApp(
   FakeOcrQueue? ocrQueue,
   FakeCategoryRepository? categoryRepository,
   FakeTagRepository? tagRepository,
+  FakeClassificationSuggestionRepository? classificationRepository,
   IncomingShareSource? incomingShareSource,
   FakeAutomaticScreenshotSource? automaticScreenshotSource,
   FakeAutomaticImportSettingsRepository? automaticSettingsRepository,
@@ -3773,6 +3913,8 @@ Widget buildTestApp(
     ocrRepository: resolvedOcrRepository,
     ocrQueue: ocrQueue ?? FakeOcrQueue(resolvedOcrRepository),
     categoryRepository: resolvedCategoryRepository,
+    classificationSuggestionRepository:
+        classificationRepository ?? FakeClassificationSuggestionRepository(),
     tagRepository: resolvedTagRepository,
     incomingShareSource: incomingShareSource ?? FakeIncomingShareSource(),
     automaticScreenshotSource:
@@ -3782,6 +3924,83 @@ Widget buildTestApp(
     onboardingRepository:
         onboardingRepository ?? FakeOnboardingRepository(completed: true),
   );
+}
+
+class FakeClassificationSuggestionRepository
+    implements ClassificationSuggestionRepository {
+  FakeClassificationSuggestionRepository({
+    List<StoredClassificationSuggestion> pending = const [],
+    List<int> counts = const [0],
+    this.countError,
+    this.loadError,
+  }) : _pending = [...pending],
+       _counts = [...counts];
+
+  final List<StoredClassificationSuggestion> _pending;
+  final List<int> _counts;
+  final Object? countError;
+  final Object? loadError;
+  int countCallCount = 0;
+
+  @override
+  Future<int> countPendingReview() async {
+    countCallCount++;
+    if (countError != null) throw countError!;
+    if (_counts.isEmpty) return 0;
+    final index = (countCallCount - 1).clamp(0, _counts.length - 1);
+    return _counts[index];
+  }
+
+  @override
+  Future<List<StoredClassificationSuggestion>> loadPendingReview() async {
+    if (loadError != null) throw loadError!;
+    return [..._pending];
+  }
+
+  @override
+  Future<StoredClassificationSuggestion?> loadByMediaItemId(
+    int mediaItemId,
+  ) async =>
+      _pending.where((item) => item.mediaItemId == mediaItemId).firstOrNull;
+
+  @override
+  Future<void> deleteForMediaItem(int mediaItemId) async {
+    _pending.removeWhere((item) => item.mediaItemId == mediaItemId);
+  }
+
+  @override
+  Future<StoredClassificationSuggestion> saveSuggestion(
+    StoredClassificationSuggestion suggestion,
+  ) async => suggestion;
+
+  @override
+  Future<StoredClassificationSuggestion> replaceSuggestion(
+    StoredClassificationSuggestion suggestion,
+  ) async => suggestion;
+
+  @override
+  Future<StoredClassificationSuggestion> saveAutomaticSuggestion(
+    StoredClassificationSuggestion suggestion, {
+    required DateTime ocrProcessedAt,
+  }) async => suggestion;
+
+  @override
+  Future<StoredClassificationSuggestion> updateStatus(
+    int mediaItemId,
+    ClassificationSuggestionStatus status,
+  ) => throw UnsupportedError('Fora do escopo do teste.');
+
+  @override
+  Future<StoredClassificationSuggestion> markAccepted(int mediaItemId) =>
+      throw UnsupportedError('Fora do escopo do teste.');
+
+  @override
+  Future<StoredClassificationSuggestion> markRejected(int mediaItemId) =>
+      throw UnsupportedError('Fora do escopo do teste.');
+
+  @override
+  Future<StoredClassificationSuggestion> markAutoApplied(int mediaItemId) =>
+      throw UnsupportedError('Fora do escopo do teste.');
 }
 
 Widget buildCategoryDetailTestApp({
