@@ -12,11 +12,13 @@ class AutomaticScreenshotCandidate {
     required this.mediaId,
     required this.temporaryPath,
     this.mimeType,
+    this.capturedAt,
   });
 
   final int mediaId;
   final String temporaryPath;
   final String? mimeType;
+  final DateTime? capturedAt;
 }
 
 class AutomaticScreenshotBatch {

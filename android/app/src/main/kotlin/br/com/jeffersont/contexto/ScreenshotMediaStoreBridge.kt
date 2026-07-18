@@ -180,6 +180,8 @@ internal class ScreenshotMediaStoreBridge(
             MediaStore.Images.Media._ID,
             MediaStore.Images.Media.DISPLAY_NAME,
             MediaStore.Images.Media.MIME_TYPE,
+            MediaStore.Images.Media.DATE_ADDED,
+            MediaStore.Images.Media.DATE_TAKEN,
         ).apply {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 add(MediaStore.Images.Media.RELATIVE_PATH)
@@ -198,6 +200,8 @@ internal class ScreenshotMediaStoreBridge(
             val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
             val nameIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
             val mimeIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.MIME_TYPE)
+            val addedIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
+            val takenIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_TAKEN)
             val pathIndex = cursor.getColumnIndex(MediaStore.Images.Media.RELATIVE_PATH)
             val pendingIndex = cursor.getColumnIndex(MediaStore.Images.Media.IS_PENDING)
             while (cursor.moveToNext()) {
@@ -223,6 +227,10 @@ internal class ScreenshotMediaStoreBridge(
                     "mediaId" to id,
                     "temporaryPath" to temporary.absolutePath,
                     "mimeType" to mimeType,
+                    "capturedAt" to MediaStoreCaptureTime.resolve(
+                        cursor.getLong(takenIndex),
+                        cursor.getLong(addedIndex),
+                    ),
                 )
             }
         }

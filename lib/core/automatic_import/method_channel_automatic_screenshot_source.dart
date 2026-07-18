@@ -49,6 +49,7 @@ class MethodChannelAutomaticScreenshotSource
               mediaId: item['mediaId']! as int,
               temporaryPath: item['temporaryPath']! as String,
               mimeType: item['mimeType'] as String?,
+              capturedAt: _dateFromMilliseconds(item['capturedAt'] as int?),
             );
           })
           .toList(growable: false),
@@ -73,5 +74,10 @@ class MethodChannelAutomaticScreenshotSource
       (status) => status.name == value,
       orElse: () => MediaPermissionStatus.unsupported,
     );
+  }
+
+  DateTime? _dateFromMilliseconds(int? value) {
+    if (value == null || value <= 0) return null;
+    return DateTime.fromMillisecondsSinceEpoch(value);
   }
 }

@@ -18,6 +18,9 @@ void main() {
     expect(source, contains('MediaStore.Images.Media.IS_PENDING'));
     expect(source, contains('startsWith("image/")'));
     expect(source, contains('MediaStore.Images.Media._ID} ASC'));
+    expect(source, contains('MediaStore.Images.Media.DATE_TAKEN'));
+    expect(source, contains('MediaStore.Images.Media.DATE_ADDED'));
+    expect(source, contains('MediaStoreCaptureTime.resolve'));
   });
 
   test('heurística contempla nomes em inglês e português', () {
