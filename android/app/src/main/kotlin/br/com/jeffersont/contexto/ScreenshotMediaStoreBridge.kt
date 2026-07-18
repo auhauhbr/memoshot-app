@@ -35,6 +35,9 @@ internal class ScreenshotMediaStoreBridge(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val executor = Executors.newSingleThreadExecutor()
     private val preferences = activity.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+    private val monitorState = NativeScreenshotMonitorState(activity)
+    private val backgroundScheduler = ScreenshotBackgroundScheduler(activity)
+    private val backgroundInbox = BackgroundScreenshotInbox(activity)
     private var permissionResult: MethodChannel.Result? = null
     private var eventSink: EventChannel.EventSink? = null
     private var observer: ContentObserver? = null
@@ -74,9 +77,69 @@ internal class ScreenshotMediaStoreBridge(
                 if (path != null) deleteTemporary(path)
                 result.success(null)
             }
+            "configureBackgroundMonitoring" -> {
+                val enabled = call.argument<Boolean>("enabled") == true
+                val marker = call.argument<Number>("lastMediaId")?.toLong() ?: 0L
+                val resetBaseline = call.argument<Boolean>("resetBaseline") == true
+                configureBackgroundMonitoring(enabled, marker, resetBaseline, result)
+            }
+            "listBackgroundInbox" -> runInBackground(result) {
+                backgroundInbox.listEntries().map { entry ->
+                    mapOf(
+                        "entryId" to entry.entryId,
+                        "mediaId" to entry.mediaStoreId,
+                        "privatePath" to entry.imagePath,
+                        "mimeType" to entry.mimeType,
+                        "capturedAt" to entry.capturedAt,
+                    )
+                }
+            }
+            "backgroundInboxPendingCount" -> runInBackground(result) {
+                backgroundInbox.pendingCount()
+            }
+            "acknowledgeBackgroundInbox", "rejectBackgroundInbox" -> {
+                val entryId = call.argument<String>("entryId").orEmpty()
+                runInBackground(result) { backgroundInbox.remove(entryId) }
+            }
             else -> result.notImplemented()
         }
     }
+
+    private fun configureBackgroundMonitoring(
+        enabled: Boolean,
+        marker: Long,
+        resetBaseline: Boolean,
+        result: MethodChannel.Result,
+    ) {
+        if (!enabled) {
+            backgroundScheduler.cancel()
+            result.success(backgroundStatus())
+            return
+        }
+        if (permissionStatus() != "fullAccess") {
+            backgroundScheduler.cancel()
+            result.success(backgroundStatus())
+            return
+        }
+        val available = if (resetBaseline) {
+            backgroundScheduler.activate(marker)
+        } else {
+            backgroundScheduler.reconcile(marker)
+        }
+        result.success(
+            mapOf(
+                "available" to available,
+                "enabled" to monitorState.isEnabled(),
+                "lastMediaId" to monitorState.marker(),
+            ),
+        )
+    }
+
+    private fun backgroundStatus(): Map<String, Any> = mapOf(
+        "available" to backgroundScheduler.isAvailable(),
+        "enabled" to monitorState.isEnabled(),
+        "lastMediaId" to monitorState.marker(),
+    )
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
         eventSink = events

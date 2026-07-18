@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import '../../core/automatic_import/automatic_screenshot_source.dart';
 import '../library/data/media_item_repository.dart';
@@ -52,11 +53,18 @@ class AutomaticScreenshotImportCoordinator {
   bool _scanning = false;
   bool _scanAgain = false;
   bool _observing = false;
+  Future<void>? _drainFuture;
+  bool _drainAgain = false;
 
   Future<void> initialize() async {
     try {
       final settings = await _settingsRepository.load();
       if (!settings.enabled) {
+        await _source.configureBackgroundMonitoring(
+          enabled: false,
+          lastMediaId: settings.lastMediaId ?? 0,
+        );
+        await _drainInbox();
         _onStateChanged(AutomaticImportUiState.disabled);
         return;
       }
@@ -75,6 +83,16 @@ class AutomaticScreenshotImportCoordinator {
       }
       final baseline = await _source.currentMaxMediaId();
       await _settingsRepository.enable(baselineMediaId: baseline);
+      try {
+        await _source.configureBackgroundMonitoring(
+          enabled: true,
+          lastMediaId: baseline,
+          resetBaseline: true,
+        );
+      } catch (_) {
+        await _settingsRepository.disable();
+        rethrow;
+      }
       _onStateChanged(AutomaticImportUiState.active);
       await _beginObserving();
       return permission;
@@ -88,8 +106,23 @@ class AutomaticScreenshotImportCoordinator {
   Future<void> disable() async {
     await _stopObserving();
     try {
+      final settings = await _settingsRepository.load();
+      var nativeDisabled = true;
+      try {
+        await _source.configureBackgroundMonitoring(
+          enabled: false,
+          lastMediaId: settings.lastMediaId ?? 0,
+        );
+      } catch (_) {
+        nativeDisabled = false;
+      }
       await _settingsRepository.disable();
-      _onStateChanged(AutomaticImportUiState.disabled);
+      _onStateChanged(
+        nativeDisabled
+            ? AutomaticImportUiState.disabled
+            : AutomaticImportUiState.unavailable,
+      );
+      if (!nativeDisabled) _onError();
     } catch (_) {
       _onError();
     }
@@ -112,12 +145,89 @@ class AutomaticScreenshotImportCoordinator {
     final permission = await _source.permissionStatus();
     if (permission != MediaPermissionStatus.fullAccess) {
       await _stopObserving();
+      await _source.configureBackgroundMonitoring(
+        enabled: false,
+        lastMediaId: lastMediaId,
+      );
       _onStateChanged(_stateForPermission(permission));
       return;
     }
+    final backgroundStatus = await _source.configureBackgroundMonitoring(
+      enabled: true,
+      lastMediaId: lastMediaId,
+    );
+    final reconciledMarker = backgroundStatus.lastMediaId > lastMediaId
+        ? backgroundStatus.lastMediaId
+        : lastMediaId;
+    if (reconciledMarker > lastMediaId) {
+      await _settingsRepository.updateMarker(reconciledMarker);
+    }
     _onStateChanged(AutomaticImportUiState.active);
-    await _scan(lastMediaId: lastMediaId);
+    await _drainInbox();
+    await _scan(lastMediaId: reconciledMarker);
     await _beginObserving();
+  }
+
+  Future<void> _drainInbox() {
+    final running = _drainFuture;
+    if (running != null) {
+      _drainAgain = true;
+      return running;
+    }
+    final future = _performInboxDrain();
+    _drainFuture = future;
+    return future.whenComplete(() {
+      _drainFuture = null;
+    });
+  }
+
+  Future<void> _performInboxDrain() async {
+    do {
+      _drainAgain = false;
+      final entries = await _source.loadBackgroundInbox();
+      final importedItems = <MediaItem>[];
+      var duplicateCount = 0;
+      var rejectedCount = 0;
+      for (final entry in entries) {
+        if (_disposed) return;
+        if (!await File(entry.privatePath).exists()) {
+          try {
+            await _source.rejectBackgroundEntry(entry.entryId);
+          } catch (_) {
+            // A entrada inválida permanece isolada para uma limpeza futura.
+          }
+          rejectedCount++;
+          continue;
+        }
+        try {
+          final result = await _mediaRepository.importScreenshots([
+            SelectedScreenshot(
+              path: entry.privatePath,
+              mimeType: entry.mimeType,
+              capturedAt: entry.capturedAt,
+            ),
+          ], origin: ImportOrigin.automatic);
+          importedItems.addAll(result.importedItems);
+          duplicateCount += result.duplicateCount;
+          rejectedCount += result.rejectedCount;
+          if (result.importedItems.isNotEmpty || result.duplicateCount > 0) {
+            await _source.acknowledgeBackgroundEntry(entry.entryId);
+          }
+        } catch (_) {
+          rejectedCount++;
+          // Mantém a entrada durável para uma tentativa futura.
+        }
+      }
+      if (importedItems.isNotEmpty || duplicateCount > 0 || rejectedCount > 0) {
+        await _onImported(
+          ImportResult(
+            importedItems: importedItems,
+            duplicateCount: duplicateCount,
+            rejectedCount: rejectedCount,
+          ),
+        );
+      }
+    } while (_drainAgain && !_disposed);
   }
 
   AutomaticImportUiState _stateForPermission(MediaPermissionStatus status) {
@@ -179,6 +289,7 @@ class AutomaticScreenshotImportCoordinator {
                   (item) => SelectedScreenshot(
                     path: item.temporaryPath,
                     mimeType: item.mimeType,
+                    capturedAt: item.capturedAt,
                   ),
                 )
                 .toList(growable: false),
@@ -190,6 +301,10 @@ class AutomaticScreenshotImportCoordinator {
             rejectedCount: imported.rejectedCount + batch.rejectedCount,
           );
           await _settingsRepository.updateMarker(batch.lastExaminedMediaId);
+          await _source.configureBackgroundMonitoring(
+            enabled: true,
+            lastMediaId: batch.lastExaminedMediaId,
+          );
         } finally {
           for (final item in batch.items) {
             try {

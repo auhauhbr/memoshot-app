@@ -35,9 +35,11 @@ void main() {
       'READ_MEDIA_VIDEO',
       'READ_MEDIA_AUDIO',
       'ACCESS_MEDIA_LOCATION',
+      'POST_NOTIFICATIONS',
     ]) {
       expect(manifest, isNot(contains(permission)));
     }
     expect(manifest, contains('android:launchMode="singleTop"'));
+    expect(manifest, isNot(contains('<service')));
   });
 }

@@ -17,6 +17,7 @@ import 'package:contexto/features/library/data/media_item_repository.dart';
 import 'package:contexto/features/library/domain/media_item.dart';
 import 'package:contexto/features/library/domain/selected_screenshot.dart';
 import 'package:contexto/features/library/domain/screenshot_search_result.dart';
+import 'package:contexto/features/library/presentation/screenshot_grid.dart';
 import 'package:contexto/features/ocr/data/ocr_repository.dart';
 import 'package:contexto/features/ocr/domain/ocr_result.dart';
 import 'package:contexto/features/processing/data/ocr_queue_processor.dart';

@@ -1105,7 +1105,9 @@ class _AutomaticImportCard extends StatelessWidget {
             ],
             const SizedBox(height: 5),
             Text(
-              'Com o app encerrado, novas capturas serão verificadas na próxima abertura.',
+              'Com o app fechado, o Android pode capturar novos screenshots em '
+              'segundo plano. O processamento será concluído quando o Contexto '
+              'estiver disponível.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colors.onSurfaceVariant,
               ),

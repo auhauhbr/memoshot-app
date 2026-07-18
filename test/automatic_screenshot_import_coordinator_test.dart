@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:contexto/core/automatic_import/automatic_screenshot_source.dart';
 import 'package:contexto/features/automatic_import/automatic_screenshot_import_coordinator.dart';
@@ -33,6 +34,7 @@ void main() {
     expect(settings.enabled, isTrue);
     expect(settings.marker, 81);
     expect(source.startCalls, 1);
+    expect(source.backgroundConfigurationCalls, 1);
     expect(source.operations, ['request', 'max', 'start']);
     await coordinator.dispose();
   });
@@ -55,6 +57,7 @@ void main() {
 
       expect(settings.enabled, isFalse);
       expect(source.startCalls, 0);
+      expect(source.backgroundConfigurationCalls, 0);
       expect(
         states.last,
         permission == MediaPermissionStatus.limitedAccess
@@ -66,15 +69,17 @@ void main() {
   });
 
   test('retomada encontra itens posteriores e usa origem automatic', () async {
+    final capturedAt = DateTime(2026, 1, 2, 10, 30);
     final source = _FakeSource(
       batches: [
-        const AutomaticScreenshotBatch(
+        AutomaticScreenshotBatch(
           lastExaminedMediaId: 14,
           items: [
             AutomaticScreenshotCandidate(
               mediaId: 14,
               temporaryPath: '/cache/ficticio.png',
               mimeType: 'image/png',
+              capturedAt: capturedAt,
             ),
           ],
         ),
@@ -92,6 +97,7 @@ void main() {
 
     expect(source.scanMarkers, [9]);
     expect(media.origins, [ImportOrigin.automatic]);
+    expect(media.receivedScreenshots.single.capturedAt, capturedAt);
     expect(settings.marker, 14);
     expect(source.deletedPaths, ['/cache/ficticio.png']);
     await coordinator.dispose();
@@ -107,6 +113,7 @@ void main() {
 
     expect(settings.enabled, isFalse);
     expect(source.stopCalls, 1);
+    expect(source.backgroundConfigurationCalls, 2);
     await coordinator.dispose();
   });
 
@@ -180,6 +187,122 @@ void main() {
       await coordinator.dispose();
     },
   );
+
+  test('entrada durável usa pipeline automático e é confirmada', () async {
+    final directory = Directory.systemTemp.createTempSync('contexto_inbox_');
+    final image = File('${directory.path}/entrada.png')..writeAsBytesSync([1]);
+    final capturedAt = DateTime(2025, 12, 20, 8);
+    final source = _FakeSource()
+      ..inbox.add(
+        BackgroundScreenshotEntry(
+          entryId: 'entrada-1',
+          mediaId: 31,
+          privatePath: image.path,
+          mimeType: 'image/png',
+          capturedAt: capturedAt,
+        ),
+      );
+    final media = _FakeMediaRepository(importItems: true);
+    final coordinator = _coordinator(source: source, media: media);
+
+    await coordinator.initialize();
+
+    expect(media.origins, [ImportOrigin.automatic]);
+    expect(media.receivedScreenshots.single.capturedAt, capturedAt);
+    expect(source.acknowledgedEntries, ['entrada-1']);
+    expect(source.inbox, isEmpty);
+    expect(await source.backgroundInboxPendingCount(), 0);
+    await coordinator.dispose();
+    directory.deleteSync(recursive: true);
+  });
+
+  test(
+    'duplicata confirma entrada e falha transitória mantém entrada',
+    () async {
+      final directory = Directory.systemTemp.createTempSync('contexto_inbox_');
+      final image = File('${directory.path}/entrada.png')
+        ..writeAsBytesSync([1]);
+      final duplicateSource = _FakeSource()
+        ..inbox.add(
+          BackgroundScreenshotEntry(
+            entryId: 'duplicada',
+            mediaId: 32,
+            privatePath: image.path,
+          ),
+        );
+      final duplicateCoordinator = _coordinator(
+        source: duplicateSource,
+        media: _FakeMediaRepository(duplicateCount: 1),
+      );
+      await duplicateCoordinator.initialize();
+      expect(duplicateSource.acknowledgedEntries, ['duplicada']);
+      await duplicateCoordinator.dispose();
+
+      final failedSource = _FakeSource()
+        ..inbox.add(
+          BackgroundScreenshotEntry(
+            entryId: 'transitoria',
+            mediaId: 33,
+            privatePath: image.path,
+          ),
+        );
+      final failedCoordinator = _coordinator(
+        source: failedSource,
+        media: _FakeMediaRepository(rejectedCount: 1),
+      );
+      await failedCoordinator.initialize();
+      expect(failedSource.acknowledgedEntries, isEmpty);
+      expect(failedSource.inbox, hasLength(1));
+      await failedCoordinator.dispose();
+      directory.deleteSync(recursive: true);
+    },
+  );
+
+  test('entrada inválida é rejeitada sem crash', () async {
+    final source = _FakeSource()
+      ..inbox.add(
+        const BackgroundScreenshotEntry(
+          entryId: 'invalida',
+          mediaId: 34,
+          privatePath: '/arquivo/ficticio/inexistente.png',
+        ),
+      );
+    final coordinator = _coordinator(source: source);
+
+    await coordinator.initialize();
+
+    expect(source.rejectedEntries, ['invalida']);
+    await coordinator.dispose();
+  });
+
+  test('marcador nativo maior é reconciliado antes da varredura', () async {
+    final source = _FakeSource()..backgroundMarker = 88;
+    final settings = _FakeSettings(enabled: true, marker: 20);
+    final coordinator = _coordinator(source: source, settings: settings);
+
+    await coordinator.initialize();
+
+    expect(source.scanMarkers, [88]);
+    expect(settings.marker, 88);
+    await coordinator.dispose();
+  });
+
+  test('duas drenagens não executam simultaneamente', () async {
+    final blocker = Completer<List<BackgroundScreenshotEntry>>();
+    final source = _FakeSource()..inboxLoadCompleter = blocker;
+    final coordinator = _coordinator(source: source);
+
+    final first = coordinator.initialize();
+    final second = coordinator.initialize();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(source.maxConcurrentInboxLoads, 1);
+    blocker.complete(const []);
+    await Future.wait([first, second]);
+
+    expect(source.maxConcurrentInboxLoads, 1);
+    await coordinator.dispose();
+  });
 }
 
 AutomaticScreenshotImportCoordinator _coordinator({
@@ -219,9 +342,43 @@ class _FakeSource implements AutomaticScreenshotSource {
   int stopCalls = 0;
   int concurrentScans = 0;
   int maxConcurrentScans = 0;
+  final List<BackgroundScreenshotEntry> inbox = [];
+  final List<String> acknowledgedEntries = [];
+  final List<String> rejectedEntries = [];
+  int backgroundMarker = 0;
+  int backgroundConfigurationCalls = 0;
+  Completer<List<BackgroundScreenshotEntry>>? inboxLoadCompleter;
+  int concurrentInboxLoads = 0;
+  int maxConcurrentInboxLoads = 0;
+
+  @override
+  Future<void> acknowledgeBackgroundEntry(String entryId) async {
+    acknowledgedEntries.add(entryId);
+    inbox.removeWhere((entry) => entry.entryId == entryId);
+  }
+
+  @override
+  Future<BackgroundMonitorStatus> configureBackgroundMonitoring({
+    required bool enabled,
+    required int lastMediaId,
+    bool resetBaseline = false,
+  }) async {
+    backgroundConfigurationCalls++;
+    backgroundMarker = resetBaseline || lastMediaId > backgroundMarker
+        ? lastMediaId
+        : backgroundMarker;
+    return BackgroundMonitorStatus(
+      available: true,
+      enabled: enabled,
+      lastMediaId: backgroundMarker,
+    );
+  }
 
   @override
   Stream<void> get changes => controller.stream;
+
+  @override
+  Future<int> backgroundInboxPendingCount() async => inbox.length;
 
   @override
   Future<int> currentMaxMediaId() async {
@@ -233,6 +390,19 @@ class _FakeSource implements AutomaticScreenshotSource {
   Future<void> deleteTemporary(String path) async => deletedPaths.add(path);
 
   void emit() => controller.add(null);
+
+  @override
+  Future<List<BackgroundScreenshotEntry>> loadBackgroundInbox() async {
+    concurrentInboxLoads++;
+    if (concurrentInboxLoads > maxConcurrentInboxLoads) {
+      maxConcurrentInboxLoads = concurrentInboxLoads;
+    }
+    final blocked = inboxLoadCompleter;
+    final result = blocked == null ? [...inbox] : await blocked.future;
+    inboxLoadCompleter = null;
+    concurrentInboxLoads--;
+    return result;
+  }
 
   @override
   Future<void> openAppSettings() async {}
@@ -248,6 +418,12 @@ class _FakeSource implements AutomaticScreenshotSource {
     requestCalls++;
     operations.add('request');
     return permission;
+  }
+
+  @override
+  Future<void> rejectBackgroundEntry(String entryId) async {
+    rejectedEntries.add(entryId);
+    inbox.removeWhere((entry) => entry.entryId == entryId);
   }
 
   @override
@@ -306,10 +482,17 @@ class _FakeSettings implements AutomaticImportSettingsRepository {
 }
 
 class _FakeMediaRepository implements MediaItemRepository {
-  _FakeMediaRepository({this.rejectedCount = 0});
+  _FakeMediaRepository({
+    this.rejectedCount = 0,
+    this.duplicateCount = 0,
+    this.importItems = false,
+  });
 
   final int rejectedCount;
+  final int duplicateCount;
+  final bool importItems;
   final List<ImportOrigin> origins = [];
+  final List<SelectedScreenshot> receivedScreenshots = [];
 
   @override
   Future<ImportResult> importScreenshots(
@@ -317,9 +500,23 @@ class _FakeMediaRepository implements MediaItemRepository {
     ImportOrigin origin = ImportOrigin.picker,
   }) async {
     origins.add(origin);
+    receivedScreenshots.addAll(screenshots);
+    final importedItems = importItems && screenshots.isNotEmpty
+        ? [
+            MediaItem(
+              id: origins.length,
+              privatePath: screenshots.first.path,
+              internalName: 'interno.png',
+              importedAt: DateTime(2026),
+              sourceMode: 'photoPicker',
+              status: 'ready',
+              importOrigin: origin,
+            ),
+          ]
+        : const <MediaItem>[];
     return ImportResult(
-      importedItems: const [],
-      duplicateCount: 0,
+      importedItems: importedItems,
+      duplicateCount: duplicateCount,
       rejectedCount: rejectedCount,
     );
   }

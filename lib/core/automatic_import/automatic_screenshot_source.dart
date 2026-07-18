@@ -33,6 +33,34 @@ class AutomaticScreenshotBatch {
   final int rejectedCount;
 }
 
+class BackgroundScreenshotEntry {
+  const BackgroundScreenshotEntry({
+    required this.entryId,
+    required this.mediaId,
+    required this.privatePath,
+    this.mimeType,
+    this.capturedAt,
+  });
+
+  final String entryId;
+  final int mediaId;
+  final String privatePath;
+  final String? mimeType;
+  final DateTime? capturedAt;
+}
+
+class BackgroundMonitorStatus {
+  const BackgroundMonitorStatus({
+    required this.available,
+    required this.enabled,
+    required this.lastMediaId,
+  });
+
+  final bool available;
+  final bool enabled;
+  final int lastMediaId;
+}
+
 abstract interface class AutomaticScreenshotSource {
   Stream<void> get changes;
 
@@ -51,4 +79,18 @@ abstract interface class AutomaticScreenshotSource {
   Future<void> stopObserving();
 
   Future<void> deleteTemporary(String path);
+
+  Future<BackgroundMonitorStatus> configureBackgroundMonitoring({
+    required bool enabled,
+    required int lastMediaId,
+    bool resetBaseline = false,
+  });
+
+  Future<List<BackgroundScreenshotEntry>> loadBackgroundInbox();
+
+  Future<int> backgroundInboxPendingCount();
+
+  Future<void> acknowledgeBackgroundEntry(String entryId);
+
+  Future<void> rejectBackgroundEntry(String entryId);
 }

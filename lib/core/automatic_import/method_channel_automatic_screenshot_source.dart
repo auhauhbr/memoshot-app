@@ -69,6 +69,63 @@ class MethodChannelAutomaticScreenshotSource
     <String, Object?>{'path': path},
   );
 
+  @override
+  Future<BackgroundMonitorStatus> configureBackgroundMonitoring({
+    required bool enabled,
+    required int lastMediaId,
+    bool resetBaseline = false,
+  }) async {
+    final value = await _methods.invokeMapMethod<String, Object?>(
+      'configureBackgroundMonitoring',
+      <String, Object?>{
+        'enabled': enabled,
+        'lastMediaId': lastMediaId,
+        'resetBaseline': resetBaseline,
+      },
+    );
+    return BackgroundMonitorStatus(
+      available: value?['available'] as bool? ?? false,
+      enabled: value?['enabled'] as bool? ?? false,
+      lastMediaId: value?['lastMediaId'] as int? ?? lastMediaId,
+    );
+  }
+
+  @override
+  Future<List<BackgroundScreenshotEntry>> loadBackgroundInbox() async {
+    final values =
+        await _methods.invokeListMethod<Object?>('listBackgroundInbox') ??
+        const [];
+    return values
+        .map((raw) {
+          final value = Map<Object?, Object?>.from(raw! as Map);
+          return BackgroundScreenshotEntry(
+            entryId: value['entryId']! as String,
+            mediaId: value['mediaId']! as int,
+            privatePath: value['privatePath']! as String,
+            mimeType: value['mimeType'] as String?,
+            capturedAt: _dateFromMilliseconds(value['capturedAt'] as int?),
+          );
+        })
+        .toList(growable: false);
+  }
+
+  @override
+  Future<int> backgroundInboxPendingCount() async =>
+      await _methods.invokeMethod<int>('backgroundInboxPendingCount') ?? 0;
+
+  @override
+  Future<void> acknowledgeBackgroundEntry(String entryId) =>
+      _methods.invokeMethod<void>(
+        'acknowledgeBackgroundInbox',
+        <String, Object?>{'entryId': entryId},
+      );
+
+  @override
+  Future<void> rejectBackgroundEntry(String entryId) =>
+      _methods.invokeMethod<void>('rejectBackgroundInbox', <String, Object?>{
+        'entryId': entryId,
+      });
+
   MediaPermissionStatus _permissionFrom(String? value) {
     return MediaPermissionStatus.values.firstWhere(
       (status) => status.name == value,
