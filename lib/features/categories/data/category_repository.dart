@@ -41,7 +41,11 @@ abstract interface class CategoryRepository {
 
   Future<List<Category>> loadRootCategories();
 
+  Future<List<CategorySummary>> loadRootCategorySummaries();
+
   Future<List<Category>> loadChildCategories(int parentId);
+
+  Future<List<CategorySummary>> loadChildCategorySummaries(int parentId);
 
   Future<Category?> findCategoryById(int id);
 
@@ -167,6 +171,11 @@ class LocalCategoryRepository implements CategoryRepository {
   Future<List<Category>> loadRootCategories() => _store.listRoots();
 
   @override
+  Future<List<CategorySummary>> loadRootCategorySummaries() {
+    return _store.listSummariesByParent(null);
+  }
+
+  @override
   Future<List<Category>> loadChildCategories(int parentId) async {
     if (await _store.findById(parentId) == null) {
       throw const CategoryHierarchyException(
@@ -174,6 +183,16 @@ class LocalCategoryRepository implements CategoryRepository {
       );
     }
     return _store.listChildren(parentId);
+  }
+
+  @override
+  Future<List<CategorySummary>> loadChildCategorySummaries(int parentId) async {
+    if (await _store.findById(parentId) == null) {
+      throw const CategoryHierarchyException(
+        CategoryHierarchyError.parentNotFound,
+      );
+    }
+    return _store.listSummariesByParent(parentId);
   }
 
   @override

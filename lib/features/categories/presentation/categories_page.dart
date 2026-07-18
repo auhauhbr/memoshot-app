@@ -47,7 +47,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Não foi possível carregar as categorias.');
+        setState(() => _error = 'Não foi possível carregar as pastas.');
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -64,15 +64,13 @@ class _CategoriesPageState extends State<CategoriesPage> {
 
   Future<void> _open(CategorySummary summary) async {
     await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => CategoryDetailPage(
-          summary: summary,
-          categoryRepository: widget.categoryRepository,
-          mediaRepository: widget.mediaRepository,
-          ocrRepository: widget.ocrRepository,
-          ocrQueue: widget.ocrQueue,
-          tagRepository: widget.tagRepository,
-        ),
+      buildCategoryDetailRoute(
+        summary: summary,
+        categoryRepository: widget.categoryRepository,
+        mediaRepository: widget.mediaRepository,
+        ocrRepository: widget.ocrRepository,
+        ocrQueue: widget.ocrQueue,
+        tagRepository: widget.tagRepository,
       ),
     );
     await _load();
@@ -100,9 +98,10 @@ class _CategoriesPageState extends State<CategoriesPage> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final entries = _hierarchyEntries(_categories);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Categorias'),
+        title: const Text('Pastas'),
         backgroundColor: colors.surface,
         foregroundColor: colors.primary,
       ),
@@ -123,49 +122,71 @@ class _CategoriesPageState extends State<CategoriesPage> {
                     Expanded(child: Center(child: Text(_error!)))
                   else if (_categories.isEmpty)
                     const Expanded(
-                      child: Center(child: Text('Nenhuma categoria criada.')),
+                      child: Center(child: Text('Nenhuma pasta criada.')),
                     )
                   else
                     Expanded(
                       child: ListView.separated(
-                        itemCount: _categories.length,
+                        itemCount: entries.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
-                          final summary = _categories[index];
+                          final entry = entries[index];
+                          final summary = entry.summary;
                           final count = summary.mediaCount;
-                          return Card(
-                            child: ListTile(
-                              key: ValueKey(
-                                'category-tile-${summary.category.id}',
-                              ),
-                              onTap: () => _open(summary),
-                              title: Text(
-                                summary.category.name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                '$count ${count == 1 ? 'screenshot' : 'screenshots'}',
-                              ),
-                              trailing: PopupMenuButton<String>(
-                                tooltip: 'Ações da categoria',
-                                onSelected: (action) {
-                                  if (action == 'rename') _rename(summary);
-                                  if (action == 'delete') _delete(summary);
-                                },
-                                itemBuilder: (_) => [
-                                  const PopupMenuItem(
-                                    value: 'rename',
-                                    child: Text('Renomear'),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: Text(
-                                      'Excluir categoria',
-                                      style: TextStyle(color: colors.error),
+                          return Padding(
+                            padding: EdgeInsets.only(left: entry.depth * 16.0),
+                            child: Card(
+                              child: ListTile(
+                                key: ValueKey(
+                                  'category-tile-${summary.category.id}',
+                                ),
+                                onTap: () => _open(summary),
+                                leading: Icon(
+                                  entry.depth == 0
+                                      ? Icons.folder_outlined
+                                      : Icons.subdirectory_arrow_right,
+                                ),
+                                title: Text(
+                                  summary.category.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (entry.depth > 0)
+                                      Text(
+                                        entry.path,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    Text(
+                                      '$count ${count == 1 ? 'print' : 'prints'}',
+                                      maxLines: 1,
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                trailing: PopupMenuButton<String>(
+                                  tooltip: 'Ações da pasta',
+                                  onSelected: (action) {
+                                    if (action == 'rename') _rename(summary);
+                                    if (action == 'delete') _delete(summary);
+                                  },
+                                  itemBuilder: (_) => [
+                                    const PopupMenuItem(
+                                      value: 'rename',
+                                      child: Text('Renomear'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Text(
+                                        'Excluir pasta',
+                                        style: TextStyle(color: colors.error),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
@@ -177,7 +198,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
                     key: const Key('new-category-button'),
                     onPressed: _create,
                     icon: const Icon(Icons.add, size: 19),
-                    label: const Text('Nova categoria'),
+                    label: const Text('Nova pasta'),
                   ),
                 ],
               ),
@@ -233,10 +254,10 @@ class _CreateCategoryDialogState extends State<_CreateCategoryDialog> {
         setState(() {
           _saving = false;
           _error = switch (error.error) {
-            CategoryValidationError.empty =>
-              'Informe um nome para a categoria.',
+            CategoryValidationError.empty => 'Informe um nome para a pasta.',
             CategoryValidationError.tooLong => 'Use no máximo 40 caracteres.',
-            CategoryValidationError.duplicate => 'Essa categoria já existe.',
+            CategoryValidationError.duplicate =>
+              'Já existe uma pasta com esse nome neste local.',
           };
         });
       }
@@ -244,7 +265,7 @@ class _CreateCategoryDialogState extends State<_CreateCategoryDialog> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = 'Não foi possível criar a categoria.';
+          _error = 'Não foi possível criar a pasta.';
         });
       }
     }
@@ -253,7 +274,7 @@ class _CreateCategoryDialogState extends State<_CreateCategoryDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Nova categoria'),
+      title: const Text('Nova pasta'),
       content: TextField(
         key: const Key('category-name-field'),
         controller: _controller,
@@ -262,7 +283,7 @@ class _CreateCategoryDialogState extends State<_CreateCategoryDialog> {
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => _save(),
         decoration: InputDecoration(
-          labelText: 'Nome da categoria',
+          labelText: 'Nome da pasta',
           errorText: _error,
         ),
       ),
@@ -347,7 +368,7 @@ class _RenameCategoryDialogState extends State<_RenameCategoryDialog> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = 'Não foi possível renomear a categoria.';
+          _error = 'Não foi possível renomear a pasta.';
         });
       }
     }
@@ -356,7 +377,7 @@ class _RenameCategoryDialogState extends State<_RenameCategoryDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Renomear categoria'),
+      title: const Text('Renomear pasta'),
       content: TextField(
         key: const Key('rename-category-field'),
         controller: _controller,
@@ -365,7 +386,7 @@ class _RenameCategoryDialogState extends State<_RenameCategoryDialog> {
         textInputAction: TextInputAction.done,
         onSubmitted: (_) => _save(),
         decoration: InputDecoration(
-          labelText: 'Nome da categoria',
+          labelText: 'Nome da pasta',
           errorText: _error,
         ),
       ),
@@ -401,7 +422,7 @@ Future<bool> confirmCategoryDeletion(
       content: Text(
         '${summary.mediaCount} '
         '${summary.mediaCount == 1 ? 'screenshot está associado' : 'screenshots estão associados'}. '
-        'Esta ação removerá a categoria e suas associações. '
+        'Esta ação removerá a pasta e suas associações. '
         'Os screenshots continuarão na biblioteca e os arquivos originais '
         'não serão alterados.',
       ),
@@ -414,7 +435,7 @@ Future<bool> confirmCategoryDeletion(
           key: const Key('confirm-category-deletion'),
           onPressed: () => Navigator.pop(context, true),
           child: Text(
-            'Excluir categoria',
+            'Excluir pasta',
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ),
@@ -425,10 +446,20 @@ Future<bool> confirmCategoryDeletion(
   try {
     await repository.deleteCategory(summary.category.id);
     return true;
+  } on CategoryHierarchyException catch (error) {
+    if (context.mounted) {
+      final message = error.error == CategoryHierarchyError.hasChildren
+          ? 'Esta pasta possui subpastas e não pode ser excluída.'
+          : 'Não foi possível excluir a pasta.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+    return false;
   } catch (_) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não foi possível excluir a categoria.')),
+        const SnackBar(content: Text('Não foi possível excluir a pasta.')),
       );
     }
     return false;
@@ -437,8 +468,73 @@ Future<bool> confirmCategoryDeletion(
 
 String _categoryValidationMessage(CategoryValidationError error) {
   return switch (error) {
-    CategoryValidationError.empty => 'Informe um nome para a categoria.',
+    CategoryValidationError.empty => 'Informe um nome para a pasta.',
     CategoryValidationError.tooLong => 'Use no máximo 40 caracteres.',
-    CategoryValidationError.duplicate => 'Essa categoria já existe.',
+    CategoryValidationError.duplicate =>
+      'Já existe uma pasta com esse nome neste local.',
   };
+}
+
+class _HierarchyEntry {
+  const _HierarchyEntry({
+    required this.summary,
+    required this.depth,
+    required this.path,
+  });
+
+  final CategorySummary summary;
+  final int depth;
+  final String path;
+}
+
+List<_HierarchyEntry> _hierarchyEntries(List<CategorySummary> summaries) {
+  final byParent = <int?, List<CategorySummary>>{};
+  for (final summary in summaries) {
+    byParent.putIfAbsent(summary.category.parentId, () => []).add(summary);
+  }
+  for (final children in byParent.values) {
+    children.sort((first, second) {
+      final name = first.category.normalizedName.compareTo(
+        second.category.normalizedName,
+      );
+      return name != 0 ? name : first.category.id.compareTo(second.category.id);
+    });
+  }
+
+  final entries = <_HierarchyEntry>[];
+  final visited = <int>{};
+  final pending = <({CategorySummary summary, int depth, String parentPath})>[
+    for (final root in (byParent[null] ?? const []).reversed)
+      (summary: root, depth: 0, parentPath: ''),
+  ];
+  while (pending.isNotEmpty) {
+    final current = pending.removeLast();
+    if (!visited.add(current.summary.category.id)) continue;
+    final path = current.parentPath.isEmpty
+        ? current.summary.category.name
+        : '${current.parentPath}/${current.summary.category.name}';
+    entries.add(
+      _HierarchyEntry(
+        summary: current.summary,
+        depth: current.depth,
+        path: path,
+      ),
+    );
+    final children = byParent[current.summary.category.id] ?? const [];
+    for (final child in children.reversed) {
+      pending.add((summary: child, depth: current.depth + 1, parentPath: path));
+    }
+  }
+  for (final summary in summaries) {
+    if (visited.add(summary.category.id)) {
+      entries.add(
+        _HierarchyEntry(
+          summary: summary,
+          depth: 0,
+          path: summary.category.name,
+        ),
+      );
+    }
+  }
+  return entries;
 }

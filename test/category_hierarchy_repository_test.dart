@@ -61,6 +61,43 @@ void main() {
   });
 
   test(
+    'resumos hierárquicos contam apenas prints diretos e subpastas',
+    () async {
+      final books = await repository.createRootCategory('Livros');
+      final career = await repository.createRootCategory('Carreira');
+      final excerpts = await repository.createSubcategory(
+        parentId: books.id,
+        name: 'Trechos',
+      );
+      await repository.createSubcategory(parentId: books.id, name: 'Capas');
+      await repository.createSubcategory(
+        parentId: excerpts.id,
+        name: 'Favoritos',
+      );
+      await repository.replaceForMedia(mediaItemId, {excerpts.id});
+
+      final roots = await repository.loadRootCategorySummaries();
+      expect(roots.map((item) => item.category.id), [career.id, books.id]);
+      final booksSummary = roots.last;
+      expect(booksSummary.mediaCount, 0);
+      expect(booksSummary.childCount, 2);
+
+      final children = await repository.loadChildCategorySummaries(books.id);
+      expect(children.map((item) => item.category.name), ['Capas', 'Trechos']);
+      expect(children.last.mediaCount, 1);
+      expect(children.last.childCount, 1);
+      expect(children.first.mediaCount, 0);
+    },
+  );
+
+  test('resumo de filhas distingue pasta inexistente', () async {
+    await expectLater(
+      repository.loadChildCategorySummaries(999),
+      _hierarchy(CategoryHierarchyError.parentNotFound),
+    );
+  });
+
+  test(
     'schema aplica FK autorreferente, restrição e índices por mãe',
     () async {
       final foreignKeys = await database

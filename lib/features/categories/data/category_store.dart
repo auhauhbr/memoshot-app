@@ -34,6 +34,8 @@ abstract interface class CategoryStore {
 
   Future<List<domain.CategorySummary>> listWithMediaCounts();
 
+  Future<List<domain.CategorySummary>> listSummariesByParent(int? parentId);
+
   Future<List<domain.Category>> listForMedia(int mediaItemId);
 
   Future<void> replaceForMedia(int mediaItemId, Set<int> categoryIds);
@@ -155,6 +157,43 @@ class DriftCategoryStore implements CategoryStore {
             mediaCount: row.read(count) ?? 0,
           );
         })
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<domain.CategorySummary>> listSummariesByParent(
+    int? parentId,
+  ) async {
+    final rows = await _database
+        .customSelect(
+          '''
+      SELECT categories.*,
+        (SELECT COUNT(*) FROM media_categories
+          WHERE media_categories.category_id = categories.id) AS media_count,
+        (SELECT COUNT(*) FROM categories AS children
+          WHERE children.parent_id = categories.id) AS child_count
+      FROM categories
+      WHERE ${parentId == null ? 'categories.parent_id IS NULL' : 'categories.parent_id = ?'}
+      ORDER BY categories.normalized_name, categories.id
+      ''',
+          variables: parentId == null ? const [] : [Variable<int>(parentId)],
+          readsFrom: {_database.categories, _database.mediaCategories},
+        )
+        .get();
+    return rows
+        .map(
+          (row) => domain.CategorySummary(
+            category: domain.Category(
+              id: row.read<int>('id'),
+              name: row.read<String>('name'),
+              normalizedName: row.read<String>('normalized_name'),
+              createdAt: row.read<DateTime>('created_at'),
+              parentId: row.readNullable<int>('parent_id'),
+            ),
+            mediaCount: row.read<int>('media_count'),
+            childCount: row.read<int>('child_count'),
+          ),
+        )
         .toList(growable: false);
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../library/data/media_item_repository.dart';
@@ -11,6 +13,32 @@ import '../../tags/data/tag_repository.dart';
 import '../data/category_repository.dart';
 import '../domain/category.dart';
 import 'categories_page.dart';
+
+const categoryDetailRouteName = '/categories/detail';
+
+Route<bool> buildCategoryDetailRoute({
+  required CategorySummary summary,
+  required CategoryRepository categoryRepository,
+  required MediaItemRepository mediaRepository,
+  required OcrRepository ocrRepository,
+  required OcrQueue ocrQueue,
+  required TagRepository tagRepository,
+}) {
+  return MaterialPageRoute<bool>(
+    settings: RouteSettings(
+      name: categoryDetailRouteName,
+      arguments: summary.category.id,
+    ),
+    builder: (_) => CategoryDetailPage(
+      summary: summary,
+      categoryRepository: categoryRepository,
+      mediaRepository: mediaRepository,
+      ocrRepository: ocrRepository,
+      ocrQueue: ocrQueue,
+      tagRepository: tagRepository,
+    ),
+  );
+}
 
 class CategoryDetailPage extends StatefulWidget {
   const CategoryDetailPage({
@@ -36,47 +64,117 @@ class CategoryDetailPage extends StatefulWidget {
 
 class _CategoryDetailPageState extends State<CategoryDetailPage> {
   late Category _category = widget.summary.category;
-  late int _mediaCount = widget.summary.mediaCount;
+  CategoryPath? _path;
+  List<CategorySummary> _children = const [];
   List<MediaItem> _items = const [];
   Map<int, OcrItemState> _ocrStates = const {};
-  bool _loading = true;
-  String? _error;
+  bool _folderLoading = true;
+  bool _childrenLoading = true;
+  bool _itemsLoading = true;
+  bool _loadedFolderOnce = false;
+  String? _folderError;
+  String? _childrenError;
+  String? _itemsError;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    unawaited(_load());
   }
 
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
+    if (mounted) {
+      setState(() {
+        _folderLoading = true;
+        _childrenLoading = true;
+        _itemsLoading = true;
+        _folderError = null;
+        _childrenError = null;
+        _itemsError = null;
+      });
+    }
+
+    try {
+      final category = await widget.categoryRepository.findCategoryById(
+        _category.id,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+      if (category == null) {
+        if (_loadedFolderOnce) {
+          Navigator.of(context).pop(true);
+          return;
+        }
+        setState(() {
+          _folderLoading = false;
+          _folderError = 'Pasta não encontrada.';
+          _childrenLoading = false;
+          _itemsLoading = false;
+        });
+        return;
+      }
+      final path = await widget.categoryRepository.loadPath(category.id);
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _category = category;
+        _path = path;
+        _folderLoading = false;
+        _loadedFolderOnce = true;
+      });
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _folderLoading = false;
+        _folderError = 'Não foi possível carregar a pasta.';
+        _childrenLoading = false;
+        _itemsLoading = false;
+      });
+      return;
+    }
+
+    await Future.wait([_loadChildren(generation), _loadItems(generation)]);
+  }
+
+  Future<void> _loadChildren(int generation) async {
+    try {
+      final children = await widget.categoryRepository
+          .loadChildCategorySummaries(_category.id);
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _children = children;
+        _childrenLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _childrenLoading = false;
+        _childrenError = 'Não foi possível carregar as subpastas.';
+      });
+    }
+  }
+
+  Future<void> _loadItems(int generation) async {
     try {
       final items = await widget.categoryRepository.loadMediaForCategory(
         _category.id,
-      );
-      final summaries = await widget.categoryRepository.loadCategories();
-      final matching = summaries.where(
-        (summary) => summary.category.id == _category.id,
       );
       final states = <int, OcrItemState>{};
       for (final item in items) {
         states[item.id] = await widget.ocrQueue.loadState(item.id);
       }
-      if (mounted) {
-        setState(() {
-          _items = items;
-          _mediaCount = matching.isEmpty
-              ? items.length
-              : matching.single.mediaCount;
-          _ocrStates = states;
-          _error = null;
-        });
-      }
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _items = items;
+        _ocrStates = states;
+        _itemsLoading = false;
+      });
     } catch (_) {
-      if (mounted) {
-        setState(() => _error = 'Não foi possível carregar a categoria.');
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _itemsLoading = false;
+        _itemsError = 'Não foi possível carregar os prints desta pasta.';
+      });
     }
   }
 
@@ -93,7 +191,21 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         ),
       ),
     );
-    await _load();
+    if (mounted) await _load();
+  }
+
+  Future<void> _openChild(CategorySummary summary) async {
+    await Navigator.of(context).push<bool>(
+      buildCategoryDetailRoute(
+        summary: summary,
+        categoryRepository: widget.categoryRepository,
+        mediaRepository: widget.mediaRepository,
+        ocrRepository: widget.ocrRepository,
+        ocrQueue: widget.ocrQueue,
+        tagRepository: widget.tagRepository,
+      ),
+    );
+    if (mounted) await _load();
   }
 
   Future<void> _rename() async {
@@ -102,16 +214,30 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       widget.categoryRepository,
       _category,
     );
-    if (renamed != null && mounted) setState(() => _category = renamed);
+    if (renamed != null && mounted) await _load();
   }
 
   Future<void> _delete() async {
     final deleted = await confirmCategoryDeletion(
       context,
       widget.categoryRepository,
-      CategorySummary(category: _category, mediaCount: _mediaCount),
+      CategorySummary(category: _category, mediaCount: _items.length),
     );
     if (deleted && mounted) Navigator.pop(context, true);
+  }
+
+  void _openAncestor(Category category) {
+    Navigator.of(context).popUntil(
+      (route) =>
+          route.settings.name == categoryDetailRouteName &&
+          route.settings.arguments == category.id,
+    );
+  }
+
+  void _openFoldersRoot() {
+    Navigator.of(
+      context,
+    ).popUntil((route) => route.settings.name != categoryDetailRouteName);
   }
 
   @override
@@ -128,17 +254,17 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         foregroundColor: colors.primary,
         actions: [
           PopupMenuButton<String>(
-            tooltip: 'Ações da categoria',
+            tooltip: 'Ações da pasta',
             onSelected: (action) {
-              if (action == 'rename') _rename();
-              if (action == 'delete') _delete();
+              if (action == 'rename') unawaited(_rename());
+              if (action == 'delete') unawaited(_delete());
             },
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'rename', child: Text('Renomear')),
               PopupMenuItem(
                 value: 'delete',
                 child: Text(
-                  'Excluir categoria',
+                  'Excluir pasta',
                   style: TextStyle(color: colors.error),
                 ),
               ),
@@ -155,38 +281,198 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    '$_mediaCount '
-                    '${_mediaCount == 1 ? 'screenshot' : 'screenshots'}',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: colors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (_loading)
+                  if (_folderLoading)
                     const Center(child: CircularProgressIndicator())
-                  else if (_error != null)
-                    Text(_error!, style: TextStyle(color: colors.error))
-                  else if (_items.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 40),
-                      child: Center(
-                        child: Text('Nenhum screenshot nesta categoria.'),
-                      ),
+                  else if (_folderError != null)
+                    _SectionError(
+                      message: _folderError!,
+                      onRetry: () => unawaited(_load()),
                     )
-                  else
-                    ScreenshotGrid(
-                      mediaItems: _items,
-                      ocrStates: _ocrStates,
-                      onItemTap: _openItem,
+                  else ...[
+                    _CategoryBreadcrumb(
+                      path: _path!,
+                      onFolders: _openFoldersRoot,
+                      onAncestor: _openAncestor,
                     ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Subpastas',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: colors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (_childrenLoading)
+                      const Center(child: CircularProgressIndicator())
+                    else if (_childrenError != null)
+                      _SectionError(
+                        message: _childrenError!,
+                        onRetry: () => unawaited(_load()),
+                      )
+                    else if (_children.isEmpty)
+                      Text(
+                        'Nenhuma subpasta.',
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      )
+                    else
+                      ..._children.map(
+                        (summary) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _SubfolderTile(
+                            summary: summary,
+                            onTap: () => _openChild(summary),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Prints nesta pasta',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: colors.primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                        if (!_itemsLoading && _itemsError == null)
+                          Text(
+                            '${_items.length} ${_items.length == 1 ? 'print' : 'prints'}',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.onSurfaceVariant),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    if (_itemsLoading)
+                      const Center(child: CircularProgressIndicator())
+                    else if (_itemsError != null)
+                      _SectionError(
+                        message: _itemsError!,
+                        onRetry: () => unawaited(_load()),
+                      )
+                    else if (_items.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 28),
+                        child: Center(child: Text('Nenhum print nesta pasta.')),
+                      )
+                    else
+                      ScreenshotGrid(
+                        mediaItems: _items,
+                        ocrStates: _ocrStates,
+                        onItemTap: _openItem,
+                      ),
+                  ],
                 ],
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CategoryBreadcrumb extends StatelessWidget {
+  const _CategoryBreadcrumb({
+    required this.path,
+    required this.onFolders,
+    required this.onAncestor,
+  });
+
+  final CategoryPath path;
+  final VoidCallback onFolders;
+  final ValueChanged<Category> onAncestor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label:
+          'Caminho da pasta: Pastas, ${path.categories.map((item) => item.name).join(', ')}',
+      child: SingleChildScrollView(
+        key: const Key('category-breadcrumb'),
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            TextButton(
+              key: const Key('breadcrumb-folders'),
+              onPressed: onFolders,
+              child: const Text('Pastas'),
+            ),
+            for (var index = 0; index < path.categories.length; index++) ...[
+              const Icon(Icons.chevron_right, size: 18),
+              if (index == path.categories.length - 1)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(
+                    path.categories[index].name,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                )
+              else
+                TextButton(
+                  key: Key('breadcrumb-${path.categories[index].id}'),
+                  onPressed: () => onAncestor(path.categories[index]),
+                  child: Text(path.categories[index].name),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SubfolderTile extends StatelessWidget {
+  const _SubfolderTile({required this.summary, required this.onTap});
+
+  final CategorySummary summary;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final printText =
+        '${summary.mediaCount} ${summary.mediaCount == 1 ? 'print' : 'prints'}';
+    final childText =
+        '${summary.childCount} ${summary.childCount == 1 ? 'subpasta' : 'subpastas'}';
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Semantics(
+        button: true,
+        label: 'Abrir pasta ${summary.category.name}, $printText, $childText',
+        child: ListTile(
+          key: Key('subfolder-${summary.category.id}'),
+          onTap: onTap,
+          leading: const Icon(Icons.folder_outlined),
+          title: Text(
+            summary.category.name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text('$printText · $childText'),
+          trailing: const Icon(Icons.chevron_right),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionError extends StatelessWidget {
+  const _SectionError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: Text(message)),
+        TextButton(onPressed: onRetry, child: const Text('Tentar novamente')),
+      ],
     );
   }
 }

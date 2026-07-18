@@ -614,7 +614,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       });
     }
     try {
-      final categories = await _categoryRepository.loadCategories();
+      final categories = await _categoryRepository.loadRootCategorySummaries();
       if (mounted) setState(() => _categories = categories);
     } catch (_) {
       if (mounted) {
@@ -674,15 +674,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _openCategory(CategorySummary summary) async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => CategoryDetailPage(
-          summary: summary,
-          categoryRepository: _categoryRepository,
-          mediaRepository: _mediaRepository,
-          ocrRepository: _ocrRepository,
-          ocrQueue: _ocrQueue,
-          tagRepository: _tagRepository,
-        ),
+      buildCategoryDetailRoute(
+        summary: summary,
+        categoryRepository: _categoryRepository,
+        mediaRepository: _mediaRepository,
+        ocrRepository: _ocrRepository,
+        ocrQueue: _ocrQueue,
+        tagRepository: _tagRepository,
       ),
     );
     await _reloadCategories();

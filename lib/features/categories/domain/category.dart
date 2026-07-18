@@ -23,8 +23,13 @@ class CategoryPath {
 }
 
 class CategorySummary {
-  const CategorySummary({required this.category, required this.mediaCount});
+  const CategorySummary({
+    required this.category,
+    required this.mediaCount,
+    this.childCount = 0,
+  });
 
   final Category category;
   final int mediaCount;
+  final int childCount;
 }
