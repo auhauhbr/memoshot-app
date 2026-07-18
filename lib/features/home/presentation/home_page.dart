@@ -14,7 +14,9 @@ import '../../../core/sharing/receive_sharing_intent_source.dart';
 import '../../../core/text/text_normalizer.dart';
 import '../../categories/data/category_repository.dart';
 import '../../categories/data/category_store.dart';
+import '../../categories/domain/category.dart';
 import '../../categories/presentation/categories_page.dart';
+import '../../categories/presentation/category_detail_page.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
@@ -93,8 +95,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Tag? _selectedTag;
   bool _isFiltering = false;
   String? _filterErrorMessage;
-  int _categoryCount = 0;
-  int _tagCount = 0;
+  List<CategorySummary> _categories = const [];
+  bool _areCategoriesLoading = true;
+  String? _categoriesErrorMessage;
   AutomaticImportUiState _automaticImportState =
       AutomaticImportUiState.disabled;
 
@@ -242,37 +245,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       );
   }
 
-  Future<void> _changeAutomaticImport(bool enabled) async {
-    if (!enabled) {
-      await _automaticImportCoordinator.disable();
-      return;
-    }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ativar importação automática?'),
-        content: const Text(
-          'O MemoShot precisará acessar suas imagens para identificar novos '
-          'screenshots. Somente capturas novas serão importadas; imagens antigas '
-          'não serão adicionadas. Todo o processamento permanece neste dispositivo '
-          'e o recurso pode ser desligado a qualquer momento.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Continuar'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    await _automaticImportCoordinator.enable();
-  }
-
   Future<void> _handleSharedImport(ImportResult result) async {
     if (!mounted) return;
     await _reloadItemsIgnoringErrors();
@@ -335,7 +307,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _initialize() async {
     try {
       await _reloadItems();
-      await _reloadCategoryCount();
+      await _reloadCategories();
       await _reloadTagCountIgnoringErrors();
       unawaited(_ocrQueue.recoverAndStart());
       final lost = await _screenshotPicker.retrieveLostScreenshots();
@@ -632,16 +604,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _reloadCategoryCount() async {
-    final categories = await _categoryRepository.loadCategories();
-    if (mounted) setState(() => _categoryCount = categories.length);
-  }
-
-  Future<void> _reloadCategoryCountIgnoringErrors() async {
+  Future<void> _reloadCategories() async {
+    if (mounted) {
+      setState(() {
+        _areCategoriesLoading = true;
+        _categoriesErrorMessage = null;
+      });
+    }
     try {
-      await _reloadCategoryCount();
+      final categories = await _categoryRepository.loadCategories();
+      if (mounted) setState(() => _categories = categories);
     } catch (_) {
-      // Uma falha no contador não impede o uso da biblioteca.
+      if (mounted) {
+        setState(() {
+          _categoriesErrorMessage = 'Não foi possível carregar as pastas.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _areCategoriesLoading = false);
     }
   }
 
@@ -657,7 +637,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final invalid = selected != null && refreshed == null;
     if (mounted) {
       setState(() {
-        _tagCount = tags.length;
         if (invalid) {
           _selectedTag = null;
         } else if (refreshed != null) {
@@ -688,7 +667,25 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
       ),
     );
-    await _reloadCategoryCountIgnoringErrors();
+    await _reloadCategories();
+  }
+
+  Future<void> _openCategory(CategorySummary summary) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => CategoryDetailPage(
+          summary: summary,
+          categoryRepository: _categoryRepository,
+          mediaRepository: _mediaRepository,
+          ocrRepository: _ocrRepository,
+          ocrQueue: _ocrQueue,
+          tagRepository: _tagRepository,
+        ),
+      ),
+    );
+    await _reloadCategories();
+    await _reloadItemsIgnoringErrors();
+    if (_searchActive) await _searchNow();
   }
 
   Future<void> _openTags() async {
@@ -716,7 +713,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
       ),
     );
-    await _reloadCategoryCountIgnoringErrors();
+    await _reloadCategories();
     await _reloadTagCountIgnoringErrors();
     if (_selectedTag != null) {
       await _reloadItemsIgnoringErrors();
@@ -739,38 +736,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        key: const Key('add-print-button'),
+        onPressed: _isLoading ? null : _pickScreenshots,
+        tooltip: 'Escolher screenshot existente',
+        icon: _isLoading
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.add_photo_alternate_outlined),
+        label: const Text('Adicionar print'),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const _AppHeader(),
+                  _AppHeader(onOpenTags: _openTags),
                   const SizedBox(height: 18),
-                  Text(
-                    'Organize e encontre seus prints',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: colors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Pesquise screenshots pelo conteúdo, sem depender da data '
-                    'ou da pasta.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colors.onSurfaceVariant,
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
@@ -805,63 +794,60 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       onRetry: () => unawaited(_retryCurrentResults()),
                     ),
                   ],
-                  const SizedBox(height: 18),
-                  const _SectionTitle('Biblioteca'),
+                  if (_automaticImportState !=
+                          AutomaticImportUiState.disabled &&
+                      _automaticImportState !=
+                          AutomaticImportUiState.active) ...[
+                    const SizedBox(height: 10),
+                    _AutomaticImportNotice(
+                      state: _automaticImportState,
+                      onAction: () => unawaited(
+                        _automaticImportState ==
+                                AutomaticImportUiState.unavailable
+                            ? _automaticImportCoordinator.resume()
+                            : _automaticImportCoordinator.openAppSettings(),
+                      ),
+                    ),
+                  ],
+                  if (_errorMessage != null || _duplicateMessage != null) ...[
+                    const SizedBox(height: 10),
+                    _ImportFeedback(
+                      errorMessage: _errorMessage,
+                      infoMessage: _duplicateMessage,
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  _SectionHeader(
+                    title: 'Pastas',
+                    actionLabel: 'Gerenciar pastas',
+                    actionKey: const Key('categories-summary'),
+                    onAction: _openCategories,
+                  ),
                   const SizedBox(height: 8),
+                  _FoldersSection(
+                    categories: _categories,
+                    isLoading: _areCategoriesLoading,
+                    errorMessage: _categoriesErrorMessage,
+                    onAll: () => unawaited(_applyTagFilter(null)),
+                    onCategory: _openCategory,
+                    onCreate: _openCategories,
+                    onRetry: _reloadCategories,
+                  ),
+                  const SizedBox(height: 22),
                   Row(
                     children: [
-                      Expanded(
-                        child: _LibrarySummary(
-                          icon: Icons.access_time_outlined,
-                          title: 'Recentes',
-                          count:
-                              '${_mediaItems.length} '
-                              '${_mediaItems.length == 1 ? 'item' : 'itens'}',
-                        ),
-                      ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: _LibrarySummary(
-                          key: const Key('categories-summary'),
-                          icon: Icons.folder_outlined,
-                          title: 'Categorias',
-                          count:
-                              '$_categoryCount '
-                              '${_categoryCount == 1 ? 'categoria' : 'categorias'}',
-                          onTap: _openCategories,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _LibrarySummary(
-                          key: const Key('tags-summary'),
-                          icon: Icons.label_outline,
-                          title: 'Etiquetas',
-                          count:
-                              '$_tagCount '
-                              '${_tagCount == 1 ? 'etiqueta' : 'etiquetas'}',
-                          onTap: _openTags,
+                      const Expanded(child: _SectionTitle('Todos os prints')),
+                      Text(
+                        '${_searchActive ? _searchResults.length : _mediaItems.length} '
+                        '${(_searchActive ? _searchResults.length : _mediaItems.length) == 1 ? 'item' : 'itens'}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  _ImportCard(
-                    isLoading: _isLoading,
-                    errorMessage: _errorMessage,
-                    infoMessage: _duplicateMessage,
-                    onPressed: _isLoading ? null : _pickScreenshots,
-                  ),
-                  const SizedBox(height: 12),
-                  _AutomaticImportCard(
-                    state: _automaticImportState,
-                    onChanged: _changeAutomaticImport,
-                    onOpenSettings: () => unawaited(
-                      _automaticImportCoordinator.openAppSettings(),
-                    ),
-                  ),
                   if (_searchActive) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     _SearchSummary(
                       query: _searchController.text.trim(),
                       resultCount: _searchResults.length,
@@ -878,9 +864,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         _searchErrorMessage == null &&
                         _searchResults.isEmpty)
                       _EmptySearchState(
-                        message: _selectedTag == null
-                            ? 'Nenhum screenshot encontrado.'
-                            : 'Nenhum screenshot corresponde à pesquisa e à etiqueta selecionada.',
+                        message: 'Nenhum print corresponde à pesquisa.',
                         onClearFilter: _selectedTag == null
                             ? null
                             : () => unawaited(_applyTagFilter(null)),
@@ -900,25 +884,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       ),
                     ],
                   ] else if (_mediaItems.isNotEmpty) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     ScreenshotGrid(
                       mediaItems: _mediaItems,
                       ocrStates: _ocrStates,
                       onItemTap: _openDetails,
                     ),
                   ] else if (!_isLoading && !_isFiltering) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     _EmptySearchState(
                       message: _selectedTag == null
-                          ? 'Nenhum screenshot salvo.'
-                          : 'Nenhum screenshot encontrado com esta etiqueta.',
+                          ? 'Nenhum print salvo.'
+                          : 'Nenhum print encontrado com esta etiqueta.',
                       onClearFilter: _selectedTag == null
                           ? null
                           : () => unawaited(_applyTagFilter(null)),
+                      actionLabel: _selectedTag == null
+                          ? 'Adicionar print'
+                          : null,
+                      onAction: _selectedTag == null ? _pickScreenshots : null,
                     ),
+                  ] else if (_isLoading) ...[
+                    const SizedBox(height: 20),
+                    const Center(child: CircularProgressIndicator()),
                   ],
-                  const SizedBox(height: 12),
-                  const _LocalProcessingInfo(),
                 ],
               ),
             ),
@@ -930,7 +919,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 }
 
 class _AppHeader extends StatelessWidget {
-  const _AppHeader();
+  const _AppHeader({required this.onOpenTags});
+
+  final VoidCallback onOpenTags;
 
   @override
   Widget build(BuildContext context) {
@@ -959,11 +950,22 @@ class _AppHeader extends StatelessWidget {
             ],
           ),
         ),
-        IconButton(
-          onPressed: null,
-          tooltip: 'Configurações indisponíveis',
-          icon: const Icon(Icons.settings_outlined),
-          visualDensity: VisualDensity.compact,
+        PopupMenuButton<String>(
+          key: const Key('home-actions-menu'),
+          tooltip: 'Mais ações',
+          onSelected: (action) {
+            if (action == 'tags') onOpenTags();
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: 'tags',
+              child: ListTile(
+                leading: Icon(Icons.label_outline),
+                title: Text('Gerenciar etiquetas'),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -997,7 +999,7 @@ class _SearchField extends StatelessWidget {
         onSubmitted: onSubmitted,
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
-          hintText: 'Pesquisar screenshots',
+          hintText: 'Pesquisar nos seus prints...',
           prefixIcon: const Icon(Icons.search, size: 20),
           suffixIcon: showClearAction
               ? IconButton(
@@ -1036,54 +1038,182 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _LibrarySummary extends StatelessWidget {
-  const _LibrarySummary({
-    super.key,
-    required this.icon,
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
     required this.title,
-    required this.count,
-    this.onTap,
+    required this.actionLabel,
+    required this.actionKey,
+    required this.onAction,
   });
 
-  final IconData icon;
   final String title;
-  final String count;
-  final VoidCallback? onTap;
+  final String actionLabel;
+  final Key actionKey;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(child: _SectionTitle(title)),
+        IconButton(
+          key: actionKey,
+          onPressed: onAction,
+          tooltip: actionLabel,
+          icon: const Icon(Icons.edit_outlined),
+        ),
+      ],
+    );
+  }
+}
+
+class _FoldersSection extends StatelessWidget {
+  const _FoldersSection({
+    required this.categories,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.onAll,
+    required this.onCategory,
+    required this.onCreate,
+    required this.onRetry,
+  });
+
+  final List<CategorySummary> categories;
+  final bool isLoading;
+  final String? errorMessage;
+  final VoidCallback onAll;
+  final ValueChanged<CategorySummary> onCategory;
+  final VoidCallback onCreate;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    if (isLoading) {
+      return const SizedBox(
+        height: 76,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (errorMessage != null) {
+      return _CompactMessage(
+        icon: Icons.folder_off_outlined,
+        message: errorMessage!,
+        actionLabel: 'Tentar novamente',
+        onAction: onRetry,
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _FolderTile(
+                key: const Key('all-folder'),
+                name: 'Todos',
+                count: null,
+                icon: Icons.photo_library_outlined,
+                onTap: onAll,
+              ),
+              for (final summary in categories) ...[
+                const SizedBox(width: 8),
+                _FolderTile(
+                  key: Key('folder-${summary.category.id}'),
+                  name: summary.category.name,
+                  count: summary.mediaCount,
+                  icon: Icons.folder_outlined,
+                  onTap: () => onCategory(summary),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (categories.isEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Nenhuma pasta criada.',
+            style: TextStyle(color: colors.onSurfaceVariant),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onCreate,
+              icon: const Icon(Icons.create_new_folder_outlined),
+              label: const Text('Criar pasta'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FolderTile extends StatelessWidget {
+  const _FolderTile({
+    super.key,
+    required this.name,
+    required this.count,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String name;
+  final int? count;
+  final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 21, color: colors.secondary),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+    return Semantics(
+      button: true,
+      label: count == null
+          ? 'Pasta $name'
+          : 'Pasta $name, $count ${count == 1 ? 'print' : 'prints'}',
+      child: SizedBox(
+        width: 126,
+        height: 72,
+        child: Card(
+          margin: EdgeInsets.zero,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(icon, color: theme.colorScheme.secondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (count != null)
+                          Text(
+                            '$count ${count == 1 ? 'print' : 'prints'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                count,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1091,235 +1221,88 @@ class _LibrarySummary extends StatelessWidget {
   }
 }
 
-class _ImportCard extends StatelessWidget {
-  const _ImportCard({
-    required this.isLoading,
-    required this.errorMessage,
-    required this.infoMessage,
-    required this.onPressed,
-  });
+class _AutomaticImportNotice extends StatelessWidget {
+  const _AutomaticImportNotice({required this.state, required this.onAction});
 
-  final bool isLoading;
-  final String? errorMessage;
-  final String? infoMessage;
-  final VoidCallback? onPressed;
+  final AutomaticImportUiState state;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.add_photo_alternate_outlined,
-                  size: 21,
-                  color: colors.secondary,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Importar screenshots',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Selecione imagens do seu dispositivo',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: colors.primaryContainer,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'No dispositivo',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colors.onPrimaryContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: onPressed,
-              child: isLoading
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Selecionar imagens'),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Você também pode enviar imagens pelo menu Compartilhar.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-            if (errorMessage != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                errorMessage!,
-                style: theme.textTheme.bodySmall?.copyWith(color: colors.error),
-              ),
-            ],
-            if (infoMessage != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                infoMessage!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.secondary,
-                ),
-              ),
-            ],
-          ],
-        ),
+    final (message, action) = switch (state) {
+      AutomaticImportUiState.accessRequired => (
+        'Permita o acesso às imagens para organizar novos prints.',
+        'Conceder acesso',
       ),
+      AutomaticImportUiState.limitedAccess => (
+        'O acesso parcial às imagens impede a organização de novos prints.',
+        'Revisar acesso',
+      ),
+      _ => (
+        'A organização automática não está disponível neste dispositivo.',
+        'Tentar novamente',
+      ),
+    };
+    return _CompactMessage(
+      key: const Key('automatic-import-notice'),
+      icon: Icons.warning_amber_rounded,
+      message: message,
+      actionLabel: action,
+      onAction: onAction,
     );
   }
 }
 
-class _AutomaticImportCard extends StatelessWidget {
-  const _AutomaticImportCard({
-    required this.state,
-    required this.onChanged,
-    required this.onOpenSettings,
+class _ImportFeedback extends StatelessWidget {
+  const _ImportFeedback({
+    required this.errorMessage,
+    required this.infoMessage,
   });
 
-  final AutomaticImportUiState state;
-  final ValueChanged<bool> onChanged;
-  final VoidCallback onOpenSettings;
+  final String? errorMessage;
+  final String? infoMessage;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final active = state == AutomaticImportUiState.active;
-    final status = switch (state) {
-      AutomaticImportUiState.disabled => 'Desativada',
-      AutomaticImportUiState.active => 'Ativa',
-      AutomaticImportUiState.accessRequired => 'Acesso às imagens necessário',
-      AutomaticImportUiState.limitedAccess => 'Acesso limitado',
-      AutomaticImportUiState.unavailable => 'Verificação indisponível',
-    };
+    final error = errorMessage != null;
+    return _CompactMessage(
+      icon: error ? Icons.error_outline : Icons.info_outline,
+      message: error ? errorMessage! : infoMessage!,
+    );
+  }
+}
 
-    return Card(
-      key: const Key('automatic-import-card'),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.screenshot_monitor_outlined,
-                  color: colors.secondary,
-                  size: 21,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Importação automática',
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Adicione novos screenshots ao MemoShot automaticamente.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Semantics(
-                  label: 'Ativar importação automática',
-                  child: Switch(
-                    key: const Key('automatic-import-switch'),
-                    value: active,
-                    onChanged: onChanged,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              status,
-              key: const Key('automatic-import-status'),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color:
-                    state == AutomaticImportUiState.accessRequired ||
-                        state == AutomaticImportUiState.limitedAccess ||
-                        state == AutomaticImportUiState.unavailable
-                    ? colors.error
-                    : colors.secondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (state == AutomaticImportUiState.limitedAccess) ...[
-              const SizedBox(height: 5),
-              Text(
-                'O Android autorizou apenas imagens escolhidas. Novos '
-                'screenshots não podem ser acompanhados com segurança.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
-              ),
-            ],
-            if (state == AutomaticImportUiState.accessRequired ||
-                state == AutomaticImportUiState.limitedAccess) ...[
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: onOpenSettings,
-                  child: const Text('Abrir configurações do aplicativo'),
-                ),
-              ),
-            ],
-            const SizedBox(height: 5),
-            Text(
-              'Com o app fechado, o Android pode capturar novos screenshots em '
-              'segundo plano. O processamento será concluído quando o MemoShot '
-              'estiver disponível.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+class _CompactMessage extends StatelessWidget {
+  const _CompactMessage({
+    super.key,
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: colors.secondary),
+          const SizedBox(width: 8),
+          Expanded(child: Text(message)),
+          if (actionLabel != null)
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+        ],
       ),
     );
   }
@@ -1411,10 +1394,17 @@ class _SearchSummary extends StatelessWidget {
 }
 
 class _EmptySearchState extends StatelessWidget {
-  const _EmptySearchState({required this.message, this.onClearFilter});
+  const _EmptySearchState({
+    required this.message,
+    this.onClearFilter,
+    this.actionLabel,
+    this.onAction,
+  });
 
   final String message;
   final VoidCallback? onClearFilter;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -1441,6 +1431,14 @@ class _EmptySearchState extends StatelessWidget {
               onPressed: onClearFilter,
               icon: const Icon(Icons.filter_alt_off_outlined),
               label: const Text('Limpar filtro'),
+            ),
+          ],
+          if (actionLabel != null) ...[
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: onAction,
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: Text(actionLabel!),
             ),
           ],
         ],
@@ -1504,50 +1502,6 @@ class _ActiveTagFilter extends StatelessWidget {
           TextButton(onPressed: onRetry, child: const Text('Tentar novamente')),
         ],
       ],
-    );
-  }
-}
-
-class _LocalProcessingInfo extends StatelessWidget {
-  const _LocalProcessingInfo();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.smartphone_outlined, size: 19, color: colors.secondary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Processamento local',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  'Seus arquivos permanecem no dispositivo.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -52,18 +52,19 @@ void main() {
     expect(find.text('MemoShot'), findsOneWidget);
     expect(find.textContaining('Contexto'), findsNothing);
     expect(find.text('Organização inteligente'), findsOneWidget);
-    expect(find.text('Organize e encontre seus prints'), findsOneWidget);
-    expect(find.text('Pesquisar screenshots'), findsOneWidget);
-    expect(find.text('Biblioteca'), findsOneWidget);
-    expect(find.text('Recentes'), findsOneWidget);
+    expect(find.text('Pesquisar nos seus prints...'), findsOneWidget);
+    expect(find.text('Pastas'), findsOneWidget);
+    expect(find.text('Todos'), findsOneWidget);
+    expect(find.text('Todos os prints'), findsOneWidget);
     expect(find.text('0 itens'), findsOneWidget);
-    expect(find.text('Categorias'), findsOneWidget);
-    expect(find.text('0 categorias'), findsOneWidget);
-    expect(find.text('Etiquetas'), findsOneWidget);
-    expect(find.text('0 etiquetas'), findsOneWidget);
-    expect(find.text('Importar screenshots'), findsOneWidget);
-    expect(find.text('Processamento local'), findsOneWidget);
-    expect(find.byType(FloatingActionButton), findsNothing);
+    expect(find.text('Nenhuma pasta criada.'), findsOneWidget);
+    expect(find.text('Criar pasta'), findsOneWidget);
+    expect(find.text('Nenhum print salvo.'), findsOneWidget);
+    expect(find.text('Etiquetas'), findsNothing);
+    expect(find.text('Importação automática'), findsNothing);
+    expect(find.text('Processamento local'), findsNothing);
+    expect(find.text('Recentes'), findsNothing);
+    expect(find.byKey(const Key('add-print-button')), findsOneWidget);
   });
 
   testWidgets('habilita importação e pesquisa local', (tester) async {
@@ -71,8 +72,8 @@ void main() {
     await tester.pump();
 
     final searchField = tester.widget<TextField>(find.byType(TextField));
-    final importButton = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Selecionar imagens'),
+    final importButton = tester.widget<FloatingActionButton>(
+      find.byKey(const Key('add-print-button')),
     );
 
     expect(searchField.enabled, isTrue);
@@ -85,7 +86,7 @@ void main() {
     await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
-    await tester.tap(find.text('Selecionar imagens'));
+    await tester.tap(find.text('Adicionar print').last);
     await tester.pump();
 
     expect(picker.pickCallCount, 1);
@@ -103,13 +104,13 @@ void main() {
     await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
-    await tester.tap(find.text('Selecionar imagens'));
+    await tester.tap(find.text('Adicionar print').last);
     await tester.pump();
 
     expect(find.text('1 item'), findsOneWidget);
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('Salvo neste dispositivo.'), findsOneWidget);
-    expect(find.text('0 categorias'), findsOneWidget);
+    expect(find.text('Nenhuma pasta criada.'), findsOneWidget);
   });
 
   testWidgets('mostra múltiplas imagens selecionadas', (tester) async {
@@ -124,7 +125,7 @@ void main() {
     await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
-    await tester.tap(find.text('Selecionar imagens'));
+    await tester.tap(find.text('Adicionar print').last);
     await tester.pump();
 
     expect(find.text('2 itens'), findsOneWidget);
@@ -140,10 +141,10 @@ void main() {
     await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
-    await tester.tap(find.text('Selecionar imagens'));
+    await tester.tap(find.text('Adicionar print').last);
     await tester.pump();
     expect(find.text('Este screenshot já está na biblioteca.'), findsOneWidget);
-    await tester.tap(find.text('Selecionar imagens'));
+    await tester.tap(find.text('Adicionar print').last);
     await tester.pump();
 
     expect(find.text('1 item'), findsOneWidget);
@@ -160,16 +161,24 @@ void main() {
     await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
-    await tester.tap(find.text('Selecionar imagens'));
+    await tester.tap(find.text('Adicionar print').last);
     await tester.pump();
 
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    final button = tester.widget<OutlinedButton>(find.byType(OutlinedButton));
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('add-print-button')),
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsOneWidget,
+    );
+    final button = tester.widget<FloatingActionButton>(
+      find.byKey(const Key('add-print-button')),
+    );
     expect(button.onPressed, isNull);
 
     completer.complete(const []);
     await tester.pump();
-    expect(find.text('Selecionar imagens'), findsOneWidget);
+    expect(find.text('Adicionar print'), findsWidgets);
   });
 
   testWidgets('exibe mensagem discreta quando a seleção falha', (tester) async {
@@ -177,7 +186,7 @@ void main() {
     await tester.pumpWidget(buildTestApp(picker));
     await tester.pump();
 
-    await tester.tap(find.text('Selecionar imagens'));
+    await tester.tap(find.text('Adicionar print').last);
     await tester.pump();
 
     expect(find.text('Não foi possível importar as imagens.'), findsOneWidget);
@@ -250,7 +259,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
-    expect(find.text('Biblioteca'), findsOneWidget);
+    expect(find.text('Todos os prints'), findsOneWidget);
     expect(find.text('1 item'), findsOneWidget);
   });
 
@@ -611,7 +620,7 @@ void main() {
       addCompleter.complete();
       await tester.pump();
 
-      expect(find.text('Biblioteca'), findsOneWidget);
+      expect(find.text('Todos os prints'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -691,7 +700,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
-    expect(find.text('Biblioteca'), findsOneWidget);
+    expect(find.text('Todos os prints'), findsOneWidget);
   });
 
   testWidgets('falha ao excluir cópia mantém detalhe e item coerentes', (
@@ -1004,8 +1013,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Biblioteca'), findsOneWidget);
-    expect(find.text('Selecionar imagens'), findsOneWidget);
+    expect(find.text('Todos os prints'), findsOneWidget);
+    expect(find.text('Adicionar print'), findsWidgets);
     recovery.complete();
   });
 
@@ -1062,7 +1071,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('0 resultados para “inexistente”'), findsOneWidget);
-    expect(find.text('Nenhum screenshot encontrado.'), findsOneWidget);
+    expect(find.text('Nenhum print corresponde à pesquisa.'), findsOneWidget);
   });
 
   testWidgets('erro de pesquisa mostra mensagem genérica', (tester) async {
@@ -1198,7 +1207,7 @@ void main() {
       find.text('Alguns screenshots ainda estão sendo processados.'),
       findsOneWidget,
     );
-    expect(find.text('Nenhum screenshot encontrado.'), findsOneWidget);
+    expect(find.text('Nenhum print corresponde à pesquisa.'), findsOneWidget);
 
     repository.setRecognizedText(1, 'Resultado local concluído');
     queue.emitState(1, OcrItemState.completedWithText);
@@ -1232,9 +1241,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump();
 
-    await tester.tap(find.text('Selecionar imagens'));
+    await tester.tap(find.text('Adicionar print').last);
     await tester.pump();
-    expect(find.text('Nenhum screenshot encontrado.'), findsOneWidget);
+    expect(find.text('Nenhum print corresponde à pesquisa.'), findsOneWidget);
 
     repository.setRecognizedText(1, 'Novo resultado importado');
     queue.emitState(1, OcrItemState.completedWithText);
@@ -1265,7 +1274,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('0 resultados para “termo”'), findsOneWidget);
-    expect(find.text('Nenhum screenshot encontrado.'), findsOneWidget);
+    expect(find.text('Nenhum print corresponde à pesquisa.'), findsOneWidget);
   });
 
   testWidgets('pesquisa não apresenta overflow em largura de 320 pixels', (
@@ -1325,14 +1334,16 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Processamento local'), findsOneWidget);
+    expect(find.text('Processamento local'), findsNothing);
   });
 
-  testWidgets('bloco Categorias abre tela com estado vazio', (tester) async {
+  testWidgets('gerenciamento de Pastas abre categorias com estado vazio', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
     await tester.pump();
 
-    expect(find.text('0 categorias'), findsOneWidget);
+    expect(find.text('Nenhuma pasta criada.'), findsOneWidget);
     await tester.tap(find.byKey(const Key('categories-summary')));
     await tester.pumpAndSettle();
 
@@ -1341,15 +1352,64 @@ void main() {
     expect(find.text('Nova categoria'), findsOneWidget);
   });
 
-  testWidgets('bloco Etiquetas abre gerenciamento pela navegação existente', (
+  testWidgets('categorias aparecem como pastas e abrem o detalhe existente', (
     tester,
   ) async {
+    final image = createTestImage(temporaryDirectory, 'pasta-home.png');
+    final item = createMediaItem(1, image.path);
+    final media = FakeMediaItemRepository(initialItems: [item]);
+    final categories = FakeCategoryRepository();
+    final category = await categories.createCategory('Carreira');
+    categories.mediaItems.add(item);
+    await categories.replaceForMedia(1, {category.id});
+
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: media,
+        categoryRepository: categories,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Carreira'), findsOneWidget);
+    expect(find.text('1 print'), findsOneWidget);
+    await tester.tap(find.byKey(Key('folder-${category.id}')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Carreira'), findsOneWidget);
+    expect(find.text('1 screenshot'), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+  });
+
+  testWidgets('pastas com nomes longos não causam overflow na Home', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final categories = FakeCategoryRepository();
+    await categories.createCategory('Referências profissionais extensas');
+
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), categoryRepository: categories),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    final label = tester.widget<Text>(
+      find.text('Referências profissionais extensas'),
+    );
+    expect(label.overflow, TextOverflow.ellipsis);
+  });
+
+  testWidgets('menu compacto abre gerenciamento de etiquetas', (tester) async {
     await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
     await tester.pump();
 
-    expect(find.text('0 etiquetas'), findsOneWidget);
-    await tester.ensureVisible(find.byKey(const Key('tags-summary')));
-    await tester.tap(find.byKey(const Key('tags-summary')));
+    expect(find.text('Etiquetas'), findsNothing);
+    await tester.tap(find.byKey(const Key('home-actions-menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gerenciar etiquetas'));
     await tester.pumpAndSettle();
 
     expect(find.text('Etiquetas'), findsOneWidget);
@@ -1368,7 +1428,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
-    expect(find.text('1 etiqueta'), findsOneWidget);
+    expect(find.text('Etiquetas'), findsNothing);
   });
 
   testWidgets(
@@ -1434,6 +1494,40 @@ void main() {
 
     await tester.tap(find.byTooltip('Limpar filtro'));
     await tester.pumpAndSettle();
+    expect(find.byKey(const Key('active-tag-filter-chip')), findsNothing);
+    expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('screenshot-tile-2')), findsOneWidget);
+  });
+
+  testWidgets('pasta Todos restaura a biblioteca geral', (tester) async {
+    final firstFile = createTestImage(temporaryDirectory, 'todos-a.png');
+    final secondFile = createTestImage(temporaryDirectory, 'todos-b.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [
+        createMediaItem(1, firstFile.path),
+        createMediaItem(2, secondFile.path),
+      ],
+    );
+    final tags = FakeTagRepository();
+    final selected = await tags.createTag('Somente um');
+    tags.seedAssociation(tagId: selected.id, mediaItemId: 1);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        tagRepository: tags,
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('open-tag-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('tag-filter-option-${selected.id}')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('screenshot-tile-2')), findsNothing);
+    await tester.tap(find.byKey(const Key('all-folder')));
+    await tester.pumpAndSettle();
+
     expect(find.byKey(const Key('active-tag-filter-chip')), findsNothing);
     expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
     expect(find.byKey(const ValueKey('screenshot-tile-2')), findsOneWidget);
@@ -1573,7 +1667,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Nenhum screenshot encontrado com esta etiqueta.'),
+      find.text('Nenhum print encontrado com esta etiqueta.'),
       findsOneWidget,
     );
     expect(find.text('Limpar filtro'), findsOneWidget);
@@ -1642,8 +1736,9 @@ void main() {
       await tester.tap(find.byKey(Key('tag-filter-option-${selected.id}')));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.byKey(const Key('tags-summary')));
-      await tester.tap(find.byKey(const Key('tags-summary')));
+      await tester.tap(find.byKey(const Key('home-actions-menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Gerenciar etiquetas'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Ações da etiqueta Descartável'));
       await tester.pumpAndSettle();
@@ -1689,7 +1784,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Nenhum screenshot encontrado com esta etiqueta.'),
+      find.text('Nenhum print encontrado com esta etiqueta.'),
       findsOneWidget,
     );
   });
@@ -1714,7 +1809,7 @@ void main() {
     expect(find.text('0 screenshots'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('1 categoria'), findsOneWidget);
+    expect(find.byKey(const Key('folder-1')), findsOneWidget);
   });
 
   testWidgets('nome duplicado e nome em branco mostram erros legíveis', (
@@ -2024,7 +2119,7 @@ void main() {
     expect(image.existsSync(), isTrue);
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('0 categorias'), findsOneWidget);
+    expect(find.text('Nenhuma pasta criada.'), findsOneWidget);
     expect(find.byKey(const ValueKey('screenshot-tile-1')), findsOneWidget);
     await tester.ensureVisible(find.byKey(const ValueKey('screenshot-tile-1')));
     await tester.tap(find.byKey(const ValueKey('screenshot-tile-1')));
@@ -2032,7 +2127,7 @@ void main() {
     expect(find.text('Nenhuma categoria atribuída.'), findsOneWidget);
   });
 
-  testWidgets('observação sobre o menu Compartilhar aparece na importação', (
+  testWidgets('Home não exibe card explicativo de importação manual', (
     tester,
   ) async {
     await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
@@ -2040,8 +2135,10 @@ void main() {
 
     expect(
       find.text('Você também pode enviar imagens pelo menu Compartilhar.'),
-      findsOneWidget,
+      findsNothing,
     );
+    expect(find.text('Importar screenshots'), findsNothing);
+    expect(find.byKey(const Key('add-print-button')), findsOneWidget);
   });
 
   testWidgets(
@@ -2207,34 +2304,17 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Importação automática'), findsOneWidget);
-    expect(find.text('Desativada'), findsOneWidget);
+    expect(find.text('Importação automática'), findsNothing);
+    expect(find.byKey(const Key('automatic-import-switch')), findsNothing);
+    expect(find.byKey(const Key('automatic-import-notice')), findsNothing);
     expect(source.requestCount, 0);
   });
 
-  testWidgets('cancelar explicação não solicita permissão', (tester) async {
+  testWidgets('automação armazenada continua ativa sem controle na Home', (
+    tester,
+  ) async {
     final source = FakeAutomaticScreenshotSource();
-    await tester.pumpWidget(
-      buildTestApp(FakeScreenshotPicker(), automaticScreenshotSource: source),
-    );
-    await tester.pump();
-    await tester.ensureVisible(
-      find.byKey(const Key('automatic-import-switch')),
-    );
-    await tester.tap(find.byKey(const Key('automatic-import-switch')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Ativar importação automática?'), findsOneWidget);
-    await tester.tap(find.text('Cancelar'));
-    await tester.pumpAndSettle();
-
-    expect(source.requestCount, 0);
-    expect(find.text('Desativada'), findsOneWidget);
-  });
-
-  testWidgets('acesso completo ativa usando linha de base', (tester) async {
-    final source = FakeAutomaticScreenshotSource(maxMediaId: 37);
-    final settings = FakeAutomaticImportSettingsRepository();
+    final settings = FakeAutomaticImportSettingsRepository(enabled: true);
     await tester.pumpWidget(
       buildTestApp(
         FakeScreenshotPicker(),
@@ -2242,41 +2322,91 @@ void main() {
         automaticSettingsRepository: settings,
       ),
     );
-    await tester.pump();
-    await tester.ensureVisible(
-      find.byKey(const Key('automatic-import-switch')),
-    );
-    await tester.tap(find.byKey(const Key('automatic-import-switch')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
 
-    expect(source.requestCount, 1);
-    expect(settings.marker, 37);
-    expect(find.text('Ativa'), findsOneWidget);
+    expect(source.requestCount, 0);
+    expect(source.startCount, 1);
+    expect(settings.enabled, isTrue);
+    expect(find.byKey(const Key('automatic-import-notice')), findsNothing);
   });
 
-  testWidgets('acesso limitado não ativa e explica a limitação', (
+  testWidgets('falta de permissão mostra aviso contextual compacto', (
+    tester,
+  ) async {
+    final source = FakeAutomaticScreenshotSource(
+      permission: MediaPermissionStatus.denied,
+    );
+    final settings = FakeAutomaticImportSettingsRepository(enabled: true);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('automatic-import-notice')), findsOneWidget);
+    expect(
+      find.text('Permita o acesso às imagens para organizar novos prints.'),
+      findsOneWidget,
+    );
+    expect(find.text('Conceder acesso'), findsOneWidget);
+    expect(source.requestCount, 0);
+  });
+
+  testWidgets('acesso limitado mostra aviso contextual e ação clara', (
     tester,
   ) async {
     final source = FakeAutomaticScreenshotSource(
       permission: MediaPermissionStatus.limitedAccess,
     );
+    final settings = FakeAutomaticImportSettingsRepository(enabled: true);
     await tester.pumpWidget(
-      buildTestApp(FakeScreenshotPicker(), automaticScreenshotSource: source),
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: settings,
+      ),
     );
-    await tester.pump();
-    await tester.ensureVisible(
-      find.byKey(const Key('automatic-import-switch')),
-    );
-    await tester.tap(find.byKey(const Key('automatic-import-switch')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Acesso limitado'), findsOneWidget);
-    expect(find.textContaining('apenas imagens escolhidas'), findsOneWidget);
+    expect(
+      find.text(
+        'O acesso parcial às imagens impede a organização de novos prints.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Revisar acesso'), findsOneWidget);
     expect(source.startCount, 0);
+  });
+
+  testWidgets('Android sem suporte mostra falha contextual sem detalhes', (
+    tester,
+  ) async {
+    final source = FakeAutomaticScreenshotSource(
+      permission: MediaPermissionStatus.unsupported,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        automaticScreenshotSource: source,
+        automaticSettingsRepository: FakeAutomaticImportSettingsRepository(
+          enabled: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'A organização automática não está disponível neste dispositivo.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Tentar novamente'), findsOneWidget);
+    expect(find.textContaining('WorkManager'), findsNothing);
+    expect(find.textContaining('MediaStore'), findsNothing);
   });
 
   testWidgets('importação automática atualiza biblioteca e feedback', (
@@ -2344,7 +2474,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('MemoShot'), findsOneWidget);
-    expect(find.text('Biblioteca'), findsOneWidget);
+    expect(find.text('Todos os prints'), findsOneWidget);
 
     inboxCompleter.complete(const []);
     await tester.pump();
