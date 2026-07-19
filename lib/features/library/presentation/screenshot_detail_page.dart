@@ -7,6 +7,7 @@ import '../../../core/media_store/media_store_content.dart';
 import '../../categories/data/category_repository.dart';
 import '../../categories/domain/category.dart';
 import '../../categories/presentation/category_selection_page.dart';
+import '../../classification/application/classification_processor.dart';
 import '../data/media_item_repository.dart';
 import '../domain/media_item.dart';
 import 'media_item_thumbnail.dart';
@@ -26,6 +27,7 @@ class ScreenshotDetailPage extends StatefulWidget {
     required this.ocrQueue,
     required this.categoryRepository,
     required this.tagRepository,
+    this.classificationReprocessor,
     this.thumbnailGateway = const MethodChannelMediaStoreContentGateway(),
     super.key,
   });
@@ -36,6 +38,7 @@ class ScreenshotDetailPage extends StatefulWidget {
   final OcrQueue ocrQueue;
   final CategoryRepository categoryRepository;
   final TagRepository tagRepository;
+  final IndividualClassificationReprocessor? classificationReprocessor;
   final MediaStoreContentGateway thumbnailGateway;
 
   @override
@@ -57,6 +60,7 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
   List<Tag> _tags = const [];
   bool _isLoadingTags = true;
   bool _isChangingTags = false;
+  bool _isReorganizing = false;
   String? _tagError;
 
   @override
@@ -154,6 +158,33 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
       ),
     );
     if (changed == true) await _loadCategories();
+  }
+
+  Future<void> _reorganizeAutomatically() async {
+    final reprocessor = widget.classificationReprocessor;
+    if (reprocessor == null || _isReorganizing) return;
+    setState(() => _isReorganizing = true);
+    var message = 'O MemoShot não encontrou uma organização segura.';
+    try {
+      final result = await reprocessor.reprocess(widget.mediaItem);
+      if (!mounted) return;
+      message = switch (result.status) {
+        IndividualReprocessStatus.applied => 'Organização atualizada.',
+        IndividualReprocessStatus.preservedManual =>
+          'A organização escolhida por você foi preservada.',
+        IndividualReprocessStatus.uncertain => message,
+      };
+      await Future.wait([_loadCategories(), _loadTags()]);
+    } catch (_) {
+      // A mensagem conservadora não expõe detalhes técnicos do processamento.
+    } finally {
+      if (mounted) {
+        setState(() => _isReorganizing = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    }
   }
 
   Future<void> _loadTags() async {
@@ -388,6 +419,22 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                     errorMessage: _categoryError,
                     onEdit: _editCategories,
                   ),
+                  if (widget.classificationReprocessor != null) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      key: const Key('reorganize-automatically-button'),
+                      onPressed: _isReorganizing
+                          ? null
+                          : _reorganizeAutomatically,
+                      icon: _isReorganizing
+                          ? const SizedBox.square(
+                              dimension: 17,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.auto_awesome_outlined, size: 19),
+                      label: const Text('Reorganizar automaticamente'),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _TagsSection(
                     tags: _tags,

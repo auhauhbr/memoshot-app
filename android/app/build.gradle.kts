@@ -50,5 +50,6 @@ flutter {
 
 dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+    implementation("com.google.mlkit:image-labeling:17.0.9")
     testImplementation("junit:junit:4.13.2")
 }

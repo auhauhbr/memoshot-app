@@ -17,6 +17,7 @@ import 'package:memoshot/features/categories/domain/category.dart';
 import 'package:memoshot/features/categories/presentation/category_detail_page.dart';
 import 'package:memoshot/features/classification/data/classification_suggestion_repository.dart';
 import 'package:memoshot/features/classification/application/classification_queue_processor.dart';
+import 'package:memoshot/features/classification/application/classification_processor.dart';
 import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
 import 'package:memoshot/features/classification/presentation/review_queue_page.dart';
 import 'package:memoshot/features/existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
@@ -428,6 +429,69 @@ void main() {
     expect(find.text('Nenhuma etiqueta adicionada.'), findsOneWidget);
     expect(find.text('Texto reconhecido'), findsOneWidget);
     expect(tagRepository.loadForMediaCallCount, 1);
+  });
+
+  testWidgets('reorganiza somente o item e mostra mensagem sem porcentagem', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'reorganizar.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final classification = FakeReprocessingClassificationQueue();
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        classificationQueue: classification,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tester.ensureVisible(
+      find.byKey(const Key('reorganize-automatically-button')),
+    );
+
+    await tester.tap(find.text('Reorganizar automaticamente'));
+    await tester.pumpAndSettle();
+
+    expect(classification.reprocessedIds, [1]);
+    expect(find.text('Organização atualizada.'), findsOneWidget);
+    expect(find.textContaining('%'), findsNothing);
+    expect(find.textContaining('aceitar', findRichText: true), findsNothing);
+    expect(find.textContaining('rejeitar', findRichText: true), findsNothing);
+  });
+
+  testWidgets('reprocessamento incerto mostra mensagem simples', (
+    tester,
+  ) async {
+    final image = createTestImage(temporaryDirectory, 'incerto.png');
+    final repository = FakeMediaItemRepository(
+      initialItems: [createMediaItem(1, image.path)],
+    );
+    final classification = FakeReprocessingClassificationQueue(
+      status: IndividualReprocessStatus.uncertain,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: repository,
+        classificationQueue: classification,
+      ),
+    );
+    await tester.pump();
+    await openFirstScreenshot(tester);
+    await tester.ensureVisible(
+      find.byKey(const Key('reorganize-automatically-button')),
+    );
+
+    await tester.tap(find.text('Reorganizar automaticamente'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('O MemoShot não encontrou uma organização segura.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('detalhes exibem uma e várias etiquetas preservando os nomes', (
@@ -5559,6 +5623,22 @@ class FakeClassificationQueue implements ClassificationQueue {
 
   @override
   Future<void> close() => _changes.close();
+}
+
+class FakeReprocessingClassificationQueue extends FakeClassificationQueue
+    implements IndividualClassificationReprocessor {
+  FakeReprocessingClassificationQueue({
+    this.status = IndividualReprocessStatus.applied,
+  });
+
+  final IndividualReprocessStatus status;
+  final List<int> reprocessedIds = [];
+
+  @override
+  Future<IndividualReprocessResult> reprocess(MediaItem mediaItem) async {
+    reprocessedIds.add(mediaItem.id);
+    return IndividualReprocessResult(status);
+  }
 }
 
 MediaItem createMediaItem(

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../../library/data/media_item_repository.dart';
+import '../../library/domain/media_item.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../data/classification_job_store.dart';
 import '../data/classification_suggestion_repository.dart';
@@ -97,7 +98,10 @@ abstract interface class HeadlessClassificationQueue {
 }
 
 class LocalClassificationQueueProcessor
-    implements ClassificationQueue, HeadlessClassificationQueue {
+    implements
+        ClassificationQueue,
+        HeadlessClassificationQueue,
+        IndividualClassificationReprocessor {
   LocalClassificationQueueProcessor({
     required ClassificationJobStore jobStore,
     required ClassificationProcessor classificationProcessor,
@@ -161,12 +165,22 @@ class LocalClassificationQueueProcessor
   Future<void> recoverAndStart() async {
     try {
       await recoverInterrupted();
-      await _enqueueBackfill(backfillBatchSize);
     } catch (_) {
       // A fila de classificação não pode impedir a abertura do aplicativo.
     } finally {
       signal();
     }
+  }
+
+  @override
+  Future<IndividualReprocessResult> reprocess(MediaItem mediaItem) {
+    final processor = _classificationProcessor;
+    if (processor is! IndividualClassificationReprocessor) {
+      throw StateError('Reprocessamento individual indisponível.');
+    }
+    return (processor as IndividualClassificationReprocessor).reprocess(
+      mediaItem,
+    );
   }
 
   @override
@@ -339,6 +353,10 @@ class LocalClassificationQueueProcessor
   Future<void> close() async {
     _closed = true;
     await _draining;
+    final processor = _classificationProcessor;
+    if (processor is ClosableClassificationProcessor) {
+      await (processor as ClosableClassificationProcessor).close();
+    }
     await _changes.close();
   }
 }

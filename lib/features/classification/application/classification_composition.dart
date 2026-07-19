@@ -1,4 +1,6 @@
 import '../../../core/database/contexto_database.dart';
+import '../../../core/ocr/media_ocr_input.dart';
+import '../../../core/visual/local_visual_analyzer.dart';
 import '../../categories/data/category_repository.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../ocr/data/ocr_repository.dart';
@@ -7,6 +9,7 @@ import '../data/classification_suggestion_repository.dart';
 import '../data/classification_suggestion_store.dart';
 import '../data/review_decision_store.dart';
 import '../domain/local_classification_engine.dart';
+import '../domain/contextual_classification.dart';
 import '../domain/stored_classification_suggestion.dart';
 import 'classification_processor.dart';
 import 'classification_queue_processor.dart';
@@ -33,6 +36,14 @@ AutomaticClassificationApplier createLocalAutomaticClassificationApplier(
 ) {
   return LocalAutomaticClassificationApplier(
     categoryRepository: categoryRepository,
+    store: DriftReviewDecisionStore(database),
+  );
+}
+
+AutomaticClassificationApplier createContextualAutomaticClassificationApplier(
+  ContextoDatabase database,
+) {
+  return ContextualAutomaticClassificationApplier(
     store: DriftReviewDecisionStore(database),
   );
 }
@@ -68,12 +79,16 @@ LocalClassificationQueueProcessor createLocalClassificationQueue({
   required OcrRepository ocrRepository,
   Duration processingExpiration = classificationProcessingExpiration,
 }) {
-  final processor = createLocalClassificationProcessor(
-    suggestionRepository,
-    automaticApplier: createLocalAutomaticClassificationApplier(
-      database,
-      categoryRepository,
-    ),
+  final processor = ContextualClassificationProcessor(
+    engine: const ContextualClassificationEngine(),
+    visualAnalyzer: createLocalVisualAnalyzer(),
+    inputResolver: createMediaOcrInputResolver(),
+    repository: suggestionRepository,
+    categoryRepository: categoryRepository,
+    ocrRepository: ocrRepository,
+    now: DateTime.now,
+    engineVersion: currentClassificationEngineVersion,
+    automaticApplier: createContextualAutomaticClassificationApplier(database),
   );
   return LocalClassificationQueueProcessor(
     jobStore: DriftClassificationJobStore(database),

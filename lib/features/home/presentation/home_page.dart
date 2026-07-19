@@ -23,6 +23,7 @@ import '../../categories/domain/category.dart';
 import '../../categories/presentation/categories_page.dart';
 import '../../categories/presentation/category_detail_page.dart';
 import '../../classification/application/classification_composition.dart';
+import '../../classification/application/classification_processor.dart';
 import '../../classification/application/classification_queue_processor.dart';
 import '../../classification/data/classification_suggestion_repository.dart';
 import '../../existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
@@ -986,6 +987,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ocrQueue: _ocrQueue,
           tagRepository: _tagRepository,
           recentFolderRepository: _recentFolderRepository,
+          classificationReprocessor:
+              _classificationQueue is IndividualClassificationReprocessor
+              ? _classificationQueue as IndividualClassificationReprocessor
+              : null,
         ),
       ),
     );
@@ -1005,6 +1010,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ocrQueue: _ocrQueue,
         tagRepository: _tagRepository,
         recentFolderRepository: _recentFolderRepository,
+        classificationReprocessor:
+            _classificationQueue is IndividualClassificationReprocessor
+            ? _classificationQueue as IndividualClassificationReprocessor
+            : null,
       ),
     );
     await _reloadCategories();
@@ -1055,6 +1064,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ocrQueue: _ocrQueue,
           categoryRepository: _categoryRepository,
           tagRepository: _tagRepository,
+          classificationReprocessor:
+              _classificationQueue is IndividualClassificationReprocessor
+              ? _classificationQueue as IndividualClassificationReprocessor
+              : null,
           thumbnailGateway:
               widget.mediaStoreContentGateway ??
               const MethodChannelMediaStoreContentGateway(),

@@ -109,42 +109,45 @@ void main() {
     ]);
   });
 
-  test('preserva ordem inbox, OCR, classificação e backfill', () async {
-    final file = File('${temporaryDirectory.path}/capture.png');
-    await file.writeAsBytes([1, 2, 3]);
-    final events = <String>[];
-    final source = _FakeSource(
-      events: events,
-      entries: [_entry('one', file.path)],
-    );
-    final media = _FakeMediaRepository(events: events);
-    final classification = _FakeClassificationQueue(
-      events: events,
-      processed: 1,
-    );
+  test(
+    'preserva ordem inbox, OCR e classificação sem backfill histórico',
+    () async {
+      final file = File('${temporaryDirectory.path}/capture.png');
+      await file.writeAsBytes([1, 2, 3]);
+      final events = <String>[];
+      final source = _FakeSource(
+        events: events,
+        entries: [_entry('one', file.path)],
+      );
+      final media = _FakeMediaRepository(events: events);
+      final classification = _FakeClassificationQueue(
+        events: events,
+        processed: 1,
+      );
 
-    final summary = await _runner(
-      settings: _FakeSettings(enabled: true),
-      source: source,
-      media: media,
-      ocr: _FakeOcrQueue(events: events, processed: 1),
-      classification: classification,
-    ).run();
+      final summary = await _runner(
+        settings: _FakeSettings(enabled: true),
+        source: source,
+        media: media,
+        ocr: _FakeOcrQueue(events: events, processed: 1),
+        classification: classification,
+      ).run();
 
-    expect(summary.importedCount, 1);
-    expect(summary.ocrProcessedCount, 1);
-    expect(summary.classificationProcessedCount, 1);
-    expect(source.acknowledged, ['one']);
-    expect(classification.backfillFlags, [true]);
-    expect(events, [
-      'recoverOcr',
-      'recoverClassification',
-      'inbox',
-      'import',
-      'ocr',
-      'classification',
-    ]);
-  });
+      expect(summary.importedCount, 1);
+      expect(summary.ocrProcessedCount, 1);
+      expect(summary.classificationProcessedCount, 1);
+      expect(source.acknowledged, ['one']);
+      expect(classification.backfillFlags, [false]);
+      expect(events, [
+        'recoverOcr',
+        'recoverClassification',
+        'inbox',
+        'import',
+        'ocr',
+        'classification',
+      ]);
+    },
+  );
 
   test('duplicata confirma a mesma entrada sem importar novamente', () async {
     final file = File('${temporaryDirectory.path}/duplicate.png');

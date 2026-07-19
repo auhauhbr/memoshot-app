@@ -2,6 +2,7 @@ import '../../../core/text/text_normalizer.dart';
 import '../../categories/data/category_repository.dart';
 import '../../categories/domain/category.dart';
 import '../domain/local_classification_engine.dart';
+import '../domain/contextual_classification.dart';
 import '../domain/stored_classification_suggestion.dart';
 import 'review_decision.dart';
 
@@ -125,6 +126,49 @@ abstract interface class AutomaticClassificationApplier {
   Future<StoredClassificationSuggestion> apply(
     StoredClassificationSuggestion suggestion,
   );
+}
+
+abstract interface class ContextualAutomaticClassificationStore {
+  Future<StoredClassificationSuggestion> autoApplyContextual({
+    required StoredClassificationSuggestion suggestion,
+    required DateTime resolvedAt,
+  });
+}
+
+class ContextualAutomaticClassificationApplier
+    implements AutomaticClassificationApplier {
+  ContextualAutomaticClassificationApplier({
+    required ContextualAutomaticClassificationStore store,
+    DateTime Function()? now,
+  }) : this._(store, now ?? DateTime.now);
+
+  ContextualAutomaticClassificationApplier._(this._store, this._now);
+
+  final ContextualAutomaticClassificationStore _store;
+  final DateTime Function() _now;
+
+  @override
+  Future<StoredClassificationSuggestion> apply(
+    StoredClassificationSuggestion suggestion,
+  ) {
+    final destination = ContextualFolderCatalog.parse(
+      suggestion.suggestedCategoryName,
+    );
+    final margin = suggestion.evidence
+        .where((item) => item.ruleId == 'context.destination.margin')
+        .map((item) => item.weight)
+        .firstOrNull;
+    if (suggestion.status != ClassificationSuggestionStatus.pendingReview ||
+        destination == null ||
+        suggestion.confidence < contextualExistingDestinationThreshold ||
+        (margin ?? 0) < contextualDestinationMargin) {
+      return Future.value(suggestion);
+    }
+    return _store.autoApplyContextual(
+      suggestion: suggestion,
+      resolvedAt: _now(),
+    );
+  }
 }
 
 class LocalAutomaticClassificationApplier

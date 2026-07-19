@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../library/data/media_item_repository.dart';
+import '../../classification/application/classification_processor.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../../processing/data/ocr_queue_processor.dart';
 import '../../tags/data/tag_repository.dart';
@@ -21,6 +22,7 @@ class CategoriesPage extends StatefulWidget {
     required this.ocrQueue,
     required this.tagRepository,
     this.recentFolderRepository,
+    this.classificationReprocessor,
     super.key,
   });
 
@@ -30,6 +32,7 @@ class CategoriesPage extends StatefulWidget {
   final OcrQueue ocrQueue;
   final TagRepository tagRepository;
   final RecentFolderRepository? recentFolderRepository;
+  final IndividualClassificationReprocessor? classificationReprocessor;
 
   @override
   State<CategoriesPage> createState() => _CategoriesPageState();
@@ -108,6 +111,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
         ocrQueue: widget.ocrQueue,
         tagRepository: widget.tagRepository,
         recentFolderRepository: widget.recentFolderRepository,
+        classificationReprocessor: widget.classificationReprocessor,
       ),
     );
     if (mounted) await _load();

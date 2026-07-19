@@ -181,7 +181,7 @@ class BackgroundProcessingRunner {
 
         final classification = await _classificationQueue.processAvailable(
           maximumItems: maximumItemsPerCycle,
-          enqueueBackfill: true,
+          enqueueBackfill: false,
         );
         classificationProcessedCount += classification.processedCount;
         classificationImmediate = classification.hasImmediateWork;

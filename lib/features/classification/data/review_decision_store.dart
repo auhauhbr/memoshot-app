@@ -7,9 +7,11 @@ import '../application/automatic_classification.dart';
 import '../application/review_decision.dart';
 import '../data/classification_suggestion_codec.dart';
 import '../domain/local_classification_engine.dart';
+import '../domain/contextual_classification.dart';
 import '../domain/stored_classification_suggestion.dart';
 
-class DriftReviewDecisionStore implements ReviewDecisionStore {
+class DriftReviewDecisionStore
+    implements ReviewDecisionStore, ContextualAutomaticClassificationStore {
   DriftReviewDecisionStore(
     ContextoDatabase database, {
     TextNormalizer normalizer = const TextNormalizer(),
@@ -22,6 +24,193 @@ class DriftReviewDecisionStore implements ReviewDecisionStore {
   final ContextoDatabase _database;
   final TextNormalizer _normalizer;
   final ClassificationSuggestionPayloadCodec _codec;
+
+  @override
+  Future<StoredClassificationSuggestion> autoApplyContextual({
+    required StoredClassificationSuggestion suggestion,
+    required DateTime resolvedAt,
+  }) {
+    return _database.transaction(() async {
+      final row =
+          await (_database.select(_database.classificationSuggestions)..where(
+                (item) => item.mediaItemId.equals(suggestion.mediaItemId),
+              ))
+              .getSingleOrNull();
+      if (row == null) return suggestion;
+      final current = _toDomain(row);
+      final destination = ContextualFolderCatalog.parse(
+        current.suggestedCategoryName,
+      );
+      final margin = current.evidence
+          .where((item) => item.ruleId == 'context.destination.margin')
+          .map((item) => item.weight)
+          .firstOrNull;
+      if (current.status != ClassificationSuggestionStatus.pendingReview ||
+          destination == null ||
+          current.confidence < contextualExistingDestinationThreshold ||
+          (margin ?? 0) < contextualDestinationMargin) {
+        return current;
+      }
+      final mediaExists =
+          await (_database.selectOnly(_database.mediaItems)
+                ..addColumns([_database.mediaItems.id])
+                ..where(_database.mediaItems.id.equals(suggestion.mediaItemId)))
+              .getSingleOrNull() !=
+          null;
+      if (!mediaExists) return current;
+
+      final priorAssociation =
+          await (_database.selectOnly(_database.mediaCategories)
+                ..addColumns([_database.mediaCategories.categoryId])
+                ..where(
+                  _database.mediaCategories.mediaItemId.equals(
+                    suggestion.mediaItemId,
+                  ),
+                )
+                ..limit(1))
+              .getSingleOrNull();
+      if (priorAssociation != null) return current;
+
+      final (catalogRoot, childName) = destination;
+      final rootName = catalogRoot == 'Produtos'
+          ? await _compatibleProductsRootName()
+          : catalogRoot;
+      var root = await _findCategory(rootName, null);
+      var child = root == null || childName == null
+          ? null
+          : await _findCategory(childName, root.id);
+      final needsCreation =
+          root == null || (childName != null && child == null);
+      if (needsCreation &&
+          current.confidence < contextualNewDestinationThreshold) {
+        return current;
+      }
+      root ??= await _createCategory(rootName, null, resolvedAt);
+      if (childName != null) {
+        child ??= await _createCategory(childName, root.id, resolvedAt);
+      }
+      final categoryId = child?.id ?? root.id;
+
+      await _database
+          .into(_database.mediaCategories)
+          .insert(
+            MediaCategoriesCompanion.insert(
+              mediaItemId: suggestion.mediaItemId,
+              categoryId: categoryId,
+              createdAt: resolvedAt,
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+      final tags = current.suggestedTags
+          .where(
+            (tag) =>
+                tag.confidence >= contextualTagThreshold &&
+                ContextualTagCatalog.contains(tag.name),
+          )
+          .take(maximumContextualTags);
+      final appliedNames = <String>{};
+      for (final suggestedTag in tags) {
+        final visibleName = suggestedTag.name.trim();
+        final normalizedName = _normalizer.normalize(visibleName);
+        if (!appliedNames.add(normalizedName)) continue;
+        var tag =
+            await (_database.select(_database.tags)
+                  ..where((item) => item.normalizedName.equals(normalizedName)))
+                .getSingleOrNull();
+        if (tag == null) {
+          await _database
+              .into(_database.tags)
+              .insert(
+                TagsCompanion.insert(
+                  name: visibleName,
+                  normalizedName: normalizedName,
+                  createdAt: resolvedAt,
+                  updatedAt: resolvedAt,
+                ),
+                mode: InsertMode.insertOrIgnore,
+              );
+          tag =
+              await (_database.select(_database.tags)..where(
+                    (item) => item.normalizedName.equals(normalizedName),
+                  ))
+                  .getSingleOrNull();
+        }
+        if (tag != null) {
+          await _database
+              .into(_database.mediaTags)
+              .insert(
+                MediaTagsCompanion.insert(
+                  mediaItemId: suggestion.mediaItemId,
+                  tagId: tag.id,
+                  createdAt: resolvedAt,
+                ),
+                mode: InsertMode.insertOrIgnore,
+              );
+        }
+      }
+      final updated =
+          await (_database.update(_database.classificationSuggestions)..where(
+                (item) =>
+                    item.mediaItemId.equals(suggestion.mediaItemId) &
+                    item.status.equals(
+                      ClassificationSuggestionStatus.pendingReview.name,
+                    ),
+              ))
+              .write(
+                ClassificationSuggestionsCompanion(
+                  status: Value(
+                    ClassificationSuggestionStatus.autoApplied.name,
+                  ),
+                  updatedAt: Value(resolvedAt),
+                  resolvedAt: Value(resolvedAt),
+                ),
+              );
+      if (updated != 1) return current;
+      return current.copyWith(
+        status: ClassificationSuggestionStatus.autoApplied,
+        updatedAt: resolvedAt,
+        resolvedAt: resolvedAt,
+      );
+    });
+  }
+
+  Future<String> _compatibleProductsRootName() async {
+    if (await _findCategory('Produtos', null) != null) return 'Produtos';
+    if (await _findCategory('Compras', null) != null) return 'Compras';
+    return 'Produtos';
+  }
+
+  Future<Category?> _findCategory(String name, int? parentId) {
+    final normalized = _normalizer.normalize(name);
+    return (_database.select(_database.categories)..where(
+          (item) =>
+              item.normalizedName.equals(normalized) &
+              (parentId == null
+                  ? item.parentId.isNull()
+                  : item.parentId.equals(parentId)),
+        ))
+        .getSingleOrNull();
+  }
+
+  Future<Category> _createCategory(
+    String name,
+    int? parentId,
+    DateTime createdAt,
+  ) async {
+    final normalized = _normalizer.normalize(name);
+    await _database
+        .into(_database.categories)
+        .insert(
+          CategoriesCompanion.insert(
+            name: name,
+            normalizedName: normalized,
+            parentId: Value(parentId),
+            createdAt: createdAt,
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+    return (await _findCategory(name, parentId))!;
+  }
 
   @override
   Future<StoredClassificationSuggestion> autoApply({

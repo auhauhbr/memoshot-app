@@ -77,6 +77,10 @@ internal class MemoShotBackgroundProcessingWorker(
                 applicationContext,
                 engine.dartExecutor.binaryMessenger,
             )
+            val localVisualAnalyzerBridge = LocalVisualAnalyzerBridge(
+                applicationContext,
+                engine.dartExecutor.binaryMessenger,
+            )
             val terminal = CompletableDeferred<HeadlessTerminalMessage>()
             val channel = MethodChannel(
                 engine.dartExecutor.binaryMessenger,
@@ -114,6 +118,7 @@ internal class MemoShotBackgroundProcessingWorker(
                 notificationBridge,
                 mediaStoreContentBridge,
                 mediaStoreOcrInputBridge,
+                localVisualAnalyzerBridge,
                 preferencesBridge,
                 channel,
                 terminal,
@@ -164,6 +169,7 @@ internal class MemoShotBackgroundProcessingWorker(
         private val notificationBridge: ReviewNotificationBridge,
         private val mediaStoreContentBridge: MediaStoreContentBridge,
         private val mediaStoreOcrInputBridge: MediaStoreOcrInputBridge,
+        private val localVisualAnalyzerBridge: LocalVisualAnalyzerBridge,
         private val preferencesBridge: AppPreferencesBridge,
         private val channel: MethodChannel,
         val terminal: CompletableDeferred<HeadlessTerminalMessage>,
@@ -174,6 +180,7 @@ internal class MemoShotBackgroundProcessingWorker(
             notificationBridge.dispose()
             mediaStoreContentBridge.dispose()
             mediaStoreOcrInputBridge.dispose()
+            localVisualAnalyzerBridge.dispose()
             preferencesBridge.dispose()
             engine.destroy()
         }

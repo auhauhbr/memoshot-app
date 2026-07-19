@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../../library/data/media_item_repository.dart';
+import '../../classification/application/classification_processor.dart';
 import '../../library/domain/media_item.dart';
 import '../../library/domain/media_page.dart';
 import '../../library/presentation/screenshot_detail_page.dart';
@@ -27,6 +28,7 @@ Route<bool> buildCategoryDetailRoute({
   required OcrQueue ocrQueue,
   required TagRepository tagRepository,
   RecentFolderRepository? recentFolderRepository,
+  IndividualClassificationReprocessor? classificationReprocessor,
 }) {
   return MaterialPageRoute<bool>(
     settings: RouteSettings(
@@ -41,6 +43,7 @@ Route<bool> buildCategoryDetailRoute({
       ocrQueue: ocrQueue,
       tagRepository: tagRepository,
       recentFolderRepository: recentFolderRepository,
+      classificationReprocessor: classificationReprocessor,
     ),
   );
 }
@@ -54,6 +57,7 @@ class CategoryDetailPage extends StatefulWidget {
     required this.ocrQueue,
     required this.tagRepository,
     this.recentFolderRepository,
+    this.classificationReprocessor,
     super.key,
   });
 
@@ -64,6 +68,7 @@ class CategoryDetailPage extends StatefulWidget {
   final OcrQueue ocrQueue;
   final TagRepository tagRepository;
   final RecentFolderRepository? recentFolderRepository;
+  final IndividualClassificationReprocessor? classificationReprocessor;
 
   @override
   State<CategoryDetailPage> createState() => _CategoryDetailPageState();
@@ -294,6 +299,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
           ocrQueue: widget.ocrQueue,
           categoryRepository: widget.categoryRepository,
           tagRepository: widget.tagRepository,
+          classificationReprocessor: widget.classificationReprocessor,
         ),
       ),
     );
@@ -312,6 +318,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         ocrQueue: widget.ocrQueue,
         tagRepository: widget.tagRepository,
         recentFolderRepository: widget.recentFolderRepository,
+        classificationReprocessor: widget.classificationReprocessor,
       ),
     );
     if (mounted) await _load();
