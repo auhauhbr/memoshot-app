@@ -2,12 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drift/native.dart';
 import 'package:memoshot/core/automatic_import/automatic_screenshot_source.dart';
+import 'package:memoshot/core/database/contexto_database.dart'
+    hide ExistingScreenshotCandidate;
 import 'package:memoshot/core/media_store/existing_screenshot_scanner.dart';
 import 'package:memoshot/features/existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
+import 'package:memoshot/features/existing_screenshots/application/historical_archive_preparation_coordinator.dart';
 import 'package:memoshot/features/existing_screenshots/data/existing_screenshot_candidate_repository.dart';
+import 'package:memoshot/features/existing_screenshots/data/existing_screenshot_candidate_store.dart';
+import 'package:memoshot/features/existing_screenshots/data/historical_media_import_job_store.dart';
+import 'package:memoshot/features/existing_screenshots/data/historical_preparation_settings_repository.dart';
 import 'package:memoshot/features/existing_screenshots/domain/existing_screenshot_candidate.dart';
 import 'package:memoshot/features/existing_screenshots/domain/existing_screenshot_scan.dart';
+import 'package:memoshot/features/existing_screenshots/domain/historical_media_import_job.dart';
 import 'package:memoshot/features/existing_screenshots/presentation/existing_screenshot_inventory_page.dart';
 
 void main() {
@@ -174,6 +182,70 @@ void main() {
     expect(harness.repository.clearCount, 1);
     expect(find.text('Mapear meus screenshots'), findsOneWidget);
   });
+
+  testWidgets('preparação exige confirmação explícita e pode ser pausada', (
+    tester,
+  ) async {
+    final database = ContextoDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(database.close);
+    final candidateRepository = LocalExistingScreenshotCandidateRepository(
+      DriftExistingScreenshotCandidateStore(database),
+    );
+    await candidateRepository.upsertBatch([
+      ExistingScreenshotCandidate(
+        sourceKey: 'external:1',
+        mediaStoreId: 1,
+        volumeName: 'external',
+        contentUri: 'content://media/external/images/media/1',
+        mimeType: 'image/png',
+        capturedAt: DateTime.utc(2025),
+        dateModified: DateTime.utc(2025),
+        sizeBytes: 100,
+        width: 100,
+        height: 200,
+        discoveredAt: DateTime.utc(2026),
+        lastSeenAt: DateTime.utc(2026),
+        availability: ExistingScreenshotAvailability.available,
+      ),
+    ]);
+    final settings = _PreparationSettings();
+    final scheduler = _PreparationScheduler();
+    final preparation = HistoricalArchivePreparationCoordinator(
+      jobStore: DriftHistoricalMediaImportJobStore(database),
+      settingsRepository: settings,
+      scheduler: scheduler,
+    );
+    final harness = _Harness()
+      ..repository.summary = ExistingScreenshotInventorySummary(
+        availableCount: 1,
+        unavailableCount: 0,
+        lastCompletedScanAt: DateTime.utc(2026),
+        lastScanWasPartial: false,
+      );
+
+    await tester.pumpWidget(harness.app(preparation: preparation));
+    await tester.pumpAndSettle();
+    expect(settings.state, HistoricalPreparationState.notStarted);
+    expect(find.text('Preparar acervo para organização'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('prepare-existing-archive')));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Nenhuma imagem será copiada ou movida'),
+      findsOneWidget,
+    );
+    expect(settings.state, HistoricalPreparationState.notStarted);
+    await tester.tap(find.byKey(const Key('confirm-prepare-archive')));
+    await tester.pumpAndSettle();
+    expect(settings.state, HistoricalPreparationState.active);
+    expect(scheduler.calls, 1);
+    expect(find.text('Pausar preparação'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('pause-archive-preparation')));
+    await tester.pumpAndSettle();
+    expect(settings.state, HistoricalPreparationState.paused);
+    expect(find.text('Continuar preparação'), findsOneWidget);
+  });
 }
 
 class _Harness {
@@ -189,7 +261,7 @@ class _Harness {
   final _Scanner scanner;
   final _Repository repository = _Repository();
 
-  Widget app() {
+  Widget app({HistoricalArchivePreparationCoordinator? preparation}) {
     return MaterialApp(
       home: ExistingScreenshotInventoryPage(
         coordinator: ExistingScreenshotInventoryCoordinator(
@@ -197,9 +269,32 @@ class _Harness {
           scanner: scanner,
           repository: repository,
         ),
+        preparationCoordinator: preparation,
       ),
     );
   }
+}
+
+class _PreparationSettings implements HistoricalPreparationSettingsRepository {
+  HistoricalPreparationState state = HistoricalPreparationState.notStarted;
+
+  @override
+  Future<HistoricalPreparationState> load() async => state;
+  @override
+  Future<void> pause() async => state = HistoricalPreparationState.paused;
+  @override
+  Future<void> resume() async => state = HistoricalPreparationState.active;
+  @override
+  Future<void> start() async => state = HistoricalPreparationState.active;
+  @override
+  Future<void> complete() async => state = HistoricalPreparationState.completed;
+}
+
+class _PreparationScheduler implements HistoricalPreparationScheduler {
+  int calls = 0;
+
+  @override
+  Future<void> schedule() async => calls++;
 }
 
 ExistingScreenshotScanPage makeScanPage(int count) =>

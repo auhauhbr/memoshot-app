@@ -6050,6 +6050,555 @@ class ExistingScreenshotInventoryStatesCompanion
   }
 }
 
+class $HistoricalMediaImportJobsTable extends HistoricalMediaImportJobs
+    with TableInfo<$HistoricalMediaImportJobsTable, HistoricalMediaImportJob> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $HistoricalMediaImportJobsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _sourceKeyMeta = const VerificationMeta(
+    'sourceKey',
+  );
+  @override
+  late final GeneratedColumn<String> sourceKey = GeneratedColumn<String>(
+    'source_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES existing_screenshot_candidates (source_key) ON DELETE RESTRICT',
+    ),
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<String> state = GeneratedColumn<String>(
+    'state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attemptsMeta = const VerificationMeta(
+    'attempts',
+  );
+  @override
+  late final GeneratedColumn<int> attempts = GeneratedColumn<int>(
+    'attempts',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _availableAtMeta = const VerificationMeta(
+    'availableAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> availableAt = GeneratedColumn<DateTime>(
+    'available_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _processingStartedAtMeta =
+      const VerificationMeta('processingStartedAt');
+  @override
+  late final GeneratedColumn<DateTime> processingStartedAt =
+      GeneratedColumn<DateTime>(
+        'processing_started_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastErrorCodeMeta = const VerificationMeta(
+    'lastErrorCode',
+  );
+  @override
+  late final GeneratedColumn<String> lastErrorCode = GeneratedColumn<String>(
+    'last_error_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    sourceKey,
+    state,
+    attempts,
+    availableAt,
+    createdAt,
+    updatedAt,
+    processingStartedAt,
+    lastErrorCode,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'historical_media_import_jobs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<HistoricalMediaImportJob> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('source_key')) {
+      context.handle(
+        _sourceKeyMeta,
+        sourceKey.isAcceptableOrUnknown(data['source_key']!, _sourceKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceKeyMeta);
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stateMeta);
+    }
+    if (data.containsKey('attempts')) {
+      context.handle(
+        _attemptsMeta,
+        attempts.isAcceptableOrUnknown(data['attempts']!, _attemptsMeta),
+      );
+    }
+    if (data.containsKey('available_at')) {
+      context.handle(
+        _availableAtMeta,
+        availableAt.isAcceptableOrUnknown(
+          data['available_at']!,
+          _availableAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_availableAtMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('processing_started_at')) {
+      context.handle(
+        _processingStartedAtMeta,
+        processingStartedAt.isAcceptableOrUnknown(
+          data['processing_started_at']!,
+          _processingStartedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_error_code')) {
+      context.handle(
+        _lastErrorCodeMeta,
+        lastErrorCode.isAcceptableOrUnknown(
+          data['last_error_code']!,
+          _lastErrorCodeMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {sourceKey};
+  @override
+  HistoricalMediaImportJob map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return HistoricalMediaImportJob(
+      sourceKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_key'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state'],
+      )!,
+      attempts: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempts'],
+      )!,
+      availableAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}available_at'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      processingStartedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}processing_started_at'],
+      ),
+      lastErrorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error_code'],
+      ),
+    );
+  }
+
+  @override
+  $HistoricalMediaImportJobsTable createAlias(String alias) {
+    return $HistoricalMediaImportJobsTable(attachedDatabase, alias);
+  }
+}
+
+class HistoricalMediaImportJob extends DataClass
+    implements Insertable<HistoricalMediaImportJob> {
+  final String sourceKey;
+  final String state;
+  final int attempts;
+  final DateTime availableAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? processingStartedAt;
+  final String? lastErrorCode;
+  const HistoricalMediaImportJob({
+    required this.sourceKey,
+    required this.state,
+    required this.attempts,
+    required this.availableAt,
+    required this.createdAt,
+    required this.updatedAt,
+    this.processingStartedAt,
+    this.lastErrorCode,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['source_key'] = Variable<String>(sourceKey);
+    map['state'] = Variable<String>(state);
+    map['attempts'] = Variable<int>(attempts);
+    map['available_at'] = Variable<DateTime>(availableAt);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || processingStartedAt != null) {
+      map['processing_started_at'] = Variable<DateTime>(processingStartedAt);
+    }
+    if (!nullToAbsent || lastErrorCode != null) {
+      map['last_error_code'] = Variable<String>(lastErrorCode);
+    }
+    return map;
+  }
+
+  HistoricalMediaImportJobsCompanion toCompanion(bool nullToAbsent) {
+    return HistoricalMediaImportJobsCompanion(
+      sourceKey: Value(sourceKey),
+      state: Value(state),
+      attempts: Value(attempts),
+      availableAt: Value(availableAt),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      processingStartedAt: processingStartedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processingStartedAt),
+      lastErrorCode: lastErrorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastErrorCode),
+    );
+  }
+
+  factory HistoricalMediaImportJob.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return HistoricalMediaImportJob(
+      sourceKey: serializer.fromJson<String>(json['sourceKey']),
+      state: serializer.fromJson<String>(json['state']),
+      attempts: serializer.fromJson<int>(json['attempts']),
+      availableAt: serializer.fromJson<DateTime>(json['availableAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      processingStartedAt: serializer.fromJson<DateTime?>(
+        json['processingStartedAt'],
+      ),
+      lastErrorCode: serializer.fromJson<String?>(json['lastErrorCode']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'sourceKey': serializer.toJson<String>(sourceKey),
+      'state': serializer.toJson<String>(state),
+      'attempts': serializer.toJson<int>(attempts),
+      'availableAt': serializer.toJson<DateTime>(availableAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'processingStartedAt': serializer.toJson<DateTime?>(processingStartedAt),
+      'lastErrorCode': serializer.toJson<String?>(lastErrorCode),
+    };
+  }
+
+  HistoricalMediaImportJob copyWith({
+    String? sourceKey,
+    String? state,
+    int? attempts,
+    DateTime? availableAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> processingStartedAt = const Value.absent(),
+    Value<String?> lastErrorCode = const Value.absent(),
+  }) => HistoricalMediaImportJob(
+    sourceKey: sourceKey ?? this.sourceKey,
+    state: state ?? this.state,
+    attempts: attempts ?? this.attempts,
+    availableAt: availableAt ?? this.availableAt,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    processingStartedAt: processingStartedAt.present
+        ? processingStartedAt.value
+        : this.processingStartedAt,
+    lastErrorCode: lastErrorCode.present
+        ? lastErrorCode.value
+        : this.lastErrorCode,
+  );
+  HistoricalMediaImportJob copyWithCompanion(
+    HistoricalMediaImportJobsCompanion data,
+  ) {
+    return HistoricalMediaImportJob(
+      sourceKey: data.sourceKey.present ? data.sourceKey.value : this.sourceKey,
+      state: data.state.present ? data.state.value : this.state,
+      attempts: data.attempts.present ? data.attempts.value : this.attempts,
+      availableAt: data.availableAt.present
+          ? data.availableAt.value
+          : this.availableAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      processingStartedAt: data.processingStartedAt.present
+          ? data.processingStartedAt.value
+          : this.processingStartedAt,
+      lastErrorCode: data.lastErrorCode.present
+          ? data.lastErrorCode.value
+          : this.lastErrorCode,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('HistoricalMediaImportJob(')
+          ..write('sourceKey: $sourceKey, ')
+          ..write('state: $state, ')
+          ..write('attempts: $attempts, ')
+          ..write('availableAt: $availableAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('processingStartedAt: $processingStartedAt, ')
+          ..write('lastErrorCode: $lastErrorCode')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    sourceKey,
+    state,
+    attempts,
+    availableAt,
+    createdAt,
+    updatedAt,
+    processingStartedAt,
+    lastErrorCode,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is HistoricalMediaImportJob &&
+          other.sourceKey == this.sourceKey &&
+          other.state == this.state &&
+          other.attempts == this.attempts &&
+          other.availableAt == this.availableAt &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.processingStartedAt == this.processingStartedAt &&
+          other.lastErrorCode == this.lastErrorCode);
+}
+
+class HistoricalMediaImportJobsCompanion
+    extends UpdateCompanion<HistoricalMediaImportJob> {
+  final Value<String> sourceKey;
+  final Value<String> state;
+  final Value<int> attempts;
+  final Value<DateTime> availableAt;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> processingStartedAt;
+  final Value<String?> lastErrorCode;
+  final Value<int> rowid;
+  const HistoricalMediaImportJobsCompanion({
+    this.sourceKey = const Value.absent(),
+    this.state = const Value.absent(),
+    this.attempts = const Value.absent(),
+    this.availableAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.processingStartedAt = const Value.absent(),
+    this.lastErrorCode = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  HistoricalMediaImportJobsCompanion.insert({
+    required String sourceKey,
+    required String state,
+    this.attempts = const Value.absent(),
+    required DateTime availableAt,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.processingStartedAt = const Value.absent(),
+    this.lastErrorCode = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : sourceKey = Value(sourceKey),
+       state = Value(state),
+       availableAt = Value(availableAt),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<HistoricalMediaImportJob> custom({
+    Expression<String>? sourceKey,
+    Expression<String>? state,
+    Expression<int>? attempts,
+    Expression<DateTime>? availableAt,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? processingStartedAt,
+    Expression<String>? lastErrorCode,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (sourceKey != null) 'source_key': sourceKey,
+      if (state != null) 'state': state,
+      if (attempts != null) 'attempts': attempts,
+      if (availableAt != null) 'available_at': availableAt,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (processingStartedAt != null)
+        'processing_started_at': processingStartedAt,
+      if (lastErrorCode != null) 'last_error_code': lastErrorCode,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  HistoricalMediaImportJobsCompanion copyWith({
+    Value<String>? sourceKey,
+    Value<String>? state,
+    Value<int>? attempts,
+    Value<DateTime>? availableAt,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? processingStartedAt,
+    Value<String?>? lastErrorCode,
+    Value<int>? rowid,
+  }) {
+    return HistoricalMediaImportJobsCompanion(
+      sourceKey: sourceKey ?? this.sourceKey,
+      state: state ?? this.state,
+      attempts: attempts ?? this.attempts,
+      availableAt: availableAt ?? this.availableAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      processingStartedAt: processingStartedAt ?? this.processingStartedAt,
+      lastErrorCode: lastErrorCode ?? this.lastErrorCode,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (sourceKey.present) {
+      map['source_key'] = Variable<String>(sourceKey.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(state.value);
+    }
+    if (attempts.present) {
+      map['attempts'] = Variable<int>(attempts.value);
+    }
+    if (availableAt.present) {
+      map['available_at'] = Variable<DateTime>(availableAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (processingStartedAt.present) {
+      map['processing_started_at'] = Variable<DateTime>(
+        processingStartedAt.value,
+      );
+    }
+    if (lastErrorCode.present) {
+      map['last_error_code'] = Variable<String>(lastErrorCode.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('HistoricalMediaImportJobsCompanion(')
+          ..write('sourceKey: $sourceKey, ')
+          ..write('state: $state, ')
+          ..write('attempts: $attempts, ')
+          ..write('availableAt: $availableAt, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('processingStartedAt: $processingStartedAt, ')
+          ..write('lastErrorCode: $lastErrorCode, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ContextoDatabase extends GeneratedDatabase {
   _$ContextoDatabase(QueryExecutor e) : super(e);
   $ContextoDatabaseManager get managers => $ContextoDatabaseManager(this);
@@ -6074,6 +6623,8 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
   existingScreenshotInventoryStates = $ExistingScreenshotInventoryStatesTable(
     this,
   );
+  late final $HistoricalMediaImportJobsTable historicalMediaImportJobs =
+      $HistoricalMediaImportJobsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6091,6 +6642,7 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
     classificationJobs,
     existingScreenshotCandidates,
     existingScreenshotInventoryStates,
+    historicalMediaImportJobs,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -10529,6 +11081,52 @@ typedef $$ExistingScreenshotCandidatesTableUpdateCompanionBuilder =
       Value<int> rowid,
     });
 
+final class $$ExistingScreenshotCandidatesTableReferences
+    extends
+        BaseReferences<
+          _$ContextoDatabase,
+          $ExistingScreenshotCandidatesTable,
+          ExistingScreenshotCandidate
+        > {
+  $$ExistingScreenshotCandidatesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static MultiTypedResultKey<
+    $HistoricalMediaImportJobsTable,
+    List<HistoricalMediaImportJob>
+  >
+  _historicalMediaImportJobsRefsTable(
+    _$ContextoDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.historicalMediaImportJobs,
+    aliasName:
+        'existing_screenshot_candidates__source_key__historical_media_import_jobs__source_key',
+  );
+
+  $$HistoricalMediaImportJobsTableProcessedTableManager
+  get historicalMediaImportJobsRefs {
+    final manager =
+        $$HistoricalMediaImportJobsTableTableManager(
+          $_db,
+          $_db.historicalMediaImportJobs,
+        ).filter(
+          (f) => f.sourceKey.sourceKey.sqlEquals(
+            $_itemColumn<String>('source_key')!,
+          ),
+        );
+
+    final cache = $_typedResult.readTableOrNull(
+      _historicalMediaImportJobsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$ExistingScreenshotCandidatesTableFilterComposer
     extends Composer<_$ContextoDatabase, $ExistingScreenshotCandidatesTable> {
   $$ExistingScreenshotCandidatesTableFilterComposer({
@@ -10602,6 +11200,33 @@ class $$ExistingScreenshotCandidatesTableFilterComposer
     column: $table.availabilityState,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> historicalMediaImportJobsRefs(
+    Expression<bool> Function($$HistoricalMediaImportJobsTableFilterComposer f)
+    f,
+  ) {
+    final $$HistoricalMediaImportJobsTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.sourceKey,
+          referencedTable: $db.historicalMediaImportJobs,
+          getReferencedColumn: (t) => t.sourceKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$HistoricalMediaImportJobsTableFilterComposer(
+                $db: $db,
+                $table: $db.historicalMediaImportJobs,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$ExistingScreenshotCandidatesTableOrderingComposer
@@ -10742,6 +11367,33 @@ class $$ExistingScreenshotCandidatesTableAnnotationComposer
     column: $table.availabilityState,
     builder: (column) => column,
   );
+
+  Expression<T> historicalMediaImportJobsRefs<T extends Object>(
+    Expression<T> Function($$HistoricalMediaImportJobsTableAnnotationComposer a)
+    f,
+  ) {
+    final $$HistoricalMediaImportJobsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.sourceKey,
+          referencedTable: $db.historicalMediaImportJobs,
+          getReferencedColumn: (t) => t.sourceKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$HistoricalMediaImportJobsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.historicalMediaImportJobs,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$ExistingScreenshotCandidatesTableTableManager
@@ -10757,14 +11409,10 @@ class $$ExistingScreenshotCandidatesTableTableManager
           $$ExistingScreenshotCandidatesTableUpdateCompanionBuilder,
           (
             ExistingScreenshotCandidate,
-            BaseReferences<
-              _$ContextoDatabase,
-              $ExistingScreenshotCandidatesTable,
-              ExistingScreenshotCandidate
-            >,
+            $$ExistingScreenshotCandidatesTableReferences,
           ),
           ExistingScreenshotCandidate,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool historicalMediaImportJobsRefs})
         > {
   $$ExistingScreenshotCandidatesTableTableManager(
     _$ContextoDatabase db,
@@ -10853,9 +11501,48 @@ class $$ExistingScreenshotCandidatesTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ExistingScreenshotCandidatesTableReferences(db, table, e),
+                ),
+              )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({historicalMediaImportJobsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (historicalMediaImportJobsRefs) db.historicalMediaImportJobs,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (historicalMediaImportJobsRefs)
+                    await $_getPrefetchedData<
+                      ExistingScreenshotCandidate,
+                      $ExistingScreenshotCandidatesTable,
+                      HistoricalMediaImportJob
+                    >(
+                      currentTable: table,
+                      referencedTable:
+                          $$ExistingScreenshotCandidatesTableReferences
+                              ._historicalMediaImportJobsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$ExistingScreenshotCandidatesTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).historicalMediaImportJobsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where(
+                            (e) => e.sourceKey == item.sourceKey,
+                          ),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -10872,14 +11559,10 @@ typedef $$ExistingScreenshotCandidatesTableProcessedTableManager =
       $$ExistingScreenshotCandidatesTableUpdateCompanionBuilder,
       (
         ExistingScreenshotCandidate,
-        BaseReferences<
-          _$ContextoDatabase,
-          $ExistingScreenshotCandidatesTable,
-          ExistingScreenshotCandidate
-        >,
+        $$ExistingScreenshotCandidatesTableReferences,
       ),
       ExistingScreenshotCandidate,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool historicalMediaImportJobsRefs})
     >;
 typedef $$ExistingScreenshotInventoryStatesTableCreateCompanionBuilder =
     ExistingScreenshotInventoryStatesCompanion Function({
@@ -11063,6 +11746,417 @@ typedef $$ExistingScreenshotInventoryStatesTableProcessedTableManager =
       ExistingScreenshotInventoryState,
       PrefetchHooks Function()
     >;
+typedef $$HistoricalMediaImportJobsTableCreateCompanionBuilder =
+    HistoricalMediaImportJobsCompanion Function({
+      required String sourceKey,
+      required String state,
+      Value<int> attempts,
+      required DateTime availableAt,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> processingStartedAt,
+      Value<String?> lastErrorCode,
+      Value<int> rowid,
+    });
+typedef $$HistoricalMediaImportJobsTableUpdateCompanionBuilder =
+    HistoricalMediaImportJobsCompanion Function({
+      Value<String> sourceKey,
+      Value<String> state,
+      Value<int> attempts,
+      Value<DateTime> availableAt,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> processingStartedAt,
+      Value<String?> lastErrorCode,
+      Value<int> rowid,
+    });
+
+final class $$HistoricalMediaImportJobsTableReferences
+    extends
+        BaseReferences<
+          _$ContextoDatabase,
+          $HistoricalMediaImportJobsTable,
+          HistoricalMediaImportJob
+        > {
+  $$HistoricalMediaImportJobsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ExistingScreenshotCandidatesTable _sourceKeyTable(
+    _$ContextoDatabase db,
+  ) => db.existingScreenshotCandidates.createAlias(
+    'historical_media_import_jobs__source_key__existing_screenshot_candidates__source_key',
+  );
+
+  $$ExistingScreenshotCandidatesTableProcessedTableManager get sourceKey {
+    final $_column = $_itemColumn<String>('source_key')!;
+
+    final manager = $$ExistingScreenshotCandidatesTableTableManager(
+      $_db,
+      $_db.existingScreenshotCandidates,
+    ).filter((f) => f.sourceKey.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_sourceKeyTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$HistoricalMediaImportJobsTableFilterComposer
+    extends Composer<_$ContextoDatabase, $HistoricalMediaImportJobsTable> {
+  $$HistoricalMediaImportJobsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get availableAt => $composableBuilder(
+    column: $table.availableAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get processingStartedAt => $composableBuilder(
+    column: $table.processingStartedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ExistingScreenshotCandidatesTableFilterComposer get sourceKey {
+    final $$ExistingScreenshotCandidatesTableFilterComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.sourceKey,
+          referencedTable: $db.existingScreenshotCandidates,
+          getReferencedColumn: (t) => t.sourceKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ExistingScreenshotCandidatesTableFilterComposer(
+                $db: $db,
+                $table: $db.existingScreenshotCandidates,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$HistoricalMediaImportJobsTableOrderingComposer
+    extends Composer<_$ContextoDatabase, $HistoricalMediaImportJobsTable> {
+  $$HistoricalMediaImportJobsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get availableAt => $composableBuilder(
+    column: $table.availableAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get processingStartedAt => $composableBuilder(
+    column: $table.processingStartedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ExistingScreenshotCandidatesTableOrderingComposer get sourceKey {
+    final $$ExistingScreenshotCandidatesTableOrderingComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.sourceKey,
+          referencedTable: $db.existingScreenshotCandidates,
+          getReferencedColumn: (t) => t.sourceKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ExistingScreenshotCandidatesTableOrderingComposer(
+                $db: $db,
+                $table: $db.existingScreenshotCandidates,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$HistoricalMediaImportJobsTableAnnotationComposer
+    extends Composer<_$ContextoDatabase, $HistoricalMediaImportJobsTable> {
+  $$HistoricalMediaImportJobsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<int> get attempts =>
+      $composableBuilder(column: $table.attempts, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get availableAt => $composableBuilder(
+    column: $table.availableAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get processingStartedAt => $composableBuilder(
+    column: $table.processingStartedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => column,
+  );
+
+  $$ExistingScreenshotCandidatesTableAnnotationComposer get sourceKey {
+    final $$ExistingScreenshotCandidatesTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.sourceKey,
+          referencedTable: $db.existingScreenshotCandidates,
+          getReferencedColumn: (t) => t.sourceKey,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ExistingScreenshotCandidatesTableAnnotationComposer(
+                $db: $db,
+                $table: $db.existingScreenshotCandidates,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return composer;
+  }
+}
+
+class $$HistoricalMediaImportJobsTableTableManager
+    extends
+        RootTableManager<
+          _$ContextoDatabase,
+          $HistoricalMediaImportJobsTable,
+          HistoricalMediaImportJob,
+          $$HistoricalMediaImportJobsTableFilterComposer,
+          $$HistoricalMediaImportJobsTableOrderingComposer,
+          $$HistoricalMediaImportJobsTableAnnotationComposer,
+          $$HistoricalMediaImportJobsTableCreateCompanionBuilder,
+          $$HistoricalMediaImportJobsTableUpdateCompanionBuilder,
+          (
+            HistoricalMediaImportJob,
+            $$HistoricalMediaImportJobsTableReferences,
+          ),
+          HistoricalMediaImportJob,
+          PrefetchHooks Function({bool sourceKey})
+        > {
+  $$HistoricalMediaImportJobsTableTableManager(
+    _$ContextoDatabase db,
+    $HistoricalMediaImportJobsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$HistoricalMediaImportJobsTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$HistoricalMediaImportJobsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$HistoricalMediaImportJobsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> sourceKey = const Value.absent(),
+                Value<String> state = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                Value<DateTime> availableAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> processingStartedAt = const Value.absent(),
+                Value<String?> lastErrorCode = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => HistoricalMediaImportJobsCompanion(
+                sourceKey: sourceKey,
+                state: state,
+                attempts: attempts,
+                availableAt: availableAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                processingStartedAt: processingStartedAt,
+                lastErrorCode: lastErrorCode,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String sourceKey,
+                required String state,
+                Value<int> attempts = const Value.absent(),
+                required DateTime availableAt,
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> processingStartedAt = const Value.absent(),
+                Value<String?> lastErrorCode = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => HistoricalMediaImportJobsCompanion.insert(
+                sourceKey: sourceKey,
+                state: state,
+                attempts: attempts,
+                availableAt: availableAt,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                processingStartedAt: processingStartedAt,
+                lastErrorCode: lastErrorCode,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$HistoricalMediaImportJobsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({sourceKey = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (sourceKey) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.sourceKey,
+                                referencedTable:
+                                    $$HistoricalMediaImportJobsTableReferences
+                                        ._sourceKeyTable(db),
+                                referencedColumn:
+                                    $$HistoricalMediaImportJobsTableReferences
+                                        ._sourceKeyTable(db)
+                                        .sourceKey,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$HistoricalMediaImportJobsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ContextoDatabase,
+      $HistoricalMediaImportJobsTable,
+      HistoricalMediaImportJob,
+      $$HistoricalMediaImportJobsTableFilterComposer,
+      $$HistoricalMediaImportJobsTableOrderingComposer,
+      $$HistoricalMediaImportJobsTableAnnotationComposer,
+      $$HistoricalMediaImportJobsTableCreateCompanionBuilder,
+      $$HistoricalMediaImportJobsTableUpdateCompanionBuilder,
+      (HistoricalMediaImportJob, $$HistoricalMediaImportJobsTableReferences),
+      HistoricalMediaImportJob,
+      PrefetchHooks Function({bool sourceKey})
+    >;
 
 class $ContextoDatabaseManager {
   final _$ContextoDatabase _db;
@@ -11103,5 +12197,10 @@ class $ContextoDatabaseManager {
       $$ExistingScreenshotInventoryStatesTableTableManager(
         _db,
         _db.existingScreenshotInventoryStates,
+      );
+  $$HistoricalMediaImportJobsTableTableManager get historicalMediaImportJobs =>
+      $$HistoricalMediaImportJobsTableTableManager(
+        _db,
+        _db.historicalMediaImportJobs,
       );
 }

@@ -36,28 +36,37 @@ void main() {
     activity = File('$root/MainActivity.kt').readAsStringSync();
   });
 
-  test('worker valida automação antes de criar engine headless', () {
-    expect(worker, contains('CoroutineWorker'));
-    expect(worker, contains('if (!state.isEnabled()) return Result.success()'));
-    expect(worker, contains('FlutterEngineRuntimeState.isUiEngineAttached()'));
-    expect(worker, contains('FlutterEngine(applicationContext, null, false)'));
-    expect(worker, contains('GeneratedPluginRegistrant.registerWith(engine)'));
-    expect(worker, contains('BackgroundScreenshotInboxBridge'));
-    expect(worker, contains('memoshotBackgroundEntrypoint'));
-    expect(worker, isNot(contains('MainActivity')));
-    expect(worker, isNot(contains('startActivity')));
-  });
+  test(
+    'worker reutiliza engine headless para automação e acervo histórico',
+    () {
+      expect(worker, contains('CoroutineWorker'));
+      expect(worker, isNot(contains('if (!state.isEnabled())')));
+      expect(
+        worker,
+        contains('FlutterEngineRuntimeState.isUiEngineAttached()'),
+      );
+      expect(
+        worker,
+        contains('FlutterEngine(applicationContext, null, false)'),
+      );
+      expect(
+        worker,
+        contains('GeneratedPluginRegistrant.registerWith(engine)'),
+      );
+      expect(worker, contains('BackgroundScreenshotInboxBridge'));
+      expect(worker, contains('AppPreferencesBridge'));
+      expect(worker, contains('memoshotBackgroundEntrypoint'));
+      expect(worker, isNot(contains('MainActivity')));
+      expect(worker, isNot(contains('startActivity')));
+    },
+  );
 
   test('engine da interface impede concorrência e destruição retoma filas', () {
     expect(runtimeState, contains('AtomicBoolean'));
     expect(activity, contains('FlutterEngineRuntimeState.attachUiEngine()'));
     expect(activity, contains('FlutterEngineRuntimeState.detachUiEngine()'));
-    expect(
-      activity,
-      contains(
-        'BackgroundProcessingScheduler(applicationContext).enqueueIfEnabled()',
-      ),
-    );
+    expect(activity, contains('processingScheduler.enqueueIfEnabled()'));
+    expect(activity, contains('enqueueHistoricalPreparation()'));
   });
 
   test('canal técnico mapeia resultados e nunca transporta conteúdo', () {
@@ -104,6 +113,7 @@ void main() {
     expect(scheduler, contains('memoshot_background_processing'));
     expect(scheduler, contains('enqueueUniqueWork'));
     expect(scheduler, contains('ExistingWorkPolicy.APPEND_OR_REPLACE'));
+    expect(scheduler, contains('setInitialDelay'));
     expect(scheduler, contains('cancelUniqueWork'));
     expect(worker, contains('MAX_WORK_MANAGER_ATTEMPTS = 3'));
     expect(scheduler, isNot(contains('PeriodicWorkRequest')));

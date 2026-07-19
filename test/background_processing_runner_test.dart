@@ -16,6 +16,9 @@ import 'package:memoshot/features/classification/application/classification_comp
 import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
 import 'package:memoshot/features/categories/data/category_repository.dart';
 import 'package:memoshot/features/categories/data/category_store.dart';
+import 'package:memoshot/features/existing_screenshots/application/historical_media_import_processor.dart';
+import 'package:memoshot/features/existing_screenshots/data/historical_preparation_settings_repository.dart';
+import 'package:memoshot/features/existing_screenshots/domain/historical_media_import_job.dart';
 import 'package:memoshot/features/library/data/media_item_repository.dart';
 import 'package:memoshot/features/library/data/media_item_store.dart';
 import 'package:memoshot/features/library/domain/media_item.dart';
@@ -58,6 +61,31 @@ void main() {
     expect(source.loadCalls, 0);
     expect(ocr.recoverCalls, 0);
     expect(classification.recoverCalls, 0);
+  });
+
+  test('preparação histórica independe da captura automática', () async {
+    final source = _FakeSource();
+    final ocr = _FakeOcrQueue();
+    final classification = _FakeClassificationQueue();
+    final historical = _FakeHistoricalQueue();
+
+    final summary = await _runner(
+      settings: _FakeSettings(enabled: false),
+      source: source,
+      ocr: ocr,
+      classification: classification,
+      historical: historical,
+      historicalSettings: _FakeHistoricalSettings(
+        HistoricalPreparationState.active,
+      ),
+    ).run();
+
+    expect(summary.historicalPreparedCount, 1);
+    expect(historical.recoverCalls, 1);
+    expect(historical.processCalls, 1);
+    expect(source.loadCalls, 0);
+    expect(ocr.processCalls, 0);
+    expect(classification.backfillFlags, isEmpty);
   });
 
   test('sem tarefas recupera filas e conclui sem polling', () async {
@@ -249,6 +277,7 @@ void main() {
       'importedCount',
       'ocrProcessedCount',
       'classificationProcessedCount',
+      'historicalPreparedCount',
       'pendingImmediateWork',
       'resultCode',
     });
@@ -343,6 +372,8 @@ BackgroundProcessingRunner _runner({
   _FakeMediaRepository? media,
   _FakeOcrQueue? ocr,
   _FakeClassificationQueue? classification,
+  _FakeHistoricalQueue? historical,
+  HistoricalPreparationSettingsRepository? historicalSettings,
   int maximumCycles = backgroundMaximumCycles,
   int maximumItems = backgroundMaximumItemsPerCycle,
   DateTime Function()? now,
@@ -354,6 +385,8 @@ BackgroundProcessingRunner _runner({
     mediaRepository: media ?? _FakeMediaRepository(),
     ocrQueue: ocr ?? _FakeOcrQueue(),
     classificationQueue: classification ?? _FakeClassificationQueue(),
+    historicalQueue: historical,
+    historicalSettingsRepository: historicalSettings,
     maximumCycles: maximumCycles,
     maximumItemsPerCycle: maximumItems,
     now: now ?? DateTime.now,
@@ -598,6 +631,44 @@ class _FakeClassificationQueue implements HeadlessClassificationQueue {
       hasImmediateWork: hasImmediateWork,
     );
   }
+}
+
+class _FakeHistoricalQueue implements HeadlessHistoricalMediaImportQueue {
+  int recoverCalls = 0;
+  int processCalls = 0;
+
+  @override
+  Future<int> recoverInterrupted() async => ++recoverCalls;
+
+  @override
+  Future<HistoricalMediaImportRunSummary> processAvailable({
+    required int maximumItems,
+  }) async {
+    processCalls++;
+    return const HistoricalMediaImportRunSummary(
+      processedCount: 1,
+      preparedCount: 1,
+      hasImmediateWork: false,
+    );
+  }
+}
+
+class _FakeHistoricalSettings
+    implements HistoricalPreparationSettingsRepository {
+  _FakeHistoricalSettings(this.state);
+
+  HistoricalPreparationState state;
+
+  @override
+  Future<HistoricalPreparationState> load() async => state;
+  @override
+  Future<void> pause() async => state = HistoricalPreparationState.paused;
+  @override
+  Future<void> resume() async => state = HistoricalPreparationState.active;
+  @override
+  Future<void> start() async => state = HistoricalPreparationState.active;
+  @override
+  Future<void> complete() async => state = HistoricalPreparationState.completed;
 }
 
 class _StrongRecognitionService implements TextRecognitionService {

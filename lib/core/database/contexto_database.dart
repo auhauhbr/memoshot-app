@@ -279,6 +279,36 @@ class ExistingScreenshotInventoryStates extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+class HistoricalMediaImportJobs extends Table {
+  TextColumn get sourceKey => text().references(
+    ExistingScreenshotCandidates,
+    #sourceKey,
+    onDelete: KeyAction.restrict,
+  )();
+
+  TextColumn get state => text()();
+
+  IntColumn get attempts => integer().withDefault(const Constant(0))();
+
+  DateTimeColumn get availableAt => dateTime()();
+
+  DateTimeColumn get createdAt => dateTime()();
+
+  DateTimeColumn get updatedAt => dateTime()();
+
+  DateTimeColumn get processingStartedAt => dateTime().nullable()();
+
+  TextColumn get lastErrorCode => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {sourceKey};
+
+  @override
+  List<String> get customConstraints => const [
+    "CHECK (state IN ('pending', 'processing', 'retryScheduled', 'failed'))",
+  ];
+}
+
 @DriftDatabase(
   tables: [
     MediaItems,
@@ -293,6 +323,7 @@ class ExistingScreenshotInventoryStates extends Table {
     ClassificationJobs,
     ExistingScreenshotCandidates,
     ExistingScreenshotInventoryStates,
+    HistoricalMediaImportJobs,
   ],
 )
 class ContextoDatabase extends _$ContextoDatabase {
@@ -301,7 +332,7 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -311,6 +342,7 @@ class ContextoDatabase extends _$ContextoDatabase {
       await _createMediaSourceKeyIndex();
       await _createCategoryNameIndexes();
       await _createClassificationJobIndexes();
+      await _createHistoricalMediaImportJobIndexes();
     },
     onUpgrade: (migrator, from, to) async {
       if (from < 2) {
@@ -387,6 +419,10 @@ class ContextoDatabase extends _$ContextoDatabase {
         await _createMediaHashIndex();
         await _createMediaSourceKeyIndex();
       }
+      if (from < 16) {
+        await migrator.createTable(historicalMediaImportJobs);
+        await _createHistoricalMediaImportJobIndexes();
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -425,6 +461,14 @@ class ContextoDatabase extends _$ContextoDatabase {
     return customStatement(
       'CREATE INDEX IF NOT EXISTS classification_jobs_available_idx '
       'ON classification_jobs (state, available_at, created_at, media_item_id)',
+    );
+  }
+
+  Future<void> _createHistoricalMediaImportJobIndexes() {
+    return customStatement(
+      'CREATE INDEX IF NOT EXISTS historical_media_import_jobs_available_idx '
+      'ON historical_media_import_jobs '
+      '(state, available_at, created_at, source_key)',
     );
   }
 

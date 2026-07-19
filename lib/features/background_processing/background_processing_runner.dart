@@ -3,6 +3,9 @@ import 'dart:io';
 import '../../core/automatic_import/automatic_screenshot_source.dart';
 import '../automatic_import/data/automatic_import_settings_repository.dart';
 import '../classification/application/classification_queue_processor.dart';
+import '../existing_screenshots/application/historical_media_import_processor.dart';
+import '../existing_screenshots/data/historical_preparation_settings_repository.dart';
+import '../existing_screenshots/domain/historical_media_import_job.dart';
 import '../library/data/media_item_repository.dart';
 import '../library/domain/media_item.dart';
 import '../library/domain/selected_screenshot.dart';
@@ -25,6 +28,8 @@ class BackgroundProcessingSummary {
     required this.importedCount,
     required this.ocrProcessedCount,
     required this.classificationProcessedCount,
+    this.historicalPreparedCount = 0,
+    this.nextHistoricalRunAt,
     required this.pendingImmediateWork,
     required this.resultCode,
   });
@@ -32,6 +37,8 @@ class BackgroundProcessingSummary {
   final int importedCount;
   final int ocrProcessedCount;
   final int classificationProcessedCount;
+  final int historicalPreparedCount;
+  final DateTime? nextHistoricalRunAt;
   final bool pendingImmediateWork;
   final BackgroundProcessingResultCode resultCode;
 
@@ -39,6 +46,9 @@ class BackgroundProcessingSummary {
     'importedCount': importedCount,
     'ocrProcessedCount': ocrProcessedCount,
     'classificationProcessedCount': classificationProcessedCount,
+    'historicalPreparedCount': historicalPreparedCount,
+    if (nextHistoricalRunAt != null)
+      'nextHistoricalRunAtMillis': nextHistoricalRunAt!.millisecondsSinceEpoch,
     'pendingImmediateWork': pendingImmediateWork ? 1 : 0,
     'resultCode': resultCode.name,
   };
@@ -51,6 +61,8 @@ class BackgroundProcessingRunner {
     required MediaItemRepository mediaRepository,
     required HeadlessOcrQueue ocrQueue,
     required HeadlessClassificationQueue classificationQueue,
+    HeadlessHistoricalMediaImportQueue? historicalQueue,
+    HistoricalPreparationSettingsRepository? historicalSettingsRepository,
     DateTime Function() now = DateTime.now,
     bool Function() isCancelled = _neverCancelled,
     int maximumCycles = backgroundMaximumCycles,
@@ -62,6 +74,8 @@ class BackgroundProcessingRunner {
          mediaRepository,
          ocrQueue,
          classificationQueue,
+         historicalQueue,
+         historicalSettingsRepository,
          now,
          isCancelled,
          maximumCycles,
@@ -75,6 +89,8 @@ class BackgroundProcessingRunner {
     this._mediaRepository,
     this._ocrQueue,
     this._classificationQueue,
+    this._historicalQueue,
+    this._historicalSettingsRepository,
     this._now,
     this._isCancelled,
     this.maximumCycles,
@@ -87,6 +103,8 @@ class BackgroundProcessingRunner {
   final MediaItemRepository _mediaRepository;
   final HeadlessOcrQueue _ocrQueue;
   final HeadlessClassificationQueue _classificationQueue;
+  final HeadlessHistoricalMediaImportQueue? _historicalQueue;
+  final HistoricalPreparationSettingsRepository? _historicalSettingsRepository;
   final DateTime Function() _now;
   final bool Function() _isCancelled;
   final int maximumCycles;
@@ -98,19 +116,28 @@ class BackgroundProcessingRunner {
     var importedCount = 0;
     var ocrProcessedCount = 0;
     var classificationProcessedCount = 0;
+    var historicalPreparedCount = 0;
+    DateTime? nextHistoricalRunAt;
 
-    if (!await _isAutomationEnabled()) {
+    final automationEnabled = await _isAutomationEnabled();
+    final historicalActive = await _isHistoricalPreparationActive();
+    if (!automationEnabled && !historicalActive) {
       return _summary(
         importedCount,
         ocrProcessedCount,
         classificationProcessedCount,
+        historicalPreparedCount,
+        nextHistoricalRunAt,
         false,
         BackgroundProcessingResultCode.disabled,
       );
     }
 
-    await _ocrQueue.recoverInterrupted();
-    await _classificationQueue.recoverInterrupted();
+    if (automationEnabled) {
+      await _ocrQueue.recoverInterrupted();
+      await _classificationQueue.recoverInterrupted();
+    }
+    if (historicalActive) await _historicalQueue?.recoverInterrupted();
 
     for (var cycle = 0; cycle < maximumCycles; cycle++) {
       final stopCode = await _stopCode(startedAt);
@@ -119,34 +146,69 @@ class BackgroundProcessingRunner {
           importedCount,
           ocrProcessedCount,
           classificationProcessedCount,
+          historicalPreparedCount,
+          nextHistoricalRunAt,
           true,
           stopCode,
         );
       }
 
-      importedCount += await _consumeInbox(maximumItemsPerCycle);
+      final runAutomatic = await _isAutomationEnabled();
+      final runHistorical = await _isHistoricalPreparationActive();
+      if (!runAutomatic && !runHistorical) {
+        return _summary(
+          importedCount,
+          ocrProcessedCount,
+          classificationProcessedCount,
+          historicalPreparedCount,
+          nextHistoricalRunAt,
+          false,
+          BackgroundProcessingResultCode.disabled,
+        );
+      }
 
-      final ocr = await _ocrQueue.processAvailable(
-        maximumItems: maximumItemsPerCycle,
-      );
-      ocrProcessedCount += ocr.processedCount;
+      var inboxPending = false;
+      var ocrImmediate = false;
+      var classificationImmediate = false;
+      if (runAutomatic) {
+        importedCount += await _consumeInbox(maximumItemsPerCycle);
 
-      final classification = await _classificationQueue.processAvailable(
-        maximumItems: maximumItemsPerCycle,
-        enqueueBackfill: true,
-      );
-      classificationProcessedCount += classification.processedCount;
+        final ocr = await _ocrQueue.processAvailable(
+          maximumItems: maximumItemsPerCycle,
+        );
+        ocrProcessedCount += ocr.processedCount;
+        ocrImmediate = ocr.hasImmediateWork;
 
-      final inboxPending = await _inboxSource.backgroundInboxPendingCount() > 0;
+        final classification = await _classificationQueue.processAvailable(
+          maximumItems: maximumItemsPerCycle,
+          enqueueBackfill: true,
+        );
+        classificationProcessedCount += classification.processedCount;
+        classificationImmediate = classification.hasImmediateWork;
+        inboxPending = await _inboxSource.backgroundInboxPendingCount() > 0;
+      }
+
+      var historicalImmediate = false;
+      if (runHistorical && _historicalQueue != null) {
+        final historical = await _historicalQueue.processAvailable(
+          maximumItems: historicalMediaMaximumBatchSize,
+        );
+        historicalPreparedCount += historical.preparedCount;
+        historicalImmediate = historical.hasImmediateWork;
+        nextHistoricalRunAt = historical.nextAvailableAt;
+      }
       final immediateWork =
           inboxPending ||
-          ocr.hasImmediateWork ||
-          classification.hasImmediateWork;
+          ocrImmediate ||
+          classificationImmediate ||
+          historicalImmediate;
       if (!immediateWork) {
         return _summary(
           importedCount,
           ocrProcessedCount,
           classificationProcessedCount,
+          historicalPreparedCount,
+          nextHistoricalRunAt,
           false,
           BackgroundProcessingResultCode.completed,
         );
@@ -157,6 +219,8 @@ class BackgroundProcessingRunner {
       importedCount,
       ocrProcessedCount,
       classificationProcessedCount,
+      historicalPreparedCount,
+      nextHistoricalRunAt,
       true,
       BackgroundProcessingResultCode.cycleLimitReached,
     );
@@ -199,19 +263,24 @@ class BackgroundProcessingRunner {
     if (_now().difference(startedAt) >= maximumDuration) {
       return BackgroundProcessingResultCode.timeLimitReached;
     }
-    if (!await _isAutomationEnabled()) {
-      return BackgroundProcessingResultCode.disabled;
-    }
     return null;
   }
 
   Future<bool> _isAutomationEnabled() async =>
       (await _settingsRepository.load()).enabled;
 
+  Future<bool> _isHistoricalPreparationActive() async {
+    final settings = _historicalSettingsRepository;
+    if (_historicalQueue == null || settings == null) return false;
+    return await settings.load() == HistoricalPreparationState.active;
+  }
+
   BackgroundProcessingSummary _summary(
     int imported,
     int ocr,
     int classification,
+    int historical,
+    DateTime? nextHistoricalRunAt,
     bool pending,
     BackgroundProcessingResultCode code,
   ) {
@@ -219,6 +288,8 @@ class BackgroundProcessingRunner {
       importedCount: imported,
       ocrProcessedCount: ocr,
       classificationProcessedCount: classification,
+      historicalPreparedCount: historical,
+      nextHistoricalRunAt: nextHistoricalRunAt,
       pendingImmediateWork: pending,
       resultCode: code,
     );

@@ -21,11 +21,9 @@ internal class MemoShotBackgroundProcessingWorker(
     appContext: Context,
     workerParams: WorkerParameters,
 ) : CoroutineWorker(appContext, workerParams) {
-    private val state = NativeScreenshotMonitorState(appContext)
     private val scheduler = BackgroundProcessingScheduler(appContext)
 
     override suspend fun doWork(): Result {
-        if (!state.isEnabled()) return Result.success()
         if (FlutterEngineRuntimeState.isUiEngineAttached()) return Result.success()
 
         var session: HeadlessEngineSession? = null
@@ -63,6 +61,10 @@ internal class MemoShotBackgroundProcessingWorker(
                 applicationContext,
                 engine.dartExecutor.binaryMessenger,
             )
+            val preferencesBridge = AppPreferencesBridge(
+                applicationContext,
+                engine.dartExecutor.binaryMessenger,
+            )
             val notificationBridge = ReviewNotificationBridge(
                 applicationContext,
                 engine.dartExecutor.binaryMessenger,
@@ -87,6 +89,8 @@ internal class MemoShotBackgroundProcessingWorker(
                                 pendingImmediateWork =
                                     (payload["pendingImmediateWork"] as? Number)?.toInt() == 1,
                                 resultCode = payload["resultCode"] as? String ?: "unknown",
+                                nextHistoricalRunAtMillis =
+                                    (payload["nextHistoricalRunAtMillis"] as? Number)?.toLong(),
                             ),
                         )
                         result.success(null)
@@ -105,14 +109,21 @@ internal class MemoShotBackgroundProcessingWorker(
                 inboxBridge,
                 notificationBridge,
                 mediaStoreContentBridge,
+                preferencesBridge,
                 channel,
                 terminal,
             )
         }
 
     private fun mapResult(message: HeadlessTerminalMessage): Result {
-        if (message.pendingImmediateWork && state.isEnabled()) {
-            scheduler.enqueueIfEnabled()
+        if (message.pendingImmediateWork) {
+            scheduler.enqueueHistoricalPreparation()
+        } else if (message.nextHistoricalRunAtMillis != null) {
+            scheduler.enqueueHistoricalPreparation(
+                message.nextHistoricalRunAtMillis
+                    .minus(System.currentTimeMillis())
+                    .coerceAtLeast(0L),
+            )
         }
         return when (message.method) {
             "completed" -> Result.success(
@@ -139,6 +150,7 @@ internal class MemoShotBackgroundProcessingWorker(
         val method: String,
         val pendingImmediateWork: Boolean,
         val resultCode: String,
+        val nextHistoricalRunAtMillis: Long?,
     )
 
     private class HeadlessEngineSession(
@@ -146,6 +158,7 @@ internal class MemoShotBackgroundProcessingWorker(
         private val inboxBridge: BackgroundScreenshotInboxBridge,
         private val notificationBridge: ReviewNotificationBridge,
         private val mediaStoreContentBridge: MediaStoreContentBridge,
+        private val preferencesBridge: AppPreferencesBridge,
         private val channel: MethodChannel,
         val terminal: CompletableDeferred<HeadlessTerminalMessage>,
     ) {
@@ -154,6 +167,7 @@ internal class MemoShotBackgroundProcessingWorker(
             inboxBridge.dispose()
             notificationBridge.dispose()
             mediaStoreContentBridge.dispose()
+            preferencesBridge.dispose()
             engine.destroy()
         }
     }

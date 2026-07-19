@@ -83,7 +83,11 @@ class MainActivity : FlutterActivity() {
         mediaStoreContentBridge?.dispose()
         mediaStoreContentBridge = null
         FlutterEngineRuntimeState.detachUiEngine()
-        BackgroundProcessingScheduler(applicationContext).enqueueIfEnabled()
+        val processingScheduler = BackgroundProcessingScheduler(applicationContext)
+        processingScheduler.enqueueIfEnabled()
+        if (AppPreferencesBridge.isHistoricalPreparationActive(applicationContext)) {
+            processingScheduler.enqueueHistoricalPreparation()
+        }
         super.onDestroy()
     }
 }

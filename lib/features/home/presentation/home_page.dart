@@ -29,8 +29,12 @@ import '../../classification/application/review_decision.dart';
 import '../../classification/data/classification_suggestion_repository.dart';
 import '../../classification/presentation/review_queue_page.dart';
 import '../../existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
+import '../../existing_screenshots/application/historical_archive_preparation_coordinator.dart';
+import '../../existing_screenshots/application/historical_media_import_processor.dart';
 import '../../existing_screenshots/data/existing_screenshot_candidate_repository.dart';
 import '../../existing_screenshots/data/existing_screenshot_candidate_store.dart';
+import '../../existing_screenshots/data/historical_media_import_job_store.dart';
+import '../../existing_screenshots/data/historical_preparation_settings_repository.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
@@ -75,6 +79,7 @@ class HomePage extends StatefulWidget {
     this.reviewNotificationCoordinator,
     this.reviewNavigationSource,
     this.existingScreenshotInventoryCoordinator,
+    this.historicalArchivePreparationCoordinator,
     this.mediaStoreContentGateway,
   });
 
@@ -94,6 +99,8 @@ class HomePage extends StatefulWidget {
   final ReviewNavigationSource? reviewNavigationSource;
   final ExistingScreenshotInventoryCoordinator?
   existingScreenshotInventoryCoordinator;
+  final HistoricalArchivePreparationCoordinator?
+  historicalArchivePreparationCoordinator;
   final MediaStoreContentGateway? mediaStoreContentGateway;
 
   @override
@@ -116,6 +123,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   ContextoDatabase? _ownedInventoryDatabase;
   StreamSubscription<int>? _queueSubscription;
   StreamSubscription<int>? _classificationQueueSubscription;
+  StreamSubscription<void>? _historicalQueueSubscription;
   late final SharedImageImportCoordinator _sharedImportCoordinator;
   late final AutomaticScreenshotImportCoordinator _automaticImportCoordinator;
   late final AutomaticImportSettingsRepository _automaticSettingsRepository;
@@ -123,6 +131,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final ReviewNavigationSource _reviewNavigationSource;
   late final ExistingScreenshotInventoryCoordinator
   _existingScreenshotInventoryCoordinator;
+  HistoricalArchivePreparationCoordinator?
+  _historicalArchivePreparationCoordinator;
+  LocalHistoricalMediaImportProcessor? _historicalMediaImportProcessor;
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final TextNormalizer _textNormalizer = const TextNormalizer();
@@ -256,6 +267,38 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           );
     }
+    if (widget.historicalArchivePreparationCoordinator case final injected?) {
+      _historicalArchivePreparationCoordinator = injected;
+    } else if (_mediaRepository
+        case final MediaStoreReferenceMediaItemRepository referenceRepository) {
+      var historicalDatabase = database ?? _ownedInventoryDatabase;
+      if (historicalDatabase == null) {
+        historicalDatabase = ContextoDatabase();
+        _ownedInventoryDatabase = historicalDatabase;
+      }
+      const historicalSettings =
+          MethodChannelHistoricalPreparationSettingsRepository();
+      final historicalStore = DriftHistoricalMediaImportJobStore(
+        historicalDatabase,
+      );
+      _historicalMediaImportProcessor = LocalHistoricalMediaImportProcessor(
+        jobStore: historicalStore,
+        mediaRepository: referenceRepository,
+        settingsRepository: historicalSettings,
+      );
+      _historicalArchivePreparationCoordinator =
+          HistoricalArchivePreparationCoordinator(
+            jobStore: historicalStore,
+            settingsRepository: historicalSettings,
+            scheduler: historicalSettings,
+            queue: _historicalMediaImportProcessor,
+          );
+    }
+    _historicalQueueSubscription = _historicalArchivePreparationCoordinator
+        ?.changes
+        .listen((_) {
+          unawaited(_reloadItemsIgnoringErrors());
+        });
     if (!_ownsMediaRepository) {
       _ownedAuxiliaryDatabase = database;
     }
@@ -293,6 +336,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(_reloadPendingReviewCount());
       unawaited(_classificationQueue?.recoverAndStart());
       unawaited(_refreshReviewNotificationState(synchronize: true));
+      unawaited(_historicalArchivePreparationCoordinator?.onAppResumed());
     }
   }
 
@@ -311,9 +355,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _sharedImportCoordinator.dispose();
     await _queueSubscription?.cancel();
     await _classificationQueueSubscription?.cancel();
+    await _historicalQueueSubscription?.cancel();
     await _reviewNavigationSource.dispose();
     await _ocrQueue.close();
     await _classificationQueue?.close();
+    await _historicalMediaImportProcessor?.close();
     if (_ownsMediaRepository) {
       await _mediaRepository.close();
     } else if (_ownedAuxiliaryDatabase != null) {
@@ -1068,6 +1114,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           reviewNotificationCoordinator: _reviewNotificationCoordinator,
           existingScreenshotInventoryCoordinator:
               _existingScreenshotInventoryCoordinator,
+          historicalArchivePreparationCoordinator:
+              _historicalArchivePreparationCoordinator,
         ),
       ),
     );

@@ -6,6 +6,7 @@ import '../../../core/automatic_import/automatic_screenshot_source.dart';
 import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
 import '../../automatic_import/data/automatic_import_settings_repository.dart';
 import '../../existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
+import '../../existing_screenshots/application/historical_archive_preparation_coordinator.dart';
 import '../../existing_screenshots/presentation/existing_screenshot_inventory_page.dart';
 import '../../review_notifications/application/review_notification_coordinator.dart';
 import '../../review_notifications/domain/review_notification.dart';
@@ -17,6 +18,7 @@ class SettingsPage extends StatefulWidget {
     required this.settingsRepository,
     required this.reviewNotificationCoordinator,
     required this.existingScreenshotInventoryCoordinator,
+    this.historicalArchivePreparationCoordinator,
   });
 
   final AutomaticScreenshotImportCoordinator coordinator;
@@ -24,6 +26,8 @@ class SettingsPage extends StatefulWidget {
   final ReviewNotificationCoordinator reviewNotificationCoordinator;
   final ExistingScreenshotInventoryCoordinator
   existingScreenshotInventoryCoordinator;
+  final HistoricalArchivePreparationCoordinator?
+  historicalArchivePreparationCoordinator;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -317,6 +321,8 @@ class _SettingsPageState extends State<SettingsPage>
                           builder: (_) => ExistingScreenshotInventoryPage(
                             coordinator:
                                 widget.existingScreenshotInventoryCoordinator,
+                            preparationCoordinator:
+                                widget.historicalArchivePreparationCoordinator,
                           ),
                         ),
                       ),

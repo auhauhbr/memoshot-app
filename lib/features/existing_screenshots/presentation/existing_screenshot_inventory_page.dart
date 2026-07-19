@@ -4,13 +4,20 @@ import 'package:flutter/material.dart';
 
 import '../../../core/automatic_import/automatic_screenshot_source.dart';
 import '../application/existing_screenshot_inventory_coordinator.dart';
+import '../application/historical_archive_preparation_coordinator.dart';
 import '../domain/existing_screenshot_candidate.dart';
 import '../domain/existing_screenshot_scan.dart';
+import '../domain/historical_media_import_job.dart';
 
 class ExistingScreenshotInventoryPage extends StatefulWidget {
-  const ExistingScreenshotInventoryPage({super.key, required this.coordinator});
+  const ExistingScreenshotInventoryPage({
+    super.key,
+    required this.coordinator,
+    this.preparationCoordinator,
+  });
 
   final ExistingScreenshotInventoryCoordinator coordinator;
+  final HistoricalArchivePreparationCoordinator? preparationCoordinator;
 
   @override
   State<ExistingScreenshotInventoryPage> createState() =>
@@ -33,11 +40,17 @@ class _ExistingScreenshotInventoryPageState
   bool _permissionChanging = false;
   String? _error;
   int _generation = 0;
+  HistoricalPreparationProgress? _preparationProgress;
+  StreamSubscription<void>? _preparationSubscription;
+  bool _changingPreparation = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _preparationSubscription = widget.preparationCoordinator?.changes.listen(
+      (_) => unawaited(_refreshProgress()),
+    );
     unawaited(_refresh());
   }
 
@@ -52,6 +65,7 @@ class _ExistingScreenshotInventoryPageState
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _generation++;
+    unawaited(_preparationSubscription?.cancel());
     unawaited(widget.coordinator.cancel());
     super.dispose();
   }
@@ -60,14 +74,20 @@ class _ExistingScreenshotInventoryPageState
     final generation = ++_generation;
     if (mounted) setState(() => _loading = true);
     try {
+      final preparationCoordinator = widget.preparationCoordinator;
       final results = await Future.wait<Object>([
         widget.coordinator.loadSummary(),
         widget.coordinator.permissionStatus(),
+        if (preparationCoordinator != null)
+          preparationCoordinator.loadProgress(),
       ]);
       if (!mounted || generation != _generation) return;
       setState(() {
         _summary = results[0] as ExistingScreenshotInventorySummary;
         _permission = results[1] as MediaPermissionStatus;
+        if (results.length > 2) {
+          _preparationProgress = results[2] as HistoricalPreparationProgress;
+        }
         _loading = false;
         _error = null;
       });
@@ -77,6 +97,74 @@ class _ExistingScreenshotInventoryPageState
         _loading = false;
         _error = 'Não foi possível carregar o inventário.';
       });
+    }
+  }
+
+  Future<void> _refreshProgress() async {
+    final coordinator = widget.preparationCoordinator;
+    if (coordinator == null) return;
+    try {
+      final progress = await coordinator.loadProgress();
+      if (mounted) setState(() => _preparationProgress = progress);
+    } catch (_) {
+      // O inventário continua utilizável se a contagem falhar.
+    }
+  }
+
+  Future<void> _startPreparation() async {
+    final coordinator = widget.preparationCoordinator;
+    final progress = _preparationProgress;
+    if (coordinator == null || progress == null || _changingPreparation) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Preparar acervo para organização?'),
+        content: Text(
+          '${progress.availableCount} disponíveis\n'
+          '${progress.preparedCount} já preparados\n'
+          '${progress.remainingCount} restantes\n'
+          '${progress.unavailableCount} indisponíveis\n\n'
+          '${_summary.lastScanWasPartial ? 'O acesso às imagens é parcial.\n\n' : ''}'
+          'O MemoShot adicionará referências aos screenshots na biblioteca. '
+          'Nenhuma imagem será copiada ou movida.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            key: const Key('confirm-prepare-archive'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Preparar acervo'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _changePreparation(coordinator.start);
+  }
+
+  Future<void> _pausePreparation() async {
+    final coordinator = widget.preparationCoordinator;
+    if (coordinator != null) await _changePreparation(coordinator.pause);
+  }
+
+  Future<void> _resumePreparation() async {
+    final coordinator = widget.preparationCoordinator;
+    if (coordinator != null) await _changePreparation(coordinator.resume);
+  }
+
+  Future<void> _changePreparation(Future<void> Function() action) async {
+    if (_changingPreparation) return;
+    setState(() => _changingPreparation = true);
+    try {
+      await action();
+      await _refreshProgress();
+    } catch (_) {
+      _showMessage('Não foi possível atualizar a preparação do acervo.');
+    } finally {
+      if (mounted) setState(() => _changingPreparation = false);
     }
   }
 
@@ -169,6 +257,15 @@ class _ExistingScreenshotInventoryPageState
   }
 
   Future<void> _clearInventory() async {
+    final preparation = widget.preparationCoordinator;
+    if (preparation != null && !await preparation.canClearInventory()) {
+      if (!mounted) return;
+      _showMessage(
+        'A preparação possui itens em andamento. Conclua a preparação antes de limpar o inventário.',
+      );
+      return;
+    }
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -276,7 +373,17 @@ class _ExistingScreenshotInventoryPageState
                   _permission == MediaPermissionStatus.limitedAccess)
                 const SizedBox(height: 16),
               if (_summary.hasCompletedScan)
-                _CompletedState(summary: _summary, onUpdate: _map)
+                _CompletedState(
+                  summary: _summary,
+                  preparation: _preparationProgress,
+                  changingPreparation: _changingPreparation,
+                  onPrepare: widget.preparationCoordinator == null
+                      ? null
+                      : _startPreparation,
+                  onPause: _pausePreparation,
+                  onResume: _resumePreparation,
+                  onUpdate: _map,
+                )
               else
                 _NeverMappedState(
                   discoveredCount: _summary.availableCount,
@@ -366,9 +473,22 @@ class _MappingState extends StatelessWidget {
 }
 
 class _CompletedState extends StatelessWidget {
-  const _CompletedState({required this.summary, required this.onUpdate});
+  const _CompletedState({
+    required this.summary,
+    required this.preparation,
+    required this.changingPreparation,
+    required this.onPrepare,
+    required this.onPause,
+    required this.onResume,
+    required this.onUpdate,
+  });
 
   final ExistingScreenshotInventorySummary summary;
+  final HistoricalPreparationProgress? preparation;
+  final bool changingPreparation;
+  final VoidCallback? onPrepare;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
   final VoidCallback onUpdate;
 
   @override
@@ -397,11 +517,49 @@ class _CompletedState extends StatelessWidget {
         ],
         const SizedBox(height: 12),
         const Text('Nenhuma imagem foi copiada ou movida.'),
-        const SizedBox(height: 6),
-        Text(
-          'O processamento do acervo será liberado na próxima etapa.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        if (preparation case final progress?) ...[
+          const SizedBox(height: 20),
+          Text(
+            '${progress.preparedCount} de ${progress.availableCount} preparados',
+            key: const Key('archive-preparation-progress'),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text('${progress.waitingCount} aguardando'),
+          if (progress.processingCount > 0)
+            Text('${progress.processingCount} em processamento'),
+          if (progress.unavailableCount > 0)
+            Text('${progress.unavailableCount} não disponíveis'),
+          if (progress.failedCount > 0)
+            Text('${progress.failedCount} com falha'),
+          const SizedBox(height: 12),
+          if (progress.state == HistoricalPreparationState.completed ||
+              progress.remainingCount == 0)
+            const Text('Acervo preparado para organização.')
+          else if (progress.state == HistoricalPreparationState.active)
+            OutlinedButton(
+              key: const Key('pause-archive-preparation'),
+              onPressed: changingPreparation ? null : onPause,
+              child: const Text('Pausar preparação'),
+            )
+          else if (progress.state == HistoricalPreparationState.paused)
+            FilledButton(
+              key: const Key('resume-archive-preparation'),
+              onPressed: changingPreparation ? null : onResume,
+              child: const Text('Continuar preparação'),
+            )
+          else if (progress.remainingCount > 0 && onPrepare != null) ...[
+            const Text(
+              'Adicione os screenshots encontrados à biblioteca sem copiar as imagens.',
+            ),
+            const SizedBox(height: 12),
+            FilledButton(
+              key: const Key('prepare-existing-archive'),
+              onPressed: changingPreparation ? null : onPrepare,
+              child: const Text('Preparar acervo para organização'),
+            ),
+          ],
+        ],
         const SizedBox(height: 20),
         FilledButton(
           key: const Key('update-inventory'),

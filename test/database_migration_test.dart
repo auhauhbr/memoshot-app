@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 8 para 15 preservando dados e hierarquia', () async {
+  test('migra schema 8 para 16 preservando dados e hierarquia', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_test_',
     );
@@ -100,7 +100,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 15);
+    expect(version.read<int>('user_version'), 16);
     expect(rows, hasLength(2));
     expect(rows.first.internalName, 'copia.png');
     expect(rows.first.mediaHash, isNull);
@@ -225,7 +225,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 10 para 15 preservando IDs e associações', () async {
+  test('migra schema 10 para 16 preservando IDs e associações', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_10_test_',
     );
@@ -282,7 +282,7 @@ void main() {
         .select(migrated.mediaCategories)
         .getSingle();
 
-    expect(version.read<int>('user_version'), 15);
+    expect(version.read<int>('user_version'), 16);
     expect(category.id, 7);
     expect(category.name, 'Livros');
     expect(category.parentId, isNull);
@@ -299,7 +299,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 11 para 15 e cria estruturas novas vazias', () async {
+  test('migra schema 11 para 16 e cria estruturas novas vazias', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_11_test_',
     );
@@ -362,7 +362,7 @@ void main() {
     expect(
       (await migrated.customSelect('PRAGMA user_version').getSingle())
           .read<int>('user_version'),
-      15,
+      16,
     );
     expect((await migrated.select(migrated.mediaItems).getSingle()).id, 4);
     expect((await migrated.select(migrated.categories).getSingle()).id, 9);
@@ -384,7 +384,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 12 para 15 preservando sugestões e organização', () async {
+  test('migra schema 12 para 16 preservando sugestões e organização', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_12_test_',
     );
@@ -498,7 +498,7 @@ void main() {
     expect(
       (await database.customSelect('PRAGMA user_version').getSingle())
           .read<int>('user_version'),
-      15,
+      16,
     );
     expect(await database.select(database.mediaItems).get(), hasLength(4));
     expect(await database.select(database.ocrResults).get(), hasLength(4));
@@ -530,7 +530,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 13 para 15 preservando todo o estado anterior', () async {
+  test('migra schema 13 para 16 preservando todo o estado anterior', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_13_test_',
     );
@@ -649,7 +649,7 @@ void main() {
     expect(
       (await database.customSelect('PRAGMA user_version').getSingle())
           .read<int>('user_version'),
-      15,
+      16,
     );
     expect(
       (await database.select(database.mediaItems).getSingle()).mediaHash,
@@ -683,7 +683,7 @@ void main() {
   });
 
   test(
-    'migra schema 14 para 15 tornando itens antigos arquivos privados',
+    'migra schema 14 para 16 tornando itens antigos arquivos privados',
     () async {
       final directory = Directory.systemTemp.createTempSync(
         'memoshot_migration_14_test_',
@@ -850,7 +850,89 @@ void main() {
       expect(
         (await database.customSelect('PRAGMA user_version').getSingle())
             .read<int>('user_version'),
-        15,
+        16,
+      );
+      await database.close();
+      directory.deleteSync(recursive: true);
+    },
+  );
+
+  test(
+    'migra schema 15 para 16 criando somente a fila histórica vazia',
+    () async {
+      final directory = Directory.systemTemp.createTempSync(
+        'memoshot_migration_15_test_',
+      );
+      final databaseFile = File('${directory.path}/contexto.sqlite');
+      final timestamp = DateTime.utc(2026, 7, 19);
+      var database = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
+      await database
+          .into(database.mediaItems)
+          .insert(
+            MediaItemsCompanion.insert(
+              privatePath: const Value('/privado/preservado.png'),
+              internalName: const Value('preservado.png'),
+              importedAt: timestamp,
+              sourceMode: 'photoPicker',
+              status: 'ready',
+            ),
+          );
+      await database
+          .into(database.mediaItems)
+          .insert(
+            MediaItemsCompanion.insert(
+              storageKind: const Value('mediaStoreReference'),
+              sourceKey: const Value('external:77'),
+              mediaStoreId: const Value(77),
+              volumeName: const Value('external'),
+              contentUri: const Value(
+                'content://media/external/images/media/77',
+              ),
+              importedAt: timestamp,
+              sourceMode: 'mediaStoreReference',
+              status: 'ready',
+            ),
+          );
+      await database
+          .into(database.existingScreenshotCandidates)
+          .insert(
+            ExistingScreenshotCandidatesCompanion.insert(
+              sourceKey: 'external:77',
+              mediaStoreId: 77,
+              volumeName: 'external',
+              contentUri: 'content://media/external/images/media/77',
+              discoveredAt: timestamp,
+              lastSeenAt: timestamp,
+              availabilityState: 'available',
+            ),
+          );
+      await database.close();
+
+      final editor = _SchemaEditorDatabase(NativeDatabase(databaseFile));
+      await editor.customStatement('DROP TABLE historical_media_import_jobs');
+      await editor.customStatement('PRAGMA user_version = 15');
+      await editor.close();
+
+      database = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
+      expect(
+        (await database.customSelect('PRAGMA user_version').getSingle())
+            .read<int>('user_version'),
+        16,
+      );
+      expect(await database.select(database.mediaItems).get(), hasLength(2));
+      expect(
+        (await database.select(database.mediaItems).get()).map(
+          (row) => row.storageKind,
+        ),
+        containsAll(['privateFile', 'mediaStoreReference']),
+      );
+      expect(
+        await database.select(database.existingScreenshotCandidates).get(),
+        hasLength(1),
+      );
+      expect(
+        await database.select(database.historicalMediaImportJobs).get(),
+        isEmpty,
       );
       await database.close();
       directory.deleteSync(recursive: true);
@@ -987,5 +1069,5 @@ class _SchemaEditorDatabase extends GeneratedDatabase {
   final List<TableInfo> allTables = const [];
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 }

@@ -6,7 +6,7 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 internal class AppPreferencesBridge(
-    context: Context,
+    private val context: Context,
     messenger: BinaryMessenger,
 ) : MethodChannel.MethodCallHandler {
     private val channel = MethodChannel(messenger, CHANNEL)
@@ -25,6 +25,27 @@ internal class AppPreferencesBridge(
                 preferences.edit().putBoolean(KEY_ONBOARDING_COMPLETED, true).apply()
                 result.success(null)
             }
+            "historicalPreparationState" -> result.success(
+                preferences.getString(
+                    KEY_HISTORICAL_PREPARATION_STATE,
+                    HISTORICAL_NOT_STARTED,
+                ),
+            )
+            "setHistoricalPreparationState" -> {
+                val state = call.argument<String>("state")
+                if (state !in HISTORICAL_STATES) {
+                    result.error("invalid_state", "Estado técnico inválido.", null)
+                    return
+                }
+                preferences.edit()
+                    .putString(KEY_HISTORICAL_PREPARATION_STATE, state)
+                    .apply()
+                result.success(null)
+            }
+            "scheduleHistoricalPreparation" -> {
+                BackgroundProcessingScheduler(context).enqueueHistoricalPreparation()
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -37,5 +58,15 @@ internal class AppPreferencesBridge(
         private const val CHANNEL = "br.com.jeffersont.memoshot/preferences"
         private const val PREFERENCES = "memoshot_preferences"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_HISTORICAL_PREPARATION_STATE =
+            "historical_preparation_state"
+        private const val HISTORICAL_NOT_STARTED = "notStarted"
+        private val HISTORICAL_STATES =
+            setOf("notStarted", "active", "paused", "completed")
+
+        fun isHistoricalPreparationActive(context: Context): Boolean =
+            context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+                .getString(KEY_HISTORICAL_PREPARATION_STATE, HISTORICAL_NOT_STARTED) ==
+                "active"
     }
 }

@@ -15,25 +15,34 @@ internal class BackgroundProcessingScheduler(context: Context) {
 
     fun enqueueIfEnabled(): Boolean {
         if (!state.isEnabled()) return false
+        enqueue()
+        return true
+    }
+
+    fun enqueueHistoricalPreparation(delayMillis: Long = 0L) {
+        enqueue(delayMillis)
+    }
+
+    private fun enqueue(delayMillis: Long = 0L) {
         workManager.enqueueUniqueWork(
             UNIQUE_WORK_NAME,
             ExistingWorkPolicy.APPEND_OR_REPLACE,
-            request(),
+            request(delayMillis),
         )
-        return true
     }
 
     fun cancel() {
         workManager.cancelUniqueWork(UNIQUE_WORK_NAME)
     }
 
-    private fun request(): OneTimeWorkRequest =
+    private fun request(delayMillis: Long): OneTimeWorkRequest =
         OneTimeWorkRequest.Builder(MemoShotBackgroundProcessingWorker::class.java)
             .setBackoffCriteria(
                 BackoffPolicy.EXPONENTIAL,
                 WorkRequest.MIN_BACKOFF_MILLIS,
                 TimeUnit.MILLISECONDS,
             )
+            .setInitialDelay(delayMillis.coerceAtLeast(0L), TimeUnit.MILLISECONDS)
             .build()
 
     companion object {

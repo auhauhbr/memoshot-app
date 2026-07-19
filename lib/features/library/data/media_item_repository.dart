@@ -266,7 +266,7 @@ class LocalMediaItemRepository
         location: location,
         mimeType: mimeType,
         importedAt: createdAt,
-        capturedAt: _validCapturedAt(capturedAt, createdAt),
+        capturedAt: capturedAt,
         sourceMode: 'mediaStoreReference',
         status: 'ready',
       );

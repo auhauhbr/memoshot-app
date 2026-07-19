@@ -21,6 +21,7 @@ import '../features/processing/data/ocr_queue_processor.dart';
 import '../features/tags/data/tag_repository.dart';
 import '../features/review_notifications/application/review_notification_coordinator.dart';
 import '../features/existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
+import '../features/existing_screenshots/application/historical_archive_preparation_coordinator.dart';
 
 class MemoShotApp extends StatelessWidget {
   const MemoShotApp({
@@ -41,6 +42,7 @@ class MemoShotApp extends StatelessWidget {
     this.reviewNotificationCoordinator,
     this.reviewNavigationSource,
     this.existingScreenshotInventoryCoordinator,
+    this.historicalArchivePreparationCoordinator,
     this.mediaStoreContentGateway,
   });
 
@@ -61,6 +63,8 @@ class MemoShotApp extends StatelessWidget {
   final ReviewNavigationSource? reviewNavigationSource;
   final ExistingScreenshotInventoryCoordinator?
   existingScreenshotInventoryCoordinator;
+  final HistoricalArchivePreparationCoordinator?
+  historicalArchivePreparationCoordinator;
   final MediaStoreContentGateway? mediaStoreContentGateway;
 
   @override
@@ -95,6 +99,8 @@ class MemoShotApp extends StatelessWidget {
           reviewNavigationSource: reviewNavigationSource,
           existingScreenshotInventoryCoordinator:
               existingScreenshotInventoryCoordinator,
+          historicalArchivePreparationCoordinator:
+              historicalArchivePreparationCoordinator,
           mediaStoreContentGateway: mediaStoreContentGateway,
         ),
       ),

@@ -8,6 +8,9 @@ import '../categories/data/category_repository.dart';
 import '../categories/data/category_store.dart';
 import '../classification/application/classification_composition.dart';
 import '../classification/application/classification_queue_processor.dart';
+import '../existing_screenshots/application/historical_media_import_processor.dart';
+import '../existing_screenshots/data/historical_media_import_job_store.dart';
+import '../existing_screenshots/data/historical_preparation_settings_repository.dart';
 import '../library/data/media_item_repository.dart';
 import '../library/data/media_item_store.dart';
 import '../ocr/data/ocr_repository.dart';
@@ -24,12 +27,14 @@ class BackgroundProcessingComposition {
     required this._database,
     required this._ocrQueue,
     required this._classificationQueue,
+    required this._historicalQueue,
     required this.notificationCoordinator,
   });
 
   final ContextoDatabase _database;
   final LocalOcrQueueProcessor _ocrQueue;
   final LocalClassificationQueueProcessor _classificationQueue;
+  final LocalHistoricalMediaImportProcessor _historicalQueue;
   final BackgroundProcessingRunner runner;
   final ReviewNotificationCoordinator notificationCoordinator;
 
@@ -47,6 +52,14 @@ class BackgroundProcessingComposition {
       store: DriftMediaItemStore(database),
       storage: PrivateScreenshotStorage(),
       ocrJobScheduler: LocalOcrJobScheduler(processingStore),
+    );
+    const historicalSettings =
+        MethodChannelHistoricalPreparationSettingsRepository();
+    final historicalQueue = LocalHistoricalMediaImportProcessor(
+      jobStore: DriftHistoricalMediaImportJobStore(database),
+      mediaRepository: mediaRepository,
+      settingsRepository: historicalSettings,
+      processingExpiration: Duration.zero,
     );
     final ocrRepository = LocalOcrRepository(
       store: ocrResultStore,
@@ -75,6 +88,8 @@ class BackgroundProcessingComposition {
       mediaRepository: mediaRepository,
       ocrQueue: ocrQueue,
       classificationQueue: classificationQueue,
+      historicalQueue: historicalQueue,
+      historicalSettingsRepository: historicalSettings,
     );
     final notificationCoordinator = ReviewNotificationCoordinator(
       snapshotRepository: classificationRepository,
@@ -84,6 +99,7 @@ class BackgroundProcessingComposition {
       database: database,
       ocrQueue: ocrQueue,
       classificationQueue: classificationQueue,
+      historicalQueue: historicalQueue,
       runner: runner,
       notificationCoordinator: notificationCoordinator,
     );
@@ -92,6 +108,7 @@ class BackgroundProcessingComposition {
   Future<void> close() async {
     await _ocrQueue.close();
     await _classificationQueue.close();
+    await _historicalQueue.close();
     await _database.close();
   }
 }
