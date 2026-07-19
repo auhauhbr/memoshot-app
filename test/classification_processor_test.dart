@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:memoshot/core/database/contexto_database.dart'
     show ContextoDatabase, MediaItemsCompanion;
 import 'package:memoshot/features/classification/application/classification_processor.dart';
+import 'package:memoshot/features/classification/application/automatic_classification.dart';
 import 'package:memoshot/features/classification/data/classification_suggestion_repository.dart';
 import 'package:memoshot/features/classification/data/classification_suggestion_store.dart';
 import 'package:memoshot/features/classification/domain/classification_models.dart';
@@ -278,6 +279,64 @@ void main() {
     expect(logs.join(' '), isNot(contains(text)));
     expect(logs.join(' '), isNot(contains('segredo@empresa.com')));
   });
+
+  test(
+    'falha do autoaplicador preserva sugestões e permite próximo item',
+    () async {
+      final first = await _insertMedia(database, name: 'first-failure.png');
+      final second = await _insertMedia(database, name: 'second-failure.png');
+      final applier = _FailingAutomaticApplier();
+      final processor = _processor(
+        repository,
+        now: now,
+        automaticApplier: applier,
+      );
+
+      final results = await Future.wait([
+        processor.process(
+          mediaItem: first,
+          ocrResult: _ocr(first.id, 'vaga entrevista', processedAt),
+        ),
+        processor.process(
+          mediaItem: second,
+          ocrResult: _ocr(second.id, 'curso certificado', processedAt),
+        ),
+      ]);
+
+      expect(applier.calls, 2);
+      expect(
+        results.map((item) => item.status),
+        everyElement(ClassificationSuggestionStatus.pendingReview),
+      );
+      expect(await repository.countPendingReview(), 2);
+    },
+  );
+
+  test(
+    'retry pendente tenta autoaplicação sem executar novamente o motor',
+    () async {
+      final item = await _insertMedia(database, name: 'retry-auto.png');
+      final engine = _CountingEngine(_suggestion(confidence: 0.9));
+      final applier = _FailingAutomaticApplier();
+      final processor = _processor(
+        repository,
+        now: now,
+        engine: engine,
+        automaticApplier: applier,
+      );
+      final ocr = _ocr(item.id, 'vaga entrevista', processedAt);
+
+      await processor.process(mediaItem: item, ocrResult: ocr);
+      await processor.process(mediaItem: item, ocrResult: ocr);
+
+      expect(engine.calls, 1);
+      expect(applier.calls, 2);
+      expect(
+        (await repository.loadByMediaItemId(item.id))?.status,
+        ClassificationSuggestionStatus.pendingReview,
+      );
+    },
+  );
 }
 
 LocalClassificationProcessor _processor(
@@ -285,13 +344,27 @@ LocalClassificationProcessor _processor(
   required DateTime now,
   LocalClassificationEngine engine = const LocalClassificationEngine(),
   int engineVersion = currentClassificationEngineVersion,
+  AutomaticClassificationApplier? automaticApplier,
 }) {
   return LocalClassificationProcessor(
     engine: engine,
     repository: repository,
     now: () => now,
     engineVersion: engineVersion,
+    automaticApplier: automaticApplier,
   );
+}
+
+class _FailingAutomaticApplier implements AutomaticClassificationApplier {
+  int calls = 0;
+
+  @override
+  Future<StoredClassificationSuggestion> apply(
+    StoredClassificationSuggestion suggestion,
+  ) async {
+    calls++;
+    throw StateError('falha técnica sanitizada');
+  }
 }
 
 class _CountingEngine extends LocalClassificationEngine {

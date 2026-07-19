@@ -142,6 +142,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _classificationRepository =
         widget.classificationSuggestionRepository ??
         createLocalClassificationRepository(database!);
+    _categoryRepository =
+        widget.categoryRepository ??
+        LocalCategoryRepository(store: DriftCategoryStore(database!));
     _reviewDecisionProcessor =
         widget.reviewDecisionProcessor ??
         createLocalReviewDecisionProcessor(database!);
@@ -170,11 +173,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           recognitionService: const MlKitTextRecognitionService(),
           classificationProcessor: createLocalClassificationProcessor(
             _classificationRepository,
+            automaticApplier: createLocalAutomaticClassificationApplier(
+              database!,
+              _categoryRepository,
+            ),
           ),
         );
-    _categoryRepository =
-        widget.categoryRepository ??
-        LocalCategoryRepository(store: DriftCategoryStore(database!));
     _tagRepository =
         widget.tagRepository ??
         LocalTagRepository(store: DriftTagStore(database!));

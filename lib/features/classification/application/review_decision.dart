@@ -54,6 +54,13 @@ abstract interface class ReviewDecisionStore {
     ReviewDecision decision, {
     required DateTime resolvedAt,
   });
+
+  Future<StoredClassificationSuggestion> autoApply({
+    required int mediaItemId,
+    required int expectedCategoryId,
+    required Set<String> safeTagNames,
+    required DateTime resolvedAt,
+  });
 }
 
 class LocalReviewDecisionProcessor implements ReviewDecisionProcessor {

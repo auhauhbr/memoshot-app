@@ -191,6 +191,7 @@ void main() {
   test('fila inclui só pendentes e usa ordem determinística', () async {
     final second = await _insertMedia(database, name: 'second.png');
     final third = await _insertMedia(database, name: 'third.png');
+    final fourth = await _insertMedia(database, name: 'fourth.png');
     await repository.saveSuggestion(
       _suggestion(mediaItemId, now, confidence: 0.7),
     );
@@ -211,6 +212,8 @@ void main() {
       ),
     );
     await repository.markRejected(second);
+    await repository.saveSuggestion(_suggestion(fourth, now, confidence: 0.9));
+    await repository.markAutoApplied(fourth);
 
     final pending = await repository.loadPendingReview();
 

@@ -5,6 +5,13 @@ import 'package:memoshot/core/database/contexto_database.dart'
     show ContextoDatabase;
 import 'package:memoshot/core/ocr/text_recognition_service.dart';
 import 'package:memoshot/features/classification/application/classification_processor.dart';
+import 'package:memoshot/features/classification/application/automatic_classification.dart';
+import 'package:memoshot/features/classification/data/classification_suggestion_repository.dart';
+import 'package:memoshot/features/classification/data/classification_suggestion_store.dart';
+import 'package:memoshot/features/classification/data/review_decision_store.dart';
+import 'package:memoshot/features/classification/domain/local_classification_engine.dart';
+import 'package:memoshot/features/categories/data/category_repository.dart';
+import 'package:memoshot/features/categories/data/category_store.dart';
 import 'package:memoshot/features/classification/domain/classification_models.dart';
 import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
 import 'package:memoshot/features/library/data/media_item_store.dart';
@@ -423,6 +430,108 @@ void main() {
       expect(await jobStore.findMediaItem(item.id), isNull);
       expect(await jobStore.findOcrJob(item.id), isNull);
       expect(await resultStore.findByMediaItemId(item.id), isNull);
+    },
+  );
+
+  test('OCR forte aplica pasta existente e sai da revisão', () async {
+    final item = await createMediaItem(mediaStore, temporaryDirectory, 40);
+    await scheduler.schedule(item.id);
+    final categories = LocalCategoryRepository(
+      store: DriftCategoryStore(database),
+    );
+    final career = await categories.createRootCategory('Carreira');
+    final suggestions = LocalClassificationSuggestionRepository(
+      DriftClassificationSuggestionStore(database),
+    );
+    final classification = LocalClassificationProcessor(
+      engine: const LocalClassificationEngine(),
+      repository: suggestions,
+      now: () => DateTime.utc(2026, 7, 18, 12),
+      engineVersion: 1,
+      automaticApplier: LocalAutomaticClassificationApplier(
+        categoryRepository: categories,
+        store: DriftReviewDecisionStore(database),
+        now: () => DateTime.utc(2026, 7, 18, 12, 1),
+      ),
+    );
+    final queue = createQueue(
+      jobStore,
+      resultStore,
+      FakeRecognitionService(
+        texts: [
+          'vaga entrevista recrutadora currículo candidatura processo seletivo urgente',
+        ],
+      ),
+      classificationProcessor: classification,
+    );
+    addTearDown(queue.close);
+
+    queue.signal();
+    await waitForState(queue, item.id, OcrItemState.completedWithText);
+
+    final stored = await suggestions.loadByMediaItemId(item.id);
+    expect(stored?.status, ClassificationSuggestionStatus.autoApplied);
+    expect(stored?.resolvedAt, isNotNull);
+    expect((await categories.loadForMedia(item.id)).map((item) => item.id), [
+      career.id,
+    ]);
+    expect(await suggestions.countPendingReview(), 0);
+  });
+
+  test(
+    'OCR fraco e pasta inexistente permanecem disponíveis para revisão',
+    () async {
+      final weak = await createMediaItem(mediaStore, temporaryDirectory, 41);
+      final noFolder = await createMediaItem(
+        mediaStore,
+        temporaryDirectory,
+        42,
+      );
+      await scheduler.schedule(weak.id);
+      await scheduler.schedule(noFolder.id);
+      final categories = LocalCategoryRepository(
+        store: DriftCategoryStore(database),
+      );
+      final suggestions = LocalClassificationSuggestionRepository(
+        DriftClassificationSuggestionStore(database),
+      );
+      final classification = LocalClassificationProcessor(
+        engine: const LocalClassificationEngine(),
+        repository: suggestions,
+        now: () => DateTime.utc(2026, 7, 18, 12),
+        engineVersion: 1,
+        automaticApplier: LocalAutomaticClassificationApplier(
+          categoryRepository: categories,
+          store: DriftReviewDecisionStore(database),
+        ),
+      );
+      final queue = createQueue(
+        jobStore,
+        resultStore,
+        FakeRecognitionService(
+          texts: [
+            'vaga',
+            'vaga entrevista recrutadora currículo candidatura processo seletivo',
+          ],
+        ),
+        classificationProcessor: classification,
+      );
+      addTearDown(queue.close);
+
+      queue.signal();
+      await waitForState(queue, weak.id, OcrItemState.completedWithText);
+      await waitForState(queue, noFolder.id, OcrItemState.completedWithText);
+
+      expect(
+        (await suggestions.loadByMediaItemId(weak.id))?.status,
+        ClassificationSuggestionStatus.pendingReview,
+      );
+      expect(
+        (await suggestions.loadByMediaItemId(noFolder.id))?.status,
+        ClassificationSuggestionStatus.pendingReview,
+      );
+      expect(await suggestions.countPendingReview(), 2);
+      expect(await categories.loadCategories(), isEmpty);
     },
   );
 }

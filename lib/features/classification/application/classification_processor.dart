@@ -4,6 +4,7 @@ import '../data/classification_suggestion_repository.dart';
 import '../domain/classification_models.dart';
 import '../domain/local_classification_engine.dart';
 import '../domain/stored_classification_suggestion.dart';
+import 'automatic_classification.dart';
 
 const strongClassificationConfidenceThreshold = 0.72;
 
@@ -20,19 +21,22 @@ class LocalClassificationProcessor implements ClassificationProcessor {
     required ClassificationSuggestionRepository repository,
     required DateTime Function() now,
     required int engineVersion,
-  }) : this._(engine, repository, now, engineVersion);
+    AutomaticClassificationApplier? automaticApplier,
+  }) : this._(engine, repository, now, engineVersion, automaticApplier);
 
   LocalClassificationProcessor._(
     this._engine,
     this._repository,
     this._now,
     this._engineVersion,
+    this._automaticApplier,
   );
 
   final LocalClassificationEngine _engine;
   final ClassificationSuggestionRepository _repository;
   final DateTime Function() _now;
   final int _engineVersion;
+  final AutomaticClassificationApplier? _automaticApplier;
   final Map<int, Future<StoredClassificationSuggestion>> _inFlight = {};
 
   @override
@@ -57,10 +61,11 @@ class LocalClassificationProcessor implements ClassificationProcessor {
     required OcrResult ocrResult,
   }) async {
     final existing = await _repository.loadByMediaItemId(mediaItem.id);
-    if (existing != null &&
-        (!_isPending(existing) ||
-            _isCurrentForOcr(existing, ocrResult.processedAt))) {
-      return existing;
+    if (existing != null) {
+      if (!_isPending(existing)) return existing;
+      if (_isCurrentForOcr(existing, ocrResult.processedAt)) {
+        return _autoApplySafely(existing);
+      }
     }
 
     final suggestion = _engine.classify(
@@ -78,10 +83,21 @@ class LocalClassificationProcessor implements ClassificationProcessor {
       createdAt: now,
       engineVersion: _engineVersion,
     );
-    return _repository.saveAutomaticSuggestion(
+    final saved = await _repository.saveAutomaticSuggestion(
       stored,
       ocrProcessedAt: ocrResult.processedAt,
     );
+    return _autoApplySafely(saved);
+  }
+
+  Future<StoredClassificationSuggestion> _autoApplySafely(
+    StoredClassificationSuggestion suggestion,
+  ) async {
+    try {
+      return await _automaticApplier?.apply(suggestion) ?? suggestion;
+    } catch (_) {
+      return suggestion;
+    }
   }
 
   bool _isPending(StoredClassificationSuggestion suggestion) {

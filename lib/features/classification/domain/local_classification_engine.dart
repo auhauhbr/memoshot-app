@@ -1,6 +1,39 @@
 import '../../../core/text/text_normalizer.dart';
 import 'classification_models.dart';
 
+class LocalClassificationTagCatalog {
+  const LocalClassificationTagCatalog._();
+
+  static const names = <String>{
+    'Entrevista',
+    'Vaga',
+    'Curso',
+    'Código',
+    'Erro',
+    'Produto',
+    'Promoção',
+    'Pagamento',
+    'Documento',
+    'Data',
+    'Horário',
+    'Link',
+    'WhatsApp',
+    'GitHub',
+    'Contato',
+    'Urgente',
+    'Precisa responder',
+    'Certificado',
+  };
+
+  static final Set<String> _normalizedNames = {
+    for (final name in names) const TextNormalizer().normalize(name),
+  };
+
+  static bool contains(String name) {
+    return _normalizedNames.contains(const TextNormalizer().normalize(name));
+  }
+}
+
 /// Motor local baseado apenas em regras explícitas.
 ///
 /// Cada sinal contribui uma única vez. A força combinada usa
