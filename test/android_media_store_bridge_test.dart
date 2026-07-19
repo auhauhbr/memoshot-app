@@ -15,7 +15,11 @@ void main() {
       'android/app/src/main/kotlin/br/com/jeffersont/memoshot/'
       'BackgroundScreenshotInboxBridge.kt',
     ).readAsStringSync();
-    source = '$activityBridge\n$inboxBridge';
+    final recognition = File(
+      'android/app/src/main/kotlin/br/com/jeffersont/memoshot/'
+      'ScreenshotRecognition.kt',
+    ).readAsStringSync();
+    source = '$activityBridge\n$inboxBridge\n$recognition';
     dartSource = File(
       'lib/core/automatic_import/'
       'method_channel_automatic_screenshot_source.dart',
@@ -38,7 +42,7 @@ void main() {
     expect(source, contains('MediaStore.Images.Media.EXTERNAL_CONTENT_URI'));
     expect(source, contains('MediaStore.Images.Media._ID} > ?'));
     expect(source, contains('MediaStore.Images.Media.IS_PENDING'));
-    expect(source, contains('startsWith("image/")'));
+    expect(source, contains('ScreenshotRecognition.isScreenshot'));
     expect(source, contains('MediaStore.Images.Media._ID} ASC'));
     expect(source, contains('MediaStore.Images.Media.DATE_TAKEN'));
     expect(source, contains('MediaStore.Images.Media.DATE_ADDED'));
@@ -46,9 +50,9 @@ void main() {
   });
 
   test('heurística contempla nomes em inglês e português', () {
-    expect(source, contains('normalized.contains("screenshot")'));
-    expect(source, contains('normalized.contains("capturadetela")'));
-    expect(source, contains('normalized.contains("capturasdetela")'));
+    expect(source, contains('"screenshot"'));
+    expect(source, contains('"capturadetela"'));
+    expect(source, contains('"capturasdetela"'));
     expect(source, contains('Normalizer.Form.NFD'));
   });
 

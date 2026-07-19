@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 8 para 13 preservando dados e hierarquia', () async {
+  test('migra schema 8 para 14 preservando dados e hierarquia', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_test_',
     );
@@ -100,7 +100,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 13);
+    expect(version.read<int>('user_version'), 14);
     expect(rows, hasLength(2));
     expect(rows.first.internalName, 'copia.png');
     expect(rows.first.mediaHash, isNull);
@@ -131,6 +131,10 @@ void main() {
       isEmpty,
     );
     expect(await migrated.select(migrated.classificationJobs).get(), isEmpty);
+    expect(
+      await migrated.select(migrated.existingScreenshotCandidates).get(),
+      isEmpty,
+    );
     final settings = await migrated
         .select(migrated.automaticImportSettings)
         .getSingle();
@@ -221,7 +225,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 10 para 13 preservando IDs e associações', () async {
+  test('migra schema 10 para 14 preservando IDs e associações', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_10_test_',
     );
@@ -278,7 +282,7 @@ void main() {
         .select(migrated.mediaCategories)
         .getSingle();
 
-    expect(version.read<int>('user_version'), 13);
+    expect(version.read<int>('user_version'), 14);
     expect(category.id, 7);
     expect(category.name, 'Livros');
     expect(category.parentId, isNull);
@@ -295,7 +299,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 11 para 13 e cria filas novas vazias', () async {
+  test('migra schema 11 para 14 e cria estruturas novas vazias', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_11_test_',
     );
@@ -358,7 +362,7 @@ void main() {
     expect(
       (await migrated.customSelect('PRAGMA user_version').getSingle())
           .read<int>('user_version'),
-      13,
+      14,
     );
     expect((await migrated.select(migrated.mediaItems).getSingle()).id, 4);
     expect((await migrated.select(migrated.categories).getSingle()).id, 9);
@@ -380,7 +384,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 12 para 13 preservando sugestões e organização', () async {
+  test('migra schema 12 para 14 preservando sugestões e organização', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_12_test_',
     );
@@ -494,7 +498,7 @@ void main() {
     expect(
       (await database.customSelect('PRAGMA user_version').getSingle())
           .read<int>('user_version'),
-      13,
+      14,
     );
     expect(await database.select(database.mediaItems).get(), hasLength(4));
     expect(await database.select(database.ocrResults).get(), hasLength(4));
@@ -517,6 +521,162 @@ void main() {
       containsAll(statuses),
     );
     expect(await database.select(database.classificationJobs).get(), isEmpty);
+    expect(
+      await database.select(database.existingScreenshotCandidates).get(),
+      isEmpty,
+    );
+
+    await database.close();
+    directory.deleteSync(recursive: true);
+  });
+
+  test('migra schema 13 para 14 preservando todo o estado anterior', () async {
+    final directory = Directory.systemTemp.createTempSync(
+      'memoshot_migration_13_test_',
+    );
+    final databaseFile = File('${directory.path}/contexto.sqlite');
+    final timestamp = DateTime.utc(2026, 7, 19);
+    var database = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
+    final mediaId = await database
+        .into(database.mediaItems)
+        .insert(
+          MediaItemsCompanion.insert(
+            privatePath: '${directory.path}/preservada.png',
+            internalName: 'preservada.png',
+            importedAt: timestamp,
+            sourceMode: 'photoPicker',
+            status: 'ready',
+            mediaHash: const Value('hash-preservado'),
+          ),
+        );
+    await database
+        .into(database.ocrResults)
+        .insert(
+          OcrResultsCompanion.insert(
+            mediaItemId: Value(mediaId),
+            fullText: 'OCR preservado',
+            normalizedText: const Value('ocr preservado'),
+            engine: 'Teste',
+            engineVersion: '1',
+            processedAt: timestamp,
+          ),
+        );
+    await database
+        .into(database.processingJobs)
+        .insert(
+          ProcessingJobsCompanion.insert(
+            mediaItemId: mediaId,
+            jobType: 'ocr',
+            status: 'completed',
+            createdAt: timestamp,
+          ),
+        );
+    final categoryId = await database
+        .into(database.categories)
+        .insert(
+          CategoriesCompanion.insert(
+            name: 'Documentos',
+            normalizedName: 'documentos',
+            createdAt: timestamp,
+          ),
+        );
+    await database
+        .into(database.mediaCategories)
+        .insert(
+          MediaCategoriesCompanion.insert(
+            mediaItemId: mediaId,
+            categoryId: categoryId,
+            createdAt: timestamp,
+          ),
+        );
+    final tagId = await database
+        .into(database.tags)
+        .insert(
+          TagsCompanion.insert(
+            name: 'Importante',
+            normalizedName: 'importante',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          ),
+        );
+    await database
+        .into(database.mediaTags)
+        .insert(
+          MediaTagsCompanion.insert(
+            mediaItemId: mediaId,
+            tagId: tagId,
+            createdAt: timestamp,
+          ),
+        );
+    await database
+        .into(database.classificationSuggestions)
+        .insert(
+          ClassificationSuggestionsCompanion.insert(
+            mediaItemId: Value(mediaId),
+            confidence: 0.8,
+            hasSuggestion: true,
+            suggestedTagsJson: '[]',
+            evidenceJson: '[]',
+            status: 'accepted',
+            engineVersion: 1,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          ),
+        );
+    await database
+        .into(database.classificationJobs)
+        .insert(
+          ClassificationJobsCompanion.insert(
+            mediaItemId: Value(mediaId),
+            state: 'completed',
+            availableAt: timestamp,
+            engineVersion: 1,
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          ),
+        );
+    await database.close();
+
+    final editor = _SchemaEditorDatabase(NativeDatabase(databaseFile));
+    await editor.customStatement('DROP TABLE existing_screenshot_candidates');
+    await editor.customStatement(
+      'DROP TABLE existing_screenshot_inventory_states',
+    );
+    await editor.customStatement('PRAGMA user_version = 13');
+    await editor.close();
+
+    database = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
+    expect(
+      (await database.customSelect('PRAGMA user_version').getSingle())
+          .read<int>('user_version'),
+      14,
+    );
+    expect(
+      (await database.select(database.mediaItems).getSingle()).mediaHash,
+      'hash-preservado',
+    );
+    expect(
+      (await database.select(database.ocrResults).getSingle()).fullText,
+      'OCR preservado',
+    );
+    expect(await database.select(database.processingJobs).get(), hasLength(1));
+    expect(
+      await database.select(database.classificationJobs).get(),
+      hasLength(1),
+    );
+    expect(
+      (await database.select(database.classificationSuggestions).getSingle())
+          .status,
+      'accepted',
+    );
+    expect(await database.select(database.categories).get(), hasLength(1));
+    expect(await database.select(database.mediaCategories).get(), hasLength(1));
+    expect(await database.select(database.tags).get(), hasLength(1));
+    expect(await database.select(database.mediaTags).get(), hasLength(1));
+    expect(
+      await database.select(database.existingScreenshotCandidates).get(),
+      isEmpty,
+    );
 
     await database.close();
     directory.deleteSync(recursive: true);
@@ -617,5 +777,5 @@ class _SchemaEditorDatabase extends GeneratedDatabase {
   final List<TableInfo> allTables = const [];
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 }

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:memoshot/app/memoshot_app.dart';
 import 'package:memoshot/core/automatic_import/automatic_screenshot_source.dart';
 import 'package:memoshot/core/media/screenshot_picker.dart';
+import 'package:memoshot/core/media_store/existing_screenshot_scanner.dart';
 import 'package:memoshot/core/navigation/review_navigation_source.dart';
 import 'package:memoshot/core/sharing/incoming_share_source.dart';
 import 'package:memoshot/core/theme/app_theme.dart';
@@ -18,6 +19,10 @@ import 'package:memoshot/features/classification/application/classification_queu
 import 'package:memoshot/features/classification/application/review_decision.dart';
 import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
 import 'package:memoshot/features/classification/presentation/review_queue_page.dart';
+import 'package:memoshot/features/existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
+import 'package:memoshot/features/existing_screenshots/data/existing_screenshot_candidate_repository.dart';
+import 'package:memoshot/features/existing_screenshots/domain/existing_screenshot_candidate.dart';
+import 'package:memoshot/features/existing_screenshots/domain/existing_screenshot_scan.dart';
 import 'package:memoshot/features/review_notifications/domain/review_notification.dart';
 import 'package:memoshot/features/review_notifications/application/review_notification_coordinator.dart';
 import 'package:memoshot/features/automatic_import/data/automatic_import_settings_repository.dart';
@@ -3351,14 +3356,39 @@ void main() {
 
     expect(find.text('Configurações'), findsOneWidget);
     expect(find.text('Captura e organização automática'), findsOneWidget);
+    expect(find.text('Acervo existente'), findsOneWidget);
+    expect(find.text('Organizar screenshots antigos'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Privacidade'), 200);
     expect(find.text('Privacidade'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Sobre o MemoShot'), 250);
     expect(find.text('Sobre o MemoShot'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Capturou, organizou.'), 120);
     expect(find.text('Capturou, organizou.'), findsOneWidget);
     expect(
       find.textContaining('não são enviados para servidores'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('Configurações abre acervo sem iniciar mapeamento', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildTestApp(FakeScreenshotPicker()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('open-existing-screenshot-inventory')),
+      180,
+    );
+    await tester.tap(
+      find.byKey(const Key('open-existing-screenshot-inventory')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Acervo existente'), findsOneWidget);
+    expect(find.text('Mapear meus screenshots'), findsOneWidget);
+    expect(find.byKey(const Key('inventory-scan-progress')), findsNothing);
   });
 
   testWidgets('switch desliga, salva e permanece somente em Configurações', (
@@ -3998,9 +4028,11 @@ void main() {
       find.text('Bloqueadas nas configurações do Android'),
       findsOneWidget,
     );
-    await tester.ensureVisible(
+    await tester.scrollUntilVisible(
       find.byKey(const Key('open-notification-settings')),
+      200,
     );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('open-notification-settings')));
     await tester.pump();
     expect(gateway.settingsCount, 1);
@@ -4124,6 +4156,8 @@ Widget buildTestApp(
   OnboardingRepository? onboardingRepository,
   ReviewNotificationCoordinator? reviewNotificationCoordinator,
   ReviewNavigationSource? reviewNavigationSource,
+  ExistingScreenshotInventoryCoordinator?
+  existingScreenshotInventoryCoordinator,
 }) {
   final resolvedOcrRepository = ocrRepository ?? FakeOcrRepository();
   final resolvedMediaRepository = repository ?? FakeMediaItemRepository();
@@ -4132,6 +4166,8 @@ Widget buildTestApp(
   final resolvedTagRepository = tagRepository ?? FakeTagRepository();
   resolvedCategoryRepository.mediaItems = resolvedMediaRepository._items;
   resolvedMediaRepository.tagAssociations = resolvedTagRepository._associations;
+  final resolvedAutomaticSource =
+      automaticScreenshotSource ?? FakeAutomaticScreenshotSource();
   return MemoShotApp(
     key: UniqueKey(),
     screenshotPicker: picker,
@@ -4145,8 +4181,7 @@ Widget buildTestApp(
     reviewDecisionProcessor: FakeReviewDecisionProcessor(),
     tagRepository: resolvedTagRepository,
     incomingShareSource: incomingShareSource ?? FakeIncomingShareSource(),
-    automaticScreenshotSource:
-        automaticScreenshotSource ?? FakeAutomaticScreenshotSource(),
+    automaticScreenshotSource: resolvedAutomaticSource,
     automaticImportSettingsRepository:
         automaticSettingsRepository ?? FakeAutomaticImportSettingsRepository(),
     onboardingRepository:
@@ -4163,7 +4198,84 @@ Widget buildTestApp(
         ),
     reviewNavigationSource:
         reviewNavigationSource ?? FakeReviewNavigationSource(),
+    existingScreenshotInventoryCoordinator:
+        existingScreenshotInventoryCoordinator ??
+        ExistingScreenshotInventoryCoordinator(
+          permissionSource: resolvedAutomaticSource,
+          scanner: _EmptyExistingScreenshotScanner(),
+          repository: _EmptyExistingScreenshotRepository(),
+        ),
   );
+}
+
+class _EmptyExistingScreenshotScanner implements ExistingScreenshotScanner {
+  @override
+  Future<String> beginScan() async => 'test';
+
+  @override
+  Future<void> cancelScan() async {}
+
+  @override
+  Future<ExistingScreenshotScanPage> scanPage({
+    required String sessionId,
+    ExistingScreenshotScanCursor? cursor,
+  }) async => const ExistingScreenshotScanPage(
+    examinedCount: 0,
+    recognizedCount: 0,
+    hasNext: false,
+    nextCursor: null,
+    items: [],
+  );
+}
+
+class _EmptyExistingScreenshotRepository
+    implements ExistingScreenshotCandidateRepository {
+  @override
+  Future<void> completeScan({
+    required DateTime scanStartedAt,
+    required DateTime completedAt,
+    required bool partialAccess,
+  }) async {}
+
+  @override
+  Future<void> clearInventory() async {}
+
+  @override
+  Future<int> countAvailable() async => 0;
+
+  @override
+  Future<int> countUnavailable() async => 0;
+
+  @override
+  Future<ExistingScreenshotCandidate?> findBySourceKey(
+    String sourceKey,
+  ) async => null;
+
+  @override
+  Future<ExistingScreenshotInventorySummary> loadSummary() async =>
+      const ExistingScreenshotInventorySummary.empty();
+
+  @override
+  Future<List<ExistingScreenshotCandidate>> loadCandidatesPage({
+    int limit = 200,
+    String? afterSourceKey,
+  }) async => const [];
+
+  @override
+  Future<void> markUnavailableNotSeenInCompletedScan(
+    DateTime scanStartedAt,
+  ) async {}
+
+  @override
+  Future<void> recordCompletedScan({
+    required DateTime completedAt,
+    required bool partialAccess,
+  }) async {}
+
+  @override
+  Future<void> upsertBatch(
+    List<ExistingScreenshotCandidate> candidates,
+  ) async {}
 }
 
 class FakeReviewDecisionProcessor implements ReviewDecisionProcessor {

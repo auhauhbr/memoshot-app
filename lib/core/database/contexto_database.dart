@@ -206,6 +206,54 @@ class ClassificationJobs extends Table {
   Set<Column<Object>> get primaryKey => {mediaItemId};
 }
 
+class ExistingScreenshotCandidates extends Table {
+  TextColumn get sourceKey => text()();
+
+  IntColumn get mediaStoreId => integer()();
+
+  TextColumn get volumeName => text()();
+
+  TextColumn get contentUri => text()();
+
+  TextColumn get mimeType => text().nullable()();
+
+  DateTimeColumn get capturedAt => dateTime().nullable()();
+
+  DateTimeColumn get dateModified => dateTime().nullable()();
+
+  IntColumn get sizeBytes => integer().nullable()();
+
+  IntColumn get width => integer().nullable()();
+
+  IntColumn get height => integer().nullable()();
+
+  DateTimeColumn get discoveredAt => dateTime()();
+
+  DateTimeColumn get lastSeenAt => dateTime()();
+
+  TextColumn get availabilityState => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {sourceKey};
+
+  @override
+  List<String> get customConstraints => const [
+    "CHECK (availability_state IN ('available', 'unavailable'))",
+  ];
+}
+
+class ExistingScreenshotInventoryStates extends Table {
+  IntColumn get id => integer()();
+
+  DateTimeColumn get lastCompletedScanAt => dateTime().nullable()();
+
+  BoolColumn get lastScanWasPartial =>
+      boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
 @DriftDatabase(
   tables: [
     MediaItems,
@@ -218,6 +266,8 @@ class ClassificationJobs extends Table {
     AutomaticImportSettings,
     ClassificationSuggestions,
     ClassificationJobs,
+    ExistingScreenshotCandidates,
+    ExistingScreenshotInventoryStates,
   ],
 )
 class ContextoDatabase extends _$ContextoDatabase {
@@ -226,7 +276,7 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -286,6 +336,10 @@ class ContextoDatabase extends _$ContextoDatabase {
       if (from < 13) {
         await migrator.createTable(classificationJobs);
         await _createClassificationJobIndexes();
+      }
+      if (from < 14) {
+        await migrator.createTable(existingScreenshotCandidates);
+        await migrator.createTable(existingScreenshotInventoryStates);
       }
     },
     beforeOpen: (details) async {

@@ -21,8 +21,6 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
-import java.text.Normalizer
-import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.Executors
 
@@ -261,8 +259,12 @@ internal class ScreenshotMediaStoreBridge(
                 val mimeType = cursor.getString(mimeIndex)
                 val displayName = cursor.getString(nameIndex).orEmpty()
                 val relativePath = if (pathIndex >= 0) cursor.getString(pathIndex).orEmpty() else ""
-                if (!mimeType.orEmpty().startsWith("image/") ||
-                    !ScreenshotNameHeuristic.isScreenshot(relativePath, displayName)
+                if (!ScreenshotRecognition.isScreenshot(
+                        mimeType,
+                        relativePath,
+                        null,
+                        displayName,
+                    )
                 ) continue
                 val temporary = copyToPrivateCache(id, mimeType)
                 if (temporary == null) {
@@ -386,22 +388,5 @@ internal class ScreenshotMediaStoreBridge(
         private const val PERMISSION_REQUEST = 5202
         private const val OBSERVER_DEBOUNCE_MS = 650L
         private const val STALE_TEMPORARY_MS = 24L * 60 * 60 * 1000
-    }
-}
-
-internal object ScreenshotNameHeuristic {
-    fun isScreenshot(relativePath: String, displayName: String): Boolean {
-        val normalized = normalize("$relativePath $displayName")
-        return normalized.contains("screenshot") ||
-            normalized.contains("capturadetela") ||
-            normalized.contains("capturasdetela")
-    }
-
-    private fun normalize(value: String): String {
-        val decomposed = Normalizer.normalize(value, Normalizer.Form.NFD)
-        return decomposed
-            .replace(Regex("\\p{M}+"), "")
-            .lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9]+"), "")
     }
 }

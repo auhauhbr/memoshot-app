@@ -105,8 +105,12 @@ internal class ScreenshotMediaWorker(
                 val mimeType = cursor.getString(mimeIndex)
                 val displayName = cursor.getString(nameIndex).orEmpty()
                 val relativePath = if (pathIndex >= 0) cursor.getString(pathIndex).orEmpty() else ""
-                val isScreenshot = mimeType.orEmpty().startsWith("image/") &&
-                    ScreenshotNameHeuristic.isScreenshot(relativePath, displayName)
+                val isScreenshot = ScreenshotRecognition.isScreenshot(
+                    mimeType,
+                    relativePath,
+                    null,
+                    displayName,
+                )
                 var examined = true
                 if (isScreenshot && !inbox.containsMediaId(id)) {
                     val uri = ContentUris.withAppendedId(

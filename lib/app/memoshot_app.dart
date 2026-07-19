@@ -19,6 +19,7 @@ import '../features/onboarding/presentation/onboarding_gate.dart';
 import '../features/processing/data/ocr_queue_processor.dart';
 import '../features/tags/data/tag_repository.dart';
 import '../features/review_notifications/application/review_notification_coordinator.dart';
+import '../features/existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
 
 class MemoShotApp extends StatelessWidget {
   const MemoShotApp({
@@ -38,6 +39,7 @@ class MemoShotApp extends StatelessWidget {
     this.onboardingRepository,
     this.reviewNotificationCoordinator,
     this.reviewNavigationSource,
+    this.existingScreenshotInventoryCoordinator,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -55,6 +57,8 @@ class MemoShotApp extends StatelessWidget {
   final OnboardingRepository? onboardingRepository;
   final ReviewNotificationCoordinator? reviewNotificationCoordinator;
   final ReviewNavigationSource? reviewNavigationSource;
+  final ExistingScreenshotInventoryCoordinator?
+  existingScreenshotInventoryCoordinator;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +90,8 @@ class MemoShotApp extends StatelessWidget {
           automaticImportSettingsRepository: automaticImportSettingsRepository,
           reviewNotificationCoordinator: reviewNotificationCoordinator,
           reviewNavigationSource: reviewNavigationSource,
+          existingScreenshotInventoryCoordinator:
+              existingScreenshotInventoryCoordinator,
         ),
       ),
     );

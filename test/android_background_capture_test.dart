@@ -69,8 +69,7 @@ void main() {
 
   test('Worker filtra MediaStore e avança marcador sem diminuir', () {
     expect(worker, contains('MediaStore.Images.Media.IS_PENDING'));
-    expect(worker, contains('startsWith("image/")'));
-    expect(worker, contains('ScreenshotNameHeuristic.isScreenshot'));
+    expect(worker, contains('ScreenshotRecognition.isScreenshot'));
     expect(worker, contains('MediaStore.Images.Media._ID} ASC'));
     expect(worker, contains('state.advanceMarker(safeMarker)'));
     expect(state, contains('maxOf(marker(), candidate)'));

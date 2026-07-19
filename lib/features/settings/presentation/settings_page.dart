@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../../core/automatic_import/automatic_screenshot_source.dart';
 import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
 import '../../automatic_import/data/automatic_import_settings_repository.dart';
+import '../../existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
+import '../../existing_screenshots/presentation/existing_screenshot_inventory_page.dart';
 import '../../review_notifications/application/review_notification_coordinator.dart';
 import '../../review_notifications/domain/review_notification.dart';
 
@@ -14,11 +16,14 @@ class SettingsPage extends StatefulWidget {
     required this.coordinator,
     required this.settingsRepository,
     required this.reviewNotificationCoordinator,
+    required this.existingScreenshotInventoryCoordinator,
   });
 
   final AutomaticScreenshotImportCoordinator coordinator;
   final AutomaticImportSettingsRepository settingsRepository;
   final ReviewNotificationCoordinator reviewNotificationCoordinator;
+  final ExistingScreenshotInventoryCoordinator
+  existingScreenshotInventoryCoordinator;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -293,6 +298,28 @@ class _SettingsPageState extends State<SettingsPage>
                       ),
                     ),
                 ],
+              ),
+            ),
+            const _SectionTitle('Acervo existente'),
+            Card(
+              child: ListTile(
+                key: const Key('open-existing-screenshot-inventory'),
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: const Text('Organizar screenshots antigos'),
+                subtitle: const Text(
+                  'Localize os prints que já estão no dispositivo e prepare-os para organização.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _isLoading || _isChanging
+                    ? null
+                    : () => Navigator.of(context).push<void>(
+                        MaterialPageRoute(
+                          builder: (_) => ExistingScreenshotInventoryPage(
+                            coordinator:
+                                widget.existingScreenshotInventoryCoordinator,
+                          ),
+                        ),
+                      ),
               ),
             ),
             const _SectionTitle('Notificações'),

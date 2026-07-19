@@ -8,6 +8,7 @@ import '../../../core/database/contexto_database.dart' show ContextoDatabase;
 import '../../../core/media/image_picker_screenshot_picker.dart';
 import '../../../core/media/screenshot_picker.dart';
 import '../../../core/media/screenshot_storage.dart';
+import '../../../core/media_store/existing_screenshot_scanner.dart';
 import '../../../core/navigation/review_navigation_source.dart';
 import '../../../core/notifications/method_channel_review_notification_gateway.dart';
 import '../../../core/ocr/ml_kit_text_recognition_service.dart';
@@ -25,6 +26,9 @@ import '../../classification/application/review_queue.dart';
 import '../../classification/application/review_decision.dart';
 import '../../classification/data/classification_suggestion_repository.dart';
 import '../../classification/presentation/review_queue_page.dart';
+import '../../existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
+import '../../existing_screenshots/data/existing_screenshot_candidate_repository.dart';
+import '../../existing_screenshots/data/existing_screenshot_candidate_store.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
@@ -67,6 +71,7 @@ class HomePage extends StatefulWidget {
     this.automaticImportSettingsRepository,
     this.reviewNotificationCoordinator,
     this.reviewNavigationSource,
+    this.existingScreenshotInventoryCoordinator,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -83,6 +88,8 @@ class HomePage extends StatefulWidget {
   final AutomaticImportSettingsRepository? automaticImportSettingsRepository;
   final ReviewNotificationCoordinator? reviewNotificationCoordinator;
   final ReviewNavigationSource? reviewNavigationSource;
+  final ExistingScreenshotInventoryCoordinator?
+  existingScreenshotInventoryCoordinator;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -101,6 +108,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final TagRepository _tagRepository;
   late final bool _ownsMediaRepository;
   ContextoDatabase? _ownedAuxiliaryDatabase;
+  ContextoDatabase? _ownedInventoryDatabase;
   StreamSubscription<int>? _queueSubscription;
   StreamSubscription<int>? _classificationQueueSubscription;
   late final SharedImageImportCoordinator _sharedImportCoordinator;
@@ -108,6 +116,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final AutomaticImportSettingsRepository _automaticSettingsRepository;
   late final ReviewNotificationCoordinator _reviewNotificationCoordinator;
   late final ReviewNavigationSource _reviewNavigationSource;
+  late final ExistingScreenshotInventoryCoordinator
+  _existingScreenshotInventoryCoordinator;
   final TextEditingController _searchController = TextEditingController();
   final TextNormalizer _textNormalizer = const TextNormalizer();
   Timer? _searchDebounce;
@@ -141,6 +151,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _screenshotPicker =
         widget.screenshotPicker ?? ImagePickerScreenshotPicker();
+    final automaticScreenshotSource =
+        widget.automaticScreenshotSource ??
+        const MethodChannelAutomaticScreenshotSource();
     _ownsMediaRepository = widget.mediaRepository == null;
     final database =
         widget.mediaRepository == null ||
@@ -219,6 +232,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         );
     _reviewNavigationSource =
         widget.reviewNavigationSource ?? MethodChannelReviewNavigationSource();
+    if (widget.existingScreenshotInventoryCoordinator case final injected?) {
+      _existingScreenshotInventoryCoordinator = injected;
+    } else {
+      final inventoryDatabase = database ?? ContextoDatabase();
+      if (database == null) _ownedInventoryDatabase = inventoryDatabase;
+      _existingScreenshotInventoryCoordinator =
+          ExistingScreenshotInventoryCoordinator(
+            permissionSource: automaticScreenshotSource,
+            scanner: const MethodChannelExistingScreenshotScanner(),
+            repository: LocalExistingScreenshotCandidateRepository(
+              DriftExistingScreenshotCandidateStore(inventoryDatabase),
+            ),
+          );
+    }
     if (!_ownsMediaRepository) {
       _ownedAuxiliaryDatabase = database;
     }
@@ -233,9 +260,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       onError: _handleSharedImportError,
     );
     _automaticImportCoordinator = AutomaticScreenshotImportCoordinator(
-      source:
-          widget.automaticScreenshotSource ??
-          const MethodChannelAutomaticScreenshotSource(),
+      source: automaticScreenshotSource,
       settingsRepository: _automaticSettingsRepository,
       mediaRepository: _mediaRepository,
       onStateChanged: _handleAutomaticImportState,
@@ -282,6 +307,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } else if (_ownedAuxiliaryDatabase != null) {
       await _ownedAuxiliaryDatabase!.close();
     }
+    await _ownedInventoryDatabase?.close();
   }
 
   void _handleAutomaticImportState(AutomaticImportUiState state) {
@@ -879,6 +905,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           coordinator: _automaticImportCoordinator,
           settingsRepository: _automaticSettingsRepository,
           reviewNotificationCoordinator: _reviewNotificationCoordinator,
+          existingScreenshotInventoryCoordinator:
+              _existingScreenshotInventoryCoordinator,
         ),
       ),
     );

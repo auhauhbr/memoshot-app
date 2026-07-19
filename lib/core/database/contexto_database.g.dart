@@ -4643,6 +4643,1094 @@ class ClassificationJobsCompanion extends UpdateCompanion<ClassificationJob> {
   }
 }
 
+class $ExistingScreenshotCandidatesTable extends ExistingScreenshotCandidates
+    with
+        TableInfo<
+          $ExistingScreenshotCandidatesTable,
+          ExistingScreenshotCandidate
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ExistingScreenshotCandidatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _sourceKeyMeta = const VerificationMeta(
+    'sourceKey',
+  );
+  @override
+  late final GeneratedColumn<String> sourceKey = GeneratedColumn<String>(
+    'source_key',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mediaStoreIdMeta = const VerificationMeta(
+    'mediaStoreId',
+  );
+  @override
+  late final GeneratedColumn<int> mediaStoreId = GeneratedColumn<int>(
+    'media_store_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _volumeNameMeta = const VerificationMeta(
+    'volumeName',
+  );
+  @override
+  late final GeneratedColumn<String> volumeName = GeneratedColumn<String>(
+    'volume_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentUriMeta = const VerificationMeta(
+    'contentUri',
+  );
+  @override
+  late final GeneratedColumn<String> contentUri = GeneratedColumn<String>(
+    'content_uri',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mimeTypeMeta = const VerificationMeta(
+    'mimeType',
+  );
+  @override
+  late final GeneratedColumn<String> mimeType = GeneratedColumn<String>(
+    'mime_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _capturedAtMeta = const VerificationMeta(
+    'capturedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> capturedAt = GeneratedColumn<DateTime>(
+    'captured_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _dateModifiedMeta = const VerificationMeta(
+    'dateModified',
+  );
+  @override
+  late final GeneratedColumn<DateTime> dateModified = GeneratedColumn<DateTime>(
+    'date_modified',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sizeBytesMeta = const VerificationMeta(
+    'sizeBytes',
+  );
+  @override
+  late final GeneratedColumn<int> sizeBytes = GeneratedColumn<int>(
+    'size_bytes',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _widthMeta = const VerificationMeta('width');
+  @override
+  late final GeneratedColumn<int> width = GeneratedColumn<int>(
+    'width',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _heightMeta = const VerificationMeta('height');
+  @override
+  late final GeneratedColumn<int> height = GeneratedColumn<int>(
+    'height',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _discoveredAtMeta = const VerificationMeta(
+    'discoveredAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> discoveredAt = GeneratedColumn<DateTime>(
+    'discovered_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _lastSeenAtMeta = const VerificationMeta(
+    'lastSeenAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSeenAt = GeneratedColumn<DateTime>(
+    'last_seen_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _availabilityStateMeta = const VerificationMeta(
+    'availabilityState',
+  );
+  @override
+  late final GeneratedColumn<String> availabilityState =
+      GeneratedColumn<String>(
+        'availability_state',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  @override
+  List<GeneratedColumn> get $columns => [
+    sourceKey,
+    mediaStoreId,
+    volumeName,
+    contentUri,
+    mimeType,
+    capturedAt,
+    dateModified,
+    sizeBytes,
+    width,
+    height,
+    discoveredAt,
+    lastSeenAt,
+    availabilityState,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'existing_screenshot_candidates';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ExistingScreenshotCandidate> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('source_key')) {
+      context.handle(
+        _sourceKeyMeta,
+        sourceKey.isAcceptableOrUnknown(data['source_key']!, _sourceKeyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sourceKeyMeta);
+    }
+    if (data.containsKey('media_store_id')) {
+      context.handle(
+        _mediaStoreIdMeta,
+        mediaStoreId.isAcceptableOrUnknown(
+          data['media_store_id']!,
+          _mediaStoreIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_mediaStoreIdMeta);
+    }
+    if (data.containsKey('volume_name')) {
+      context.handle(
+        _volumeNameMeta,
+        volumeName.isAcceptableOrUnknown(data['volume_name']!, _volumeNameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_volumeNameMeta);
+    }
+    if (data.containsKey('content_uri')) {
+      context.handle(
+        _contentUriMeta,
+        contentUri.isAcceptableOrUnknown(data['content_uri']!, _contentUriMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentUriMeta);
+    }
+    if (data.containsKey('mime_type')) {
+      context.handle(
+        _mimeTypeMeta,
+        mimeType.isAcceptableOrUnknown(data['mime_type']!, _mimeTypeMeta),
+      );
+    }
+    if (data.containsKey('captured_at')) {
+      context.handle(
+        _capturedAtMeta,
+        capturedAt.isAcceptableOrUnknown(data['captured_at']!, _capturedAtMeta),
+      );
+    }
+    if (data.containsKey('date_modified')) {
+      context.handle(
+        _dateModifiedMeta,
+        dateModified.isAcceptableOrUnknown(
+          data['date_modified']!,
+          _dateModifiedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('size_bytes')) {
+      context.handle(
+        _sizeBytesMeta,
+        sizeBytes.isAcceptableOrUnknown(data['size_bytes']!, _sizeBytesMeta),
+      );
+    }
+    if (data.containsKey('width')) {
+      context.handle(
+        _widthMeta,
+        width.isAcceptableOrUnknown(data['width']!, _widthMeta),
+      );
+    }
+    if (data.containsKey('height')) {
+      context.handle(
+        _heightMeta,
+        height.isAcceptableOrUnknown(data['height']!, _heightMeta),
+      );
+    }
+    if (data.containsKey('discovered_at')) {
+      context.handle(
+        _discoveredAtMeta,
+        discoveredAt.isAcceptableOrUnknown(
+          data['discovered_at']!,
+          _discoveredAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_discoveredAtMeta);
+    }
+    if (data.containsKey('last_seen_at')) {
+      context.handle(
+        _lastSeenAtMeta,
+        lastSeenAt.isAcceptableOrUnknown(
+          data['last_seen_at']!,
+          _lastSeenAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_lastSeenAtMeta);
+    }
+    if (data.containsKey('availability_state')) {
+      context.handle(
+        _availabilityStateMeta,
+        availabilityState.isAcceptableOrUnknown(
+          data['availability_state']!,
+          _availabilityStateMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_availabilityStateMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {sourceKey};
+  @override
+  ExistingScreenshotCandidate map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ExistingScreenshotCandidate(
+      sourceKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_key'],
+      )!,
+      mediaStoreId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}media_store_id'],
+      )!,
+      volumeName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}volume_name'],
+      )!,
+      contentUri: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_uri'],
+      )!,
+      mimeType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}mime_type'],
+      ),
+      capturedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}captured_at'],
+      ),
+      dateModified: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}date_modified'],
+      ),
+      sizeBytes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}size_bytes'],
+      ),
+      width: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}width'],
+      ),
+      height: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}height'],
+      ),
+      discoveredAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}discovered_at'],
+      )!,
+      lastSeenAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_seen_at'],
+      )!,
+      availabilityState: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}availability_state'],
+      )!,
+    );
+  }
+
+  @override
+  $ExistingScreenshotCandidatesTable createAlias(String alias) {
+    return $ExistingScreenshotCandidatesTable(attachedDatabase, alias);
+  }
+}
+
+class ExistingScreenshotCandidate extends DataClass
+    implements Insertable<ExistingScreenshotCandidate> {
+  final String sourceKey;
+  final int mediaStoreId;
+  final String volumeName;
+  final String contentUri;
+  final String? mimeType;
+  final DateTime? capturedAt;
+  final DateTime? dateModified;
+  final int? sizeBytes;
+  final int? width;
+  final int? height;
+  final DateTime discoveredAt;
+  final DateTime lastSeenAt;
+  final String availabilityState;
+  const ExistingScreenshotCandidate({
+    required this.sourceKey,
+    required this.mediaStoreId,
+    required this.volumeName,
+    required this.contentUri,
+    this.mimeType,
+    this.capturedAt,
+    this.dateModified,
+    this.sizeBytes,
+    this.width,
+    this.height,
+    required this.discoveredAt,
+    required this.lastSeenAt,
+    required this.availabilityState,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['source_key'] = Variable<String>(sourceKey);
+    map['media_store_id'] = Variable<int>(mediaStoreId);
+    map['volume_name'] = Variable<String>(volumeName);
+    map['content_uri'] = Variable<String>(contentUri);
+    if (!nullToAbsent || mimeType != null) {
+      map['mime_type'] = Variable<String>(mimeType);
+    }
+    if (!nullToAbsent || capturedAt != null) {
+      map['captured_at'] = Variable<DateTime>(capturedAt);
+    }
+    if (!nullToAbsent || dateModified != null) {
+      map['date_modified'] = Variable<DateTime>(dateModified);
+    }
+    if (!nullToAbsent || sizeBytes != null) {
+      map['size_bytes'] = Variable<int>(sizeBytes);
+    }
+    if (!nullToAbsent || width != null) {
+      map['width'] = Variable<int>(width);
+    }
+    if (!nullToAbsent || height != null) {
+      map['height'] = Variable<int>(height);
+    }
+    map['discovered_at'] = Variable<DateTime>(discoveredAt);
+    map['last_seen_at'] = Variable<DateTime>(lastSeenAt);
+    map['availability_state'] = Variable<String>(availabilityState);
+    return map;
+  }
+
+  ExistingScreenshotCandidatesCompanion toCompanion(bool nullToAbsent) {
+    return ExistingScreenshotCandidatesCompanion(
+      sourceKey: Value(sourceKey),
+      mediaStoreId: Value(mediaStoreId),
+      volumeName: Value(volumeName),
+      contentUri: Value(contentUri),
+      mimeType: mimeType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mimeType),
+      capturedAt: capturedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(capturedAt),
+      dateModified: dateModified == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dateModified),
+      sizeBytes: sizeBytes == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sizeBytes),
+      width: width == null && nullToAbsent
+          ? const Value.absent()
+          : Value(width),
+      height: height == null && nullToAbsent
+          ? const Value.absent()
+          : Value(height),
+      discoveredAt: Value(discoveredAt),
+      lastSeenAt: Value(lastSeenAt),
+      availabilityState: Value(availabilityState),
+    );
+  }
+
+  factory ExistingScreenshotCandidate.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ExistingScreenshotCandidate(
+      sourceKey: serializer.fromJson<String>(json['sourceKey']),
+      mediaStoreId: serializer.fromJson<int>(json['mediaStoreId']),
+      volumeName: serializer.fromJson<String>(json['volumeName']),
+      contentUri: serializer.fromJson<String>(json['contentUri']),
+      mimeType: serializer.fromJson<String?>(json['mimeType']),
+      capturedAt: serializer.fromJson<DateTime?>(json['capturedAt']),
+      dateModified: serializer.fromJson<DateTime?>(json['dateModified']),
+      sizeBytes: serializer.fromJson<int?>(json['sizeBytes']),
+      width: serializer.fromJson<int?>(json['width']),
+      height: serializer.fromJson<int?>(json['height']),
+      discoveredAt: serializer.fromJson<DateTime>(json['discoveredAt']),
+      lastSeenAt: serializer.fromJson<DateTime>(json['lastSeenAt']),
+      availabilityState: serializer.fromJson<String>(json['availabilityState']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'sourceKey': serializer.toJson<String>(sourceKey),
+      'mediaStoreId': serializer.toJson<int>(mediaStoreId),
+      'volumeName': serializer.toJson<String>(volumeName),
+      'contentUri': serializer.toJson<String>(contentUri),
+      'mimeType': serializer.toJson<String?>(mimeType),
+      'capturedAt': serializer.toJson<DateTime?>(capturedAt),
+      'dateModified': serializer.toJson<DateTime?>(dateModified),
+      'sizeBytes': serializer.toJson<int?>(sizeBytes),
+      'width': serializer.toJson<int?>(width),
+      'height': serializer.toJson<int?>(height),
+      'discoveredAt': serializer.toJson<DateTime>(discoveredAt),
+      'lastSeenAt': serializer.toJson<DateTime>(lastSeenAt),
+      'availabilityState': serializer.toJson<String>(availabilityState),
+    };
+  }
+
+  ExistingScreenshotCandidate copyWith({
+    String? sourceKey,
+    int? mediaStoreId,
+    String? volumeName,
+    String? contentUri,
+    Value<String?> mimeType = const Value.absent(),
+    Value<DateTime?> capturedAt = const Value.absent(),
+    Value<DateTime?> dateModified = const Value.absent(),
+    Value<int?> sizeBytes = const Value.absent(),
+    Value<int?> width = const Value.absent(),
+    Value<int?> height = const Value.absent(),
+    DateTime? discoveredAt,
+    DateTime? lastSeenAt,
+    String? availabilityState,
+  }) => ExistingScreenshotCandidate(
+    sourceKey: sourceKey ?? this.sourceKey,
+    mediaStoreId: mediaStoreId ?? this.mediaStoreId,
+    volumeName: volumeName ?? this.volumeName,
+    contentUri: contentUri ?? this.contentUri,
+    mimeType: mimeType.present ? mimeType.value : this.mimeType,
+    capturedAt: capturedAt.present ? capturedAt.value : this.capturedAt,
+    dateModified: dateModified.present ? dateModified.value : this.dateModified,
+    sizeBytes: sizeBytes.present ? sizeBytes.value : this.sizeBytes,
+    width: width.present ? width.value : this.width,
+    height: height.present ? height.value : this.height,
+    discoveredAt: discoveredAt ?? this.discoveredAt,
+    lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+    availabilityState: availabilityState ?? this.availabilityState,
+  );
+  ExistingScreenshotCandidate copyWithCompanion(
+    ExistingScreenshotCandidatesCompanion data,
+  ) {
+    return ExistingScreenshotCandidate(
+      sourceKey: data.sourceKey.present ? data.sourceKey.value : this.sourceKey,
+      mediaStoreId: data.mediaStoreId.present
+          ? data.mediaStoreId.value
+          : this.mediaStoreId,
+      volumeName: data.volumeName.present
+          ? data.volumeName.value
+          : this.volumeName,
+      contentUri: data.contentUri.present
+          ? data.contentUri.value
+          : this.contentUri,
+      mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
+      capturedAt: data.capturedAt.present
+          ? data.capturedAt.value
+          : this.capturedAt,
+      dateModified: data.dateModified.present
+          ? data.dateModified.value
+          : this.dateModified,
+      sizeBytes: data.sizeBytes.present ? data.sizeBytes.value : this.sizeBytes,
+      width: data.width.present ? data.width.value : this.width,
+      height: data.height.present ? data.height.value : this.height,
+      discoveredAt: data.discoveredAt.present
+          ? data.discoveredAt.value
+          : this.discoveredAt,
+      lastSeenAt: data.lastSeenAt.present
+          ? data.lastSeenAt.value
+          : this.lastSeenAt,
+      availabilityState: data.availabilityState.present
+          ? data.availabilityState.value
+          : this.availabilityState,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExistingScreenshotCandidate(')
+          ..write('sourceKey: $sourceKey, ')
+          ..write('mediaStoreId: $mediaStoreId, ')
+          ..write('volumeName: $volumeName, ')
+          ..write('contentUri: $contentUri, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('capturedAt: $capturedAt, ')
+          ..write('dateModified: $dateModified, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('width: $width, ')
+          ..write('height: $height, ')
+          ..write('discoveredAt: $discoveredAt, ')
+          ..write('lastSeenAt: $lastSeenAt, ')
+          ..write('availabilityState: $availabilityState')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    sourceKey,
+    mediaStoreId,
+    volumeName,
+    contentUri,
+    mimeType,
+    capturedAt,
+    dateModified,
+    sizeBytes,
+    width,
+    height,
+    discoveredAt,
+    lastSeenAt,
+    availabilityState,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExistingScreenshotCandidate &&
+          other.sourceKey == this.sourceKey &&
+          other.mediaStoreId == this.mediaStoreId &&
+          other.volumeName == this.volumeName &&
+          other.contentUri == this.contentUri &&
+          other.mimeType == this.mimeType &&
+          other.capturedAt == this.capturedAt &&
+          other.dateModified == this.dateModified &&
+          other.sizeBytes == this.sizeBytes &&
+          other.width == this.width &&
+          other.height == this.height &&
+          other.discoveredAt == this.discoveredAt &&
+          other.lastSeenAt == this.lastSeenAt &&
+          other.availabilityState == this.availabilityState);
+}
+
+class ExistingScreenshotCandidatesCompanion
+    extends UpdateCompanion<ExistingScreenshotCandidate> {
+  final Value<String> sourceKey;
+  final Value<int> mediaStoreId;
+  final Value<String> volumeName;
+  final Value<String> contentUri;
+  final Value<String?> mimeType;
+  final Value<DateTime?> capturedAt;
+  final Value<DateTime?> dateModified;
+  final Value<int?> sizeBytes;
+  final Value<int?> width;
+  final Value<int?> height;
+  final Value<DateTime> discoveredAt;
+  final Value<DateTime> lastSeenAt;
+  final Value<String> availabilityState;
+  final Value<int> rowid;
+  const ExistingScreenshotCandidatesCompanion({
+    this.sourceKey = const Value.absent(),
+    this.mediaStoreId = const Value.absent(),
+    this.volumeName = const Value.absent(),
+    this.contentUri = const Value.absent(),
+    this.mimeType = const Value.absent(),
+    this.capturedAt = const Value.absent(),
+    this.dateModified = const Value.absent(),
+    this.sizeBytes = const Value.absent(),
+    this.width = const Value.absent(),
+    this.height = const Value.absent(),
+    this.discoveredAt = const Value.absent(),
+    this.lastSeenAt = const Value.absent(),
+    this.availabilityState = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ExistingScreenshotCandidatesCompanion.insert({
+    required String sourceKey,
+    required int mediaStoreId,
+    required String volumeName,
+    required String contentUri,
+    this.mimeType = const Value.absent(),
+    this.capturedAt = const Value.absent(),
+    this.dateModified = const Value.absent(),
+    this.sizeBytes = const Value.absent(),
+    this.width = const Value.absent(),
+    this.height = const Value.absent(),
+    required DateTime discoveredAt,
+    required DateTime lastSeenAt,
+    required String availabilityState,
+    this.rowid = const Value.absent(),
+  }) : sourceKey = Value(sourceKey),
+       mediaStoreId = Value(mediaStoreId),
+       volumeName = Value(volumeName),
+       contentUri = Value(contentUri),
+       discoveredAt = Value(discoveredAt),
+       lastSeenAt = Value(lastSeenAt),
+       availabilityState = Value(availabilityState);
+  static Insertable<ExistingScreenshotCandidate> custom({
+    Expression<String>? sourceKey,
+    Expression<int>? mediaStoreId,
+    Expression<String>? volumeName,
+    Expression<String>? contentUri,
+    Expression<String>? mimeType,
+    Expression<DateTime>? capturedAt,
+    Expression<DateTime>? dateModified,
+    Expression<int>? sizeBytes,
+    Expression<int>? width,
+    Expression<int>? height,
+    Expression<DateTime>? discoveredAt,
+    Expression<DateTime>? lastSeenAt,
+    Expression<String>? availabilityState,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (sourceKey != null) 'source_key': sourceKey,
+      if (mediaStoreId != null) 'media_store_id': mediaStoreId,
+      if (volumeName != null) 'volume_name': volumeName,
+      if (contentUri != null) 'content_uri': contentUri,
+      if (mimeType != null) 'mime_type': mimeType,
+      if (capturedAt != null) 'captured_at': capturedAt,
+      if (dateModified != null) 'date_modified': dateModified,
+      if (sizeBytes != null) 'size_bytes': sizeBytes,
+      if (width != null) 'width': width,
+      if (height != null) 'height': height,
+      if (discoveredAt != null) 'discovered_at': discoveredAt,
+      if (lastSeenAt != null) 'last_seen_at': lastSeenAt,
+      if (availabilityState != null) 'availability_state': availabilityState,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ExistingScreenshotCandidatesCompanion copyWith({
+    Value<String>? sourceKey,
+    Value<int>? mediaStoreId,
+    Value<String>? volumeName,
+    Value<String>? contentUri,
+    Value<String?>? mimeType,
+    Value<DateTime?>? capturedAt,
+    Value<DateTime?>? dateModified,
+    Value<int?>? sizeBytes,
+    Value<int?>? width,
+    Value<int?>? height,
+    Value<DateTime>? discoveredAt,
+    Value<DateTime>? lastSeenAt,
+    Value<String>? availabilityState,
+    Value<int>? rowid,
+  }) {
+    return ExistingScreenshotCandidatesCompanion(
+      sourceKey: sourceKey ?? this.sourceKey,
+      mediaStoreId: mediaStoreId ?? this.mediaStoreId,
+      volumeName: volumeName ?? this.volumeName,
+      contentUri: contentUri ?? this.contentUri,
+      mimeType: mimeType ?? this.mimeType,
+      capturedAt: capturedAt ?? this.capturedAt,
+      dateModified: dateModified ?? this.dateModified,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      discoveredAt: discoveredAt ?? this.discoveredAt,
+      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
+      availabilityState: availabilityState ?? this.availabilityState,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (sourceKey.present) {
+      map['source_key'] = Variable<String>(sourceKey.value);
+    }
+    if (mediaStoreId.present) {
+      map['media_store_id'] = Variable<int>(mediaStoreId.value);
+    }
+    if (volumeName.present) {
+      map['volume_name'] = Variable<String>(volumeName.value);
+    }
+    if (contentUri.present) {
+      map['content_uri'] = Variable<String>(contentUri.value);
+    }
+    if (mimeType.present) {
+      map['mime_type'] = Variable<String>(mimeType.value);
+    }
+    if (capturedAt.present) {
+      map['captured_at'] = Variable<DateTime>(capturedAt.value);
+    }
+    if (dateModified.present) {
+      map['date_modified'] = Variable<DateTime>(dateModified.value);
+    }
+    if (sizeBytes.present) {
+      map['size_bytes'] = Variable<int>(sizeBytes.value);
+    }
+    if (width.present) {
+      map['width'] = Variable<int>(width.value);
+    }
+    if (height.present) {
+      map['height'] = Variable<int>(height.value);
+    }
+    if (discoveredAt.present) {
+      map['discovered_at'] = Variable<DateTime>(discoveredAt.value);
+    }
+    if (lastSeenAt.present) {
+      map['last_seen_at'] = Variable<DateTime>(lastSeenAt.value);
+    }
+    if (availabilityState.present) {
+      map['availability_state'] = Variable<String>(availabilityState.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExistingScreenshotCandidatesCompanion(')
+          ..write('sourceKey: $sourceKey, ')
+          ..write('mediaStoreId: $mediaStoreId, ')
+          ..write('volumeName: $volumeName, ')
+          ..write('contentUri: $contentUri, ')
+          ..write('mimeType: $mimeType, ')
+          ..write('capturedAt: $capturedAt, ')
+          ..write('dateModified: $dateModified, ')
+          ..write('sizeBytes: $sizeBytes, ')
+          ..write('width: $width, ')
+          ..write('height: $height, ')
+          ..write('discoveredAt: $discoveredAt, ')
+          ..write('lastSeenAt: $lastSeenAt, ')
+          ..write('availabilityState: $availabilityState, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ExistingScreenshotInventoryStatesTable
+    extends ExistingScreenshotInventoryStates
+    with
+        TableInfo<
+          $ExistingScreenshotInventoryStatesTable,
+          ExistingScreenshotInventoryState
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ExistingScreenshotInventoryStatesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lastCompletedScanAtMeta =
+      const VerificationMeta('lastCompletedScanAt');
+  @override
+  late final GeneratedColumn<DateTime> lastCompletedScanAt =
+      GeneratedColumn<DateTime>(
+        'last_completed_scan_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastScanWasPartialMeta =
+      const VerificationMeta('lastScanWasPartial');
+  @override
+  late final GeneratedColumn<bool> lastScanWasPartial = GeneratedColumn<bool>(
+    'last_scan_was_partial',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("last_scan_was_partial" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    lastCompletedScanAt,
+    lastScanWasPartial,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'existing_screenshot_inventory_states';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ExistingScreenshotInventoryState> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('last_completed_scan_at')) {
+      context.handle(
+        _lastCompletedScanAtMeta,
+        lastCompletedScanAt.isAcceptableOrUnknown(
+          data['last_completed_scan_at']!,
+          _lastCompletedScanAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_scan_was_partial')) {
+      context.handle(
+        _lastScanWasPartialMeta,
+        lastScanWasPartial.isAcceptableOrUnknown(
+          data['last_scan_was_partial']!,
+          _lastScanWasPartialMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ExistingScreenshotInventoryState map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ExistingScreenshotInventoryState(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      lastCompletedScanAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_completed_scan_at'],
+      ),
+      lastScanWasPartial: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}last_scan_was_partial'],
+      )!,
+    );
+  }
+
+  @override
+  $ExistingScreenshotInventoryStatesTable createAlias(String alias) {
+    return $ExistingScreenshotInventoryStatesTable(attachedDatabase, alias);
+  }
+}
+
+class ExistingScreenshotInventoryState extends DataClass
+    implements Insertable<ExistingScreenshotInventoryState> {
+  final int id;
+  final DateTime? lastCompletedScanAt;
+  final bool lastScanWasPartial;
+  const ExistingScreenshotInventoryState({
+    required this.id,
+    this.lastCompletedScanAt,
+    required this.lastScanWasPartial,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || lastCompletedScanAt != null) {
+      map['last_completed_scan_at'] = Variable<DateTime>(lastCompletedScanAt);
+    }
+    map['last_scan_was_partial'] = Variable<bool>(lastScanWasPartial);
+    return map;
+  }
+
+  ExistingScreenshotInventoryStatesCompanion toCompanion(bool nullToAbsent) {
+    return ExistingScreenshotInventoryStatesCompanion(
+      id: Value(id),
+      lastCompletedScanAt: lastCompletedScanAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastCompletedScanAt),
+      lastScanWasPartial: Value(lastScanWasPartial),
+    );
+  }
+
+  factory ExistingScreenshotInventoryState.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ExistingScreenshotInventoryState(
+      id: serializer.fromJson<int>(json['id']),
+      lastCompletedScanAt: serializer.fromJson<DateTime?>(
+        json['lastCompletedScanAt'],
+      ),
+      lastScanWasPartial: serializer.fromJson<bool>(json['lastScanWasPartial']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'lastCompletedScanAt': serializer.toJson<DateTime?>(lastCompletedScanAt),
+      'lastScanWasPartial': serializer.toJson<bool>(lastScanWasPartial),
+    };
+  }
+
+  ExistingScreenshotInventoryState copyWith({
+    int? id,
+    Value<DateTime?> lastCompletedScanAt = const Value.absent(),
+    bool? lastScanWasPartial,
+  }) => ExistingScreenshotInventoryState(
+    id: id ?? this.id,
+    lastCompletedScanAt: lastCompletedScanAt.present
+        ? lastCompletedScanAt.value
+        : this.lastCompletedScanAt,
+    lastScanWasPartial: lastScanWasPartial ?? this.lastScanWasPartial,
+  );
+  ExistingScreenshotInventoryState copyWithCompanion(
+    ExistingScreenshotInventoryStatesCompanion data,
+  ) {
+    return ExistingScreenshotInventoryState(
+      id: data.id.present ? data.id.value : this.id,
+      lastCompletedScanAt: data.lastCompletedScanAt.present
+          ? data.lastCompletedScanAt.value
+          : this.lastCompletedScanAt,
+      lastScanWasPartial: data.lastScanWasPartial.present
+          ? data.lastScanWasPartial.value
+          : this.lastScanWasPartial,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExistingScreenshotInventoryState(')
+          ..write('id: $id, ')
+          ..write('lastCompletedScanAt: $lastCompletedScanAt, ')
+          ..write('lastScanWasPartial: $lastScanWasPartial')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, lastCompletedScanAt, lastScanWasPartial);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExistingScreenshotInventoryState &&
+          other.id == this.id &&
+          other.lastCompletedScanAt == this.lastCompletedScanAt &&
+          other.lastScanWasPartial == this.lastScanWasPartial);
+}
+
+class ExistingScreenshotInventoryStatesCompanion
+    extends UpdateCompanion<ExistingScreenshotInventoryState> {
+  final Value<int> id;
+  final Value<DateTime?> lastCompletedScanAt;
+  final Value<bool> lastScanWasPartial;
+  const ExistingScreenshotInventoryStatesCompanion({
+    this.id = const Value.absent(),
+    this.lastCompletedScanAt = const Value.absent(),
+    this.lastScanWasPartial = const Value.absent(),
+  });
+  ExistingScreenshotInventoryStatesCompanion.insert({
+    this.id = const Value.absent(),
+    this.lastCompletedScanAt = const Value.absent(),
+    this.lastScanWasPartial = const Value.absent(),
+  });
+  static Insertable<ExistingScreenshotInventoryState> custom({
+    Expression<int>? id,
+    Expression<DateTime>? lastCompletedScanAt,
+    Expression<bool>? lastScanWasPartial,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (lastCompletedScanAt != null)
+        'last_completed_scan_at': lastCompletedScanAt,
+      if (lastScanWasPartial != null)
+        'last_scan_was_partial': lastScanWasPartial,
+    });
+  }
+
+  ExistingScreenshotInventoryStatesCompanion copyWith({
+    Value<int>? id,
+    Value<DateTime?>? lastCompletedScanAt,
+    Value<bool>? lastScanWasPartial,
+  }) {
+    return ExistingScreenshotInventoryStatesCompanion(
+      id: id ?? this.id,
+      lastCompletedScanAt: lastCompletedScanAt ?? this.lastCompletedScanAt,
+      lastScanWasPartial: lastScanWasPartial ?? this.lastScanWasPartial,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (lastCompletedScanAt.present) {
+      map['last_completed_scan_at'] = Variable<DateTime>(
+        lastCompletedScanAt.value,
+      );
+    }
+    if (lastScanWasPartial.present) {
+      map['last_scan_was_partial'] = Variable<bool>(lastScanWasPartial.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExistingScreenshotInventoryStatesCompanion(')
+          ..write('id: $id, ')
+          ..write('lastCompletedScanAt: $lastCompletedScanAt, ')
+          ..write('lastScanWasPartial: $lastScanWasPartial')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ContextoDatabase extends GeneratedDatabase {
   _$ContextoDatabase(QueryExecutor e) : super(e);
   $ContextoDatabaseManager get managers => $ContextoDatabaseManager(this);
@@ -4661,6 +5749,12 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
       $ClassificationSuggestionsTable(this);
   late final $ClassificationJobsTable classificationJobs =
       $ClassificationJobsTable(this);
+  late final $ExistingScreenshotCandidatesTable existingScreenshotCandidates =
+      $ExistingScreenshotCandidatesTable(this);
+  late final $ExistingScreenshotInventoryStatesTable
+  existingScreenshotInventoryStates = $ExistingScreenshotInventoryStatesTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4676,6 +5770,8 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
     automaticImportSettings,
     classificationSuggestions,
     classificationJobs,
+    existingScreenshotCandidates,
+    existingScreenshotInventoryStates,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -8955,6 +10051,575 @@ typedef $$ClassificationJobsTableProcessedTableManager =
       ClassificationJob,
       PrefetchHooks Function({bool mediaItemId})
     >;
+typedef $$ExistingScreenshotCandidatesTableCreateCompanionBuilder =
+    ExistingScreenshotCandidatesCompanion Function({
+      required String sourceKey,
+      required int mediaStoreId,
+      required String volumeName,
+      required String contentUri,
+      Value<String?> mimeType,
+      Value<DateTime?> capturedAt,
+      Value<DateTime?> dateModified,
+      Value<int?> sizeBytes,
+      Value<int?> width,
+      Value<int?> height,
+      required DateTime discoveredAt,
+      required DateTime lastSeenAt,
+      required String availabilityState,
+      Value<int> rowid,
+    });
+typedef $$ExistingScreenshotCandidatesTableUpdateCompanionBuilder =
+    ExistingScreenshotCandidatesCompanion Function({
+      Value<String> sourceKey,
+      Value<int> mediaStoreId,
+      Value<String> volumeName,
+      Value<String> contentUri,
+      Value<String?> mimeType,
+      Value<DateTime?> capturedAt,
+      Value<DateTime?> dateModified,
+      Value<int?> sizeBytes,
+      Value<int?> width,
+      Value<int?> height,
+      Value<DateTime> discoveredAt,
+      Value<DateTime> lastSeenAt,
+      Value<String> availabilityState,
+      Value<int> rowid,
+    });
+
+class $$ExistingScreenshotCandidatesTableFilterComposer
+    extends Composer<_$ContextoDatabase, $ExistingScreenshotCandidatesTable> {
+  $$ExistingScreenshotCandidatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get sourceKey => $composableBuilder(
+    column: $table.sourceKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get mediaStoreId => $composableBuilder(
+    column: $table.mediaStoreId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get volumeName => $composableBuilder(
+    column: $table.volumeName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentUri => $composableBuilder(
+    column: $table.contentUri,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get dateModified => $composableBuilder(
+    column: $table.dateModified,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get width => $composableBuilder(
+    column: $table.width,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get height => $composableBuilder(
+    column: $table.height,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get discoveredAt => $composableBuilder(
+    column: $table.discoveredAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get availabilityState => $composableBuilder(
+    column: $table.availabilityState,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ExistingScreenshotCandidatesTableOrderingComposer
+    extends Composer<_$ContextoDatabase, $ExistingScreenshotCandidatesTable> {
+  $$ExistingScreenshotCandidatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get sourceKey => $composableBuilder(
+    column: $table.sourceKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get mediaStoreId => $composableBuilder(
+    column: $table.mediaStoreId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get volumeName => $composableBuilder(
+    column: $table.volumeName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentUri => $composableBuilder(
+    column: $table.contentUri,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get mimeType => $composableBuilder(
+    column: $table.mimeType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get dateModified => $composableBuilder(
+    column: $table.dateModified,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sizeBytes => $composableBuilder(
+    column: $table.sizeBytes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get width => $composableBuilder(
+    column: $table.width,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get height => $composableBuilder(
+    column: $table.height,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get discoveredAt => $composableBuilder(
+    column: $table.discoveredAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get availabilityState => $composableBuilder(
+    column: $table.availabilityState,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ExistingScreenshotCandidatesTableAnnotationComposer
+    extends Composer<_$ContextoDatabase, $ExistingScreenshotCandidatesTable> {
+  $$ExistingScreenshotCandidatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get sourceKey =>
+      $composableBuilder(column: $table.sourceKey, builder: (column) => column);
+
+  GeneratedColumn<int> get mediaStoreId => $composableBuilder(
+    column: $table.mediaStoreId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get volumeName => $composableBuilder(
+    column: $table.volumeName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contentUri => $composableBuilder(
+    column: $table.contentUri,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get mimeType =>
+      $composableBuilder(column: $table.mimeType, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get capturedAt => $composableBuilder(
+    column: $table.capturedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get dateModified => $composableBuilder(
+    column: $table.dateModified,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sizeBytes =>
+      $composableBuilder(column: $table.sizeBytes, builder: (column) => column);
+
+  GeneratedColumn<int> get width =>
+      $composableBuilder(column: $table.width, builder: (column) => column);
+
+  GeneratedColumn<int> get height =>
+      $composableBuilder(column: $table.height, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get discoveredAt => $composableBuilder(
+    column: $table.discoveredAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSeenAt => $composableBuilder(
+    column: $table.lastSeenAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get availabilityState => $composableBuilder(
+    column: $table.availabilityState,
+    builder: (column) => column,
+  );
+}
+
+class $$ExistingScreenshotCandidatesTableTableManager
+    extends
+        RootTableManager<
+          _$ContextoDatabase,
+          $ExistingScreenshotCandidatesTable,
+          ExistingScreenshotCandidate,
+          $$ExistingScreenshotCandidatesTableFilterComposer,
+          $$ExistingScreenshotCandidatesTableOrderingComposer,
+          $$ExistingScreenshotCandidatesTableAnnotationComposer,
+          $$ExistingScreenshotCandidatesTableCreateCompanionBuilder,
+          $$ExistingScreenshotCandidatesTableUpdateCompanionBuilder,
+          (
+            ExistingScreenshotCandidate,
+            BaseReferences<
+              _$ContextoDatabase,
+              $ExistingScreenshotCandidatesTable,
+              ExistingScreenshotCandidate
+            >,
+          ),
+          ExistingScreenshotCandidate,
+          PrefetchHooks Function()
+        > {
+  $$ExistingScreenshotCandidatesTableTableManager(
+    _$ContextoDatabase db,
+    $ExistingScreenshotCandidatesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ExistingScreenshotCandidatesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ExistingScreenshotCandidatesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ExistingScreenshotCandidatesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> sourceKey = const Value.absent(),
+                Value<int> mediaStoreId = const Value.absent(),
+                Value<String> volumeName = const Value.absent(),
+                Value<String> contentUri = const Value.absent(),
+                Value<String?> mimeType = const Value.absent(),
+                Value<DateTime?> capturedAt = const Value.absent(),
+                Value<DateTime?> dateModified = const Value.absent(),
+                Value<int?> sizeBytes = const Value.absent(),
+                Value<int?> width = const Value.absent(),
+                Value<int?> height = const Value.absent(),
+                Value<DateTime> discoveredAt = const Value.absent(),
+                Value<DateTime> lastSeenAt = const Value.absent(),
+                Value<String> availabilityState = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ExistingScreenshotCandidatesCompanion(
+                sourceKey: sourceKey,
+                mediaStoreId: mediaStoreId,
+                volumeName: volumeName,
+                contentUri: contentUri,
+                mimeType: mimeType,
+                capturedAt: capturedAt,
+                dateModified: dateModified,
+                sizeBytes: sizeBytes,
+                width: width,
+                height: height,
+                discoveredAt: discoveredAt,
+                lastSeenAt: lastSeenAt,
+                availabilityState: availabilityState,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String sourceKey,
+                required int mediaStoreId,
+                required String volumeName,
+                required String contentUri,
+                Value<String?> mimeType = const Value.absent(),
+                Value<DateTime?> capturedAt = const Value.absent(),
+                Value<DateTime?> dateModified = const Value.absent(),
+                Value<int?> sizeBytes = const Value.absent(),
+                Value<int?> width = const Value.absent(),
+                Value<int?> height = const Value.absent(),
+                required DateTime discoveredAt,
+                required DateTime lastSeenAt,
+                required String availabilityState,
+                Value<int> rowid = const Value.absent(),
+              }) => ExistingScreenshotCandidatesCompanion.insert(
+                sourceKey: sourceKey,
+                mediaStoreId: mediaStoreId,
+                volumeName: volumeName,
+                contentUri: contentUri,
+                mimeType: mimeType,
+                capturedAt: capturedAt,
+                dateModified: dateModified,
+                sizeBytes: sizeBytes,
+                width: width,
+                height: height,
+                discoveredAt: discoveredAt,
+                lastSeenAt: lastSeenAt,
+                availabilityState: availabilityState,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ExistingScreenshotCandidatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ContextoDatabase,
+      $ExistingScreenshotCandidatesTable,
+      ExistingScreenshotCandidate,
+      $$ExistingScreenshotCandidatesTableFilterComposer,
+      $$ExistingScreenshotCandidatesTableOrderingComposer,
+      $$ExistingScreenshotCandidatesTableAnnotationComposer,
+      $$ExistingScreenshotCandidatesTableCreateCompanionBuilder,
+      $$ExistingScreenshotCandidatesTableUpdateCompanionBuilder,
+      (
+        ExistingScreenshotCandidate,
+        BaseReferences<
+          _$ContextoDatabase,
+          $ExistingScreenshotCandidatesTable,
+          ExistingScreenshotCandidate
+        >,
+      ),
+      ExistingScreenshotCandidate,
+      PrefetchHooks Function()
+    >;
+typedef $$ExistingScreenshotInventoryStatesTableCreateCompanionBuilder =
+    ExistingScreenshotInventoryStatesCompanion Function({
+      Value<int> id,
+      Value<DateTime?> lastCompletedScanAt,
+      Value<bool> lastScanWasPartial,
+    });
+typedef $$ExistingScreenshotInventoryStatesTableUpdateCompanionBuilder =
+    ExistingScreenshotInventoryStatesCompanion Function({
+      Value<int> id,
+      Value<DateTime?> lastCompletedScanAt,
+      Value<bool> lastScanWasPartial,
+    });
+
+class $$ExistingScreenshotInventoryStatesTableFilterComposer
+    extends
+        Composer<_$ContextoDatabase, $ExistingScreenshotInventoryStatesTable> {
+  $$ExistingScreenshotInventoryStatesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastCompletedScanAt => $composableBuilder(
+    column: $table.lastCompletedScanAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get lastScanWasPartial => $composableBuilder(
+    column: $table.lastScanWasPartial,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ExistingScreenshotInventoryStatesTableOrderingComposer
+    extends
+        Composer<_$ContextoDatabase, $ExistingScreenshotInventoryStatesTable> {
+  $$ExistingScreenshotInventoryStatesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastCompletedScanAt => $composableBuilder(
+    column: $table.lastCompletedScanAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get lastScanWasPartial => $composableBuilder(
+    column: $table.lastScanWasPartial,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ExistingScreenshotInventoryStatesTableAnnotationComposer
+    extends
+        Composer<_$ContextoDatabase, $ExistingScreenshotInventoryStatesTable> {
+  $$ExistingScreenshotInventoryStatesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get lastCompletedScanAt => $composableBuilder(
+    column: $table.lastCompletedScanAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get lastScanWasPartial => $composableBuilder(
+    column: $table.lastScanWasPartial,
+    builder: (column) => column,
+  );
+}
+
+class $$ExistingScreenshotInventoryStatesTableTableManager
+    extends
+        RootTableManager<
+          _$ContextoDatabase,
+          $ExistingScreenshotInventoryStatesTable,
+          ExistingScreenshotInventoryState,
+          $$ExistingScreenshotInventoryStatesTableFilterComposer,
+          $$ExistingScreenshotInventoryStatesTableOrderingComposer,
+          $$ExistingScreenshotInventoryStatesTableAnnotationComposer,
+          $$ExistingScreenshotInventoryStatesTableCreateCompanionBuilder,
+          $$ExistingScreenshotInventoryStatesTableUpdateCompanionBuilder,
+          (
+            ExistingScreenshotInventoryState,
+            BaseReferences<
+              _$ContextoDatabase,
+              $ExistingScreenshotInventoryStatesTable,
+              ExistingScreenshotInventoryState
+            >,
+          ),
+          ExistingScreenshotInventoryState,
+          PrefetchHooks Function()
+        > {
+  $$ExistingScreenshotInventoryStatesTableTableManager(
+    _$ContextoDatabase db,
+    $ExistingScreenshotInventoryStatesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ExistingScreenshotInventoryStatesTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ExistingScreenshotInventoryStatesTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ExistingScreenshotInventoryStatesTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<DateTime?> lastCompletedScanAt = const Value.absent(),
+                Value<bool> lastScanWasPartial = const Value.absent(),
+              }) => ExistingScreenshotInventoryStatesCompanion(
+                id: id,
+                lastCompletedScanAt: lastCompletedScanAt,
+                lastScanWasPartial: lastScanWasPartial,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<DateTime?> lastCompletedScanAt = const Value.absent(),
+                Value<bool> lastScanWasPartial = const Value.absent(),
+              }) => ExistingScreenshotInventoryStatesCompanion.insert(
+                id: id,
+                lastCompletedScanAt: lastCompletedScanAt,
+                lastScanWasPartial: lastScanWasPartial,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ExistingScreenshotInventoryStatesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ContextoDatabase,
+      $ExistingScreenshotInventoryStatesTable,
+      ExistingScreenshotInventoryState,
+      $$ExistingScreenshotInventoryStatesTableFilterComposer,
+      $$ExistingScreenshotInventoryStatesTableOrderingComposer,
+      $$ExistingScreenshotInventoryStatesTableAnnotationComposer,
+      $$ExistingScreenshotInventoryStatesTableCreateCompanionBuilder,
+      $$ExistingScreenshotInventoryStatesTableUpdateCompanionBuilder,
+      (
+        ExistingScreenshotInventoryState,
+        BaseReferences<
+          _$ContextoDatabase,
+          $ExistingScreenshotInventoryStatesTable,
+          ExistingScreenshotInventoryState
+        >,
+      ),
+      ExistingScreenshotInventoryState,
+      PrefetchHooks Function()
+    >;
 
 class $ContextoDatabaseManager {
   final _$ContextoDatabase _db;
@@ -8984,4 +10649,16 @@ class $ContextoDatabaseManager {
       );
   $$ClassificationJobsTableTableManager get classificationJobs =>
       $$ClassificationJobsTableTableManager(_db, _db.classificationJobs);
+  $$ExistingScreenshotCandidatesTableTableManager
+  get existingScreenshotCandidates =>
+      $$ExistingScreenshotCandidatesTableTableManager(
+        _db,
+        _db.existingScreenshotCandidates,
+      );
+  $$ExistingScreenshotInventoryStatesTableTableManager
+  get existingScreenshotInventoryStates =>
+      $$ExistingScreenshotInventoryStatesTableTableManager(
+        _db,
+        _db.existingScreenshotInventoryStates,
+      );
 }
