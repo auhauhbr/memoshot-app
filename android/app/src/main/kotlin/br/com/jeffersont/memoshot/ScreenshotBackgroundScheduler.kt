@@ -14,6 +14,8 @@ import java.util.concurrent.TimeUnit
 internal class ScreenshotBackgroundScheduler(private val context: Context) {
     private val state = NativeScreenshotMonitorState(context)
     private val workManager = WorkManager.getInstance(context)
+    private val processingScheduler = BackgroundProcessingScheduler(context)
+    private val inbox = BackgroundScreenshotInbox(context)
 
     fun activate(baseline: Long): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return false
@@ -24,6 +26,7 @@ internal class ScreenshotBackgroundScheduler(private val context: Context) {
                 ExistingWorkPolicy.REPLACE,
                 request(),
             )
+            processingScheduler.enqueueIfEnabled()
         }
         return true
     }
@@ -37,6 +40,7 @@ internal class ScreenshotBackgroundScheduler(private val context: Context) {
                 ExistingWorkPolicy.KEEP,
                 request(),
             )
+            if (inbox.pendingCount() > 0) processingScheduler.enqueueIfEnabled()
         }
         return true
     }
@@ -45,6 +49,7 @@ internal class ScreenshotBackgroundScheduler(private val context: Context) {
         synchronized(NativeScreenshotMonitorState.lock) {
             state.disable()
             workManager.cancelUniqueWork(UNIQUE_WORK_NAME)
+            processingScheduler.cancel()
         }
     }
 

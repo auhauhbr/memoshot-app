@@ -9,6 +9,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        FlutterEngineRuntimeState.attachUiEngine()
         screenshotBridge = ScreenshotMediaStoreBridge(
             activity = this,
             messenger = flutterEngine.dartExecutor.binaryMessenger,
@@ -33,6 +34,8 @@ class MainActivity : FlutterActivity() {
         screenshotBridge = null
         preferencesBridge?.dispose()
         preferencesBridge = null
+        FlutterEngineRuntimeState.detachUiEngine()
+        BackgroundProcessingScheduler(applicationContext).enqueueIfEnabled()
         super.onDestroy()
     }
 }

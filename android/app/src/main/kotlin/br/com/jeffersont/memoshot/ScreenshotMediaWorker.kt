@@ -16,6 +16,7 @@ internal class ScreenshotMediaWorker(
 ) : Worker(appContext, workerParams) {
     private val state = NativeScreenshotMonitorState(appContext)
     private val scheduler = ScreenshotBackgroundScheduler(appContext)
+    private val processingScheduler = BackgroundProcessingScheduler(appContext)
     private val inbox = BackgroundScreenshotInbox(appContext)
 
     override fun doWork(): Result {
@@ -28,6 +29,7 @@ internal class ScreenshotMediaWorker(
         }
         return try {
             val transientFailure = collectNewScreenshots()
+            scheduleProcessingSafely()
             if (transientFailure && runAttemptCount < MAX_TRANSIENT_ATTEMPTS) {
                 Result.retry()
             } else {
@@ -35,12 +37,21 @@ internal class ScreenshotMediaWorker(
                 Result.success()
             }
         } catch (_: Exception) {
+            scheduleProcessingSafely()
             if (runAttemptCount < MAX_TRANSIENT_ATTEMPTS) {
                 Result.retry()
             } else {
                 rearmSafely()
                 Result.success()
             }
+        }
+    }
+
+    private fun scheduleProcessingSafely() {
+        try {
+            if (inbox.pendingCount() > 0) processingScheduler.enqueueIfEnabled()
+        } catch (_: Exception) {
+            // O próximo gatilho de conteúdo ou abertura retomará a inbox.
         }
     }
 

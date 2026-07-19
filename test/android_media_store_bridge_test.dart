@@ -7,10 +7,15 @@ void main() {
   late String dartSource;
 
   setUpAll(() {
-    source = File(
+    final activityBridge = File(
       'android/app/src/main/kotlin/br/com/jeffersont/memoshot/'
       'ScreenshotMediaStoreBridge.kt',
     ).readAsStringSync();
+    final inboxBridge = File(
+      'android/app/src/main/kotlin/br/com/jeffersont/memoshot/'
+      'BackgroundScreenshotInboxBridge.kt',
+    ).readAsStringSync();
+    source = '$activityBridge\n$inboxBridge';
     dartSource = File(
       'lib/core/automatic_import/'
       'method_channel_automatic_screenshot_source.dart',

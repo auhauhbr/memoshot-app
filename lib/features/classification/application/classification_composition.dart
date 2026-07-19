@@ -60,12 +60,13 @@ ClassificationJobScheduler createLocalClassificationJobScheduler(
   );
 }
 
-ClassificationQueue createLocalClassificationQueue({
+LocalClassificationQueueProcessor createLocalClassificationQueue({
   required ContextoDatabase database,
   required ClassificationSuggestionRepository suggestionRepository,
   required CategoryRepository categoryRepository,
   required MediaItemRepository mediaRepository,
   required OcrRepository ocrRepository,
+  Duration processingExpiration = classificationProcessingExpiration,
 }) {
   final processor = createLocalClassificationProcessor(
     suggestionRepository,
@@ -81,5 +82,6 @@ ClassificationQueue createLocalClassificationQueue({
     mediaRepository: mediaRepository,
     ocrRepository: ocrRepository,
     now: DateTime.now,
+    processingExpiration: processingExpiration,
   );
 }

@@ -37,7 +37,7 @@ internal class ScreenshotMediaStoreBridge(
     private val preferences = activity.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     private val monitorState = NativeScreenshotMonitorState(activity)
     private val backgroundScheduler = ScreenshotBackgroundScheduler(activity)
-    private val backgroundInbox = BackgroundScreenshotInbox(activity)
+    private val backgroundInboxHandler = BackgroundScreenshotInboxHandler(activity)
     private var permissionResult: MethodChannel.Result? = null
     private var eventSink: EventChannel.EventSink? = null
     private var observer: ContentObserver? = null
@@ -52,6 +52,7 @@ internal class ScreenshotMediaStoreBridge(
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        if (backgroundInboxHandler.handle(call, result)) return
         when (call.method) {
             "permissionStatus" -> result.success(permissionStatus())
             "requestPermission" -> requestPermission(result)
@@ -82,24 +83,6 @@ internal class ScreenshotMediaStoreBridge(
                 val marker = call.argument<Number>("lastMediaId")?.toLong() ?: 0L
                 val resetBaseline = call.argument<Boolean>("resetBaseline") == true
                 configureBackgroundMonitoring(enabled, marker, resetBaseline, result)
-            }
-            "listBackgroundInbox" -> runInBackground(result) {
-                backgroundInbox.listEntries().map { entry ->
-                    mapOf(
-                        "entryId" to entry.entryId,
-                        "mediaId" to entry.mediaStoreId,
-                        "privatePath" to entry.imagePath,
-                        "mimeType" to entry.mimeType,
-                        "capturedAt" to entry.capturedAt,
-                    )
-                }
-            }
-            "backgroundInboxPendingCount" -> runInBackground(result) {
-                backgroundInbox.pendingCount()
-            }
-            "acknowledgeBackgroundInbox", "rejectBackgroundInbox" -> {
-                val entryId = call.argument<String>("entryId").orEmpty()
-                runInBackground(result) { backgroundInbox.remove(entryId) }
             }
             else -> result.notImplemented()
         }
@@ -389,12 +372,12 @@ internal class ScreenshotMediaStoreBridge(
         permissionResult = null
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
+        backgroundInboxHandler.dispose()
         executor.shutdownNow()
     }
 
     companion object {
-        private const val METHODS_CHANNEL =
-            "br.com.jeffersont.memoshot/automatic_screenshots/methods"
+        private const val METHODS_CHANNEL = AUTOMATIC_SCREENSHOTS_METHODS_CHANNEL
         private const val EVENTS_CHANNEL =
             "br.com.jeffersont.memoshot/automatic_screenshots/events"
         private const val PREFERENCES = "automatic_screenshot_permission"

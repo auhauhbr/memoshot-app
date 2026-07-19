@@ -17,7 +17,9 @@ abstract interface class ProcessingJobStore {
 
   Future<void> resetForRetry(int mediaItemId);
 
-  Future<List<int>> recoverInterruptedOcrJobs();
+  Future<List<int>> recoverInterruptedOcrJobs({DateTime? startedBefore});
+
+  Future<bool> hasPendingOcrJobs();
 
   Future<domain_media.MediaItem?> findMediaItem(int mediaItemId);
 
@@ -199,26 +201,36 @@ class DriftProcessingJobStore implements ProcessingJobStore {
   }
 
   @override
-  Future<List<int>> recoverInterruptedOcrJobs() async {
+  Future<List<int>> recoverInterruptedOcrJobs({DateTime? startedBefore}) async {
     final interrupted =
-        await (_database.select(_database.processingJobs)..where(
-              (job) =>
+        await (_database.select(_database.processingJobs)..where((job) {
+              final processing =
                   job.jobType.equals('ocr') &
                   job.status.equals(
                     _statusValue(domain.ProcessingJobStatus.processing),
-                  ),
-            ))
+                  );
+              if (startedBefore == null) return processing;
+              return processing &
+                  (job.startedAt.isNull() |
+                      job.startedAt.isSmallerOrEqualValue(startedBefore));
+            }))
             .get();
     if (interrupted.isEmpty) {
       return const [];
     }
-    await (_database.update(_database.processingJobs)..where(
-          (job) =>
+    final ids = interrupted.map((job) => job.id).toList(growable: false);
+    await (_database.update(_database.processingJobs)..where((job) {
+          final stillProcessing =
+              job.id.isIn(ids) &
               job.jobType.equals('ocr') &
               job.status.equals(
                 _statusValue(domain.ProcessingJobStatus.processing),
-              ),
-        ))
+              );
+          if (startedBefore == null) return stillProcessing;
+          return stillProcessing &
+              (job.startedAt.isNull() |
+                  job.startedAt.isSmallerOrEqualValue(startedBefore));
+        }))
         .write(
           ProcessingJobsCompanion(
             status: Value(_statusValue(domain.ProcessingJobStatus.pending)),
@@ -227,6 +239,22 @@ class DriftProcessingJobStore implements ProcessingJobStore {
           ),
         );
     return interrupted.map((job) => job.mediaItemId).toList(growable: false);
+  }
+
+  @override
+  Future<bool> hasPendingOcrJobs() async {
+    final row =
+        await (_database.selectOnly(_database.processingJobs)
+              ..addColumns([_database.processingJobs.id])
+              ..where(
+                _database.processingJobs.jobType.equals('ocr') &
+                    _database.processingJobs.status.equals(
+                      _statusValue(domain.ProcessingJobStatus.pending),
+                    ),
+              )
+              ..limit(1))
+            .getSingleOrNull();
+    return row != null;
   }
 
   @override

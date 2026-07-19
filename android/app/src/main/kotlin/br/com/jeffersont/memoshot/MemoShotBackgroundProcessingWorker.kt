@@ -1,0 +1,150 @@
+package br.com.jeffersont.memoshot
+
+import android.content.Context
+import androidx.work.CoroutineWorker
+import androidx.work.Data
+import androidx.work.WorkerParameters
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.dart.DartExecutor
+import io.flutter.embedding.engine.loader.FlutterLoader
+import io.flutter.plugins.GeneratedPluginRegistrant
+import io.flutter.plugin.common.MethodChannel
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+
+internal class MemoShotBackgroundProcessingWorker(
+    appContext: Context,
+    workerParams: WorkerParameters,
+) : CoroutineWorker(appContext, workerParams) {
+    private val state = NativeScreenshotMonitorState(appContext)
+    private val scheduler = BackgroundProcessingScheduler(appContext)
+
+    override suspend fun doWork(): Result {
+        if (!state.isEnabled()) return Result.success()
+        if (FlutterEngineRuntimeState.isUiEngineAttached()) return Result.success()
+
+        var session: HeadlessEngineSession? = null
+        return try {
+            val createdSession = withTimeout(ENGINE_INITIALIZATION_TIMEOUT_MS) {
+                createSession()
+            }
+            session = createdSession
+            val terminal = withTimeout(DART_RESPONSE_TIMEOUT_MS) {
+                createdSession.terminal.await()
+            }
+            mapResult(terminal)
+        } catch (_: TimeoutCancellationException) {
+            retryOrFailure("engineOrRunnerTimeout")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            retryOrFailure("engineOrRunnerUnavailable")
+        } finally {
+            withContext(NonCancellable + Dispatchers.Main) {
+                session?.dispose()
+            }
+        }
+    }
+
+    private suspend fun createSession(): HeadlessEngineSession =
+        withContext(Dispatchers.Main) {
+            val loader = FlutterLoader()
+            loader.startInitialization(applicationContext)
+            loader.ensureInitializationComplete(applicationContext, null)
+
+            val engine = FlutterEngine(applicationContext, null, false)
+            GeneratedPluginRegistrant.registerWith(engine)
+            val inboxBridge = BackgroundScreenshotInboxBridge(
+                applicationContext,
+                engine.dartExecutor.binaryMessenger,
+            )
+            val terminal = CompletableDeferred<HeadlessTerminalMessage>()
+            val channel = MethodChannel(
+                engine.dartExecutor.binaryMessenger,
+                BACKGROUND_PROCESSING_CHANNEL,
+            )
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "ready" -> result.success(null)
+                    "completed", "retryableFailure", "terminalFailure", "cancelled" -> {
+                        val payload = call.arguments as? Map<*, *> ?: emptyMap<Any, Any>()
+                        terminal.complete(
+                            HeadlessTerminalMessage(
+                                method = call.method,
+                                pendingImmediateWork =
+                                    (payload["pendingImmediateWork"] as? Number)?.toInt() == 1,
+                                resultCode = payload["resultCode"] as? String ?: "unknown",
+                            ),
+                        )
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+            engine.dartExecutor.executeDartEntrypoint(
+                DartExecutor.DartEntrypoint(
+                    loader.findAppBundlePath(),
+                    DART_ENTRYPOINT,
+                ),
+            )
+            HeadlessEngineSession(engine, inboxBridge, channel, terminal)
+        }
+
+    private fun mapResult(message: HeadlessTerminalMessage): Result {
+        if (message.pendingImmediateWork && state.isEnabled()) {
+            scheduler.enqueueIfEnabled()
+        }
+        return when (message.method) {
+            "completed" -> Result.success(
+                Data.Builder().putString("resultCode", message.resultCode).build(),
+            )
+            "retryableFailure" -> retryOrFailure(message.resultCode)
+            "terminalFailure" -> Result.failure(
+                Data.Builder().putString("resultCode", message.resultCode).build(),
+            )
+            "cancelled" -> Result.success()
+            else -> retryOrFailure("unknownResponse")
+        }
+    }
+
+    private fun retryOrFailure(resultCode: String): Result {
+        return if (runAttemptCount < MAX_WORK_MANAGER_ATTEMPTS) {
+            Result.retry()
+        } else {
+            Result.failure(Data.Builder().putString("resultCode", resultCode).build())
+        }
+    }
+
+    private data class HeadlessTerminalMessage(
+        val method: String,
+        val pendingImmediateWork: Boolean,
+        val resultCode: String,
+    )
+
+    private class HeadlessEngineSession(
+        private val engine: FlutterEngine,
+        private val inboxBridge: BackgroundScreenshotInboxBridge,
+        private val channel: MethodChannel,
+        val terminal: CompletableDeferred<HeadlessTerminalMessage>,
+    ) {
+        fun dispose() {
+            channel.setMethodCallHandler(null)
+            inboxBridge.dispose()
+            engine.destroy()
+        }
+    }
+
+    companion object {
+        private const val BACKGROUND_PROCESSING_CHANNEL =
+            "br.com.jeffersont.memoshot/background_processing"
+        private const val DART_ENTRYPOINT = "memoshotBackgroundEntrypoint"
+        private const val ENGINE_INITIALIZATION_TIMEOUT_MS = 30_000L
+        private const val DART_RESPONSE_TIMEOUT_MS = 9L * 60 * 1000
+        private const val MAX_WORK_MANAGER_ATTEMPTS = 3
+    }
+}

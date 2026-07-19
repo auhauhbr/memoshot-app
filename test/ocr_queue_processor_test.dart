@@ -102,7 +102,12 @@ void main() {
     await scheduler.schedule(item.id);
     await jobStore.claimNextPendingOcr();
     final service = FakeRecognitionService(texts: ['Retomado']);
-    final queue = createQueue(jobStore, resultStore, service);
+    final queue = createQueue(
+      jobStore,
+      resultStore,
+      service,
+      processingExpiration: Duration.zero,
+    );
     addTearDown(queue.close);
 
     await queue.recoverAndStart();
@@ -112,6 +117,24 @@ void main() {
     expect(
       (await resultStore.findByMediaItemId(item.id))?.fullText,
       'Retomado',
+    );
+  });
+
+  test('recuperação não rouba OCR processing recente', () async {
+    final item = await createMediaItem(mediaStore, temporaryDirectory, 64);
+    await scheduler.schedule(item.id);
+    await jobStore.claimNextPendingOcr();
+    final queue = createQueue(
+      jobStore,
+      resultStore,
+      FakeRecognitionService(texts: ['não deve executar']),
+    );
+    addTearDown(queue.close);
+
+    expect(await queue.recoverInterrupted(), 0);
+    expect(
+      (await jobStore.findOcrJob(item.id))?.status,
+      ProcessingJobStatus.processing,
     );
   });
 
@@ -259,6 +282,7 @@ void main() {
         resultStore: resultStore,
         recognitionService: recognition,
         classificationJobScheduler: classificationScheduler,
+        processingExpiration: Duration.zero,
       );
       addTearDown(resumedQueue.close);
 
@@ -626,6 +650,7 @@ LocalOcrQueueProcessor createQueue(
   OcrResultStore resultStore,
   TextRecognitionService service, {
   ClassificationProcessor? classificationProcessor,
+  Duration processingExpiration = ocrProcessingExpiration,
 }) {
   final bridge = classificationProcessor == null
       ? null
@@ -640,6 +665,7 @@ LocalOcrQueueProcessor createQueue(
     recognitionService: service,
     classificationJobScheduler: bridge,
     classificationQueue: bridge,
+    processingExpiration: processingExpiration,
   );
 }
 

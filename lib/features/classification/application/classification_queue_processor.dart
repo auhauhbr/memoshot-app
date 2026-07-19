@@ -75,7 +75,29 @@ abstract interface class ClassificationQueue {
   Future<void> close();
 }
 
-class LocalClassificationQueueProcessor implements ClassificationQueue {
+class ClassificationQueueRunSummary {
+  const ClassificationQueueRunSummary({
+    required this.processedCount,
+    required this.backfillCount,
+    required this.hasImmediateWork,
+  });
+
+  final int processedCount;
+  final int backfillCount;
+  final bool hasImmediateWork;
+}
+
+abstract interface class HeadlessClassificationQueue {
+  Future<int> recoverInterrupted();
+
+  Future<ClassificationQueueRunSummary> processAvailable({
+    required int maximumItems,
+    required bool enqueueBackfill,
+  });
+}
+
+class LocalClassificationQueueProcessor
+    implements ClassificationQueue, HeadlessClassificationQueue {
   LocalClassificationQueueProcessor({
     required ClassificationJobStore jobStore,
     required ClassificationProcessor classificationProcessor,
@@ -138,21 +160,30 @@ class LocalClassificationQueueProcessor implements ClassificationQueue {
   @override
   Future<void> recoverAndStart() async {
     try {
-      final now = _now();
-      await _jobStore.recoverExpired(
-        expiredBefore: now.subtract(processingExpiration),
-        now: now,
-      );
-      await _jobStore.enqueueBackfillBatch(
-        engineVersion: engineVersion,
-        now: now,
-        limit: backfillBatchSize,
-      );
+      await recoverInterrupted();
+      await _enqueueBackfill(backfillBatchSize);
     } catch (_) {
       // A fila de classificação não pode impedir a abertura do aplicativo.
     } finally {
       signal();
     }
+  }
+
+  @override
+  Future<int> recoverInterrupted() async {
+    final now = _now();
+    return _jobStore.recoverExpired(
+      expiredBefore: now.subtract(processingExpiration),
+      now: now,
+    );
+  }
+
+  Future<int> _enqueueBackfill(int limit) {
+    return _jobStore.enqueueBackfillBatch(
+      engineVersion: engineVersion,
+      now: _now(),
+      limit: limit,
+    );
   }
 
   @override
@@ -184,21 +215,50 @@ class LocalClassificationQueueProcessor implements ClassificationQueue {
   }
 
   Future<void> _drain() async {
-    final now = _now();
-    await _jobStore.recoverExpired(
-      expiredBefore: now.subtract(processingExpiration),
-      now: now,
-    );
+    await recoverInterrupted();
+    await _processAvailable(maximumBatchSize);
+  }
+
+  Future<int> _processAvailable(int maximumItems) async {
     var processed = 0;
-    while (!_closed && processed < maximumBatchSize) {
+    while (!_closed && processed < maximumItems) {
       final job = await _jobStore.claimNextAvailable(
         now: _now(),
         engineVersion: engineVersion,
       );
-      if (job == null) return;
+      if (job == null) return processed;
       processed++;
       await _process(job);
     }
+    return processed;
+  }
+
+  @override
+  Future<ClassificationQueueRunSummary> processAvailable({
+    required int maximumItems,
+    required bool enqueueBackfill,
+  }) async {
+    if (_closed || maximumItems <= 0) {
+      return const ClassificationQueueRunSummary(
+        processedCount: 0,
+        backfillCount: 0,
+        hasImmediateWork: false,
+      );
+    }
+    final backfillCount = enqueueBackfill
+        ? await _enqueueBackfill(maximumItems)
+        : 0;
+    final processedCount = await _processAvailable(maximumItems);
+    final availableJob = await _jobStore.hasAvailable(
+      engineVersion: engineVersion,
+      now: _now(),
+    );
+    return ClassificationQueueRunSummary(
+      processedCount: processedCount,
+      backfillCount: backfillCount,
+      hasImmediateWork:
+          availableJob || (enqueueBackfill && backfillCount >= maximumItems),
+    );
   }
 
   Future<void> _process(ClassificationJob job) async {

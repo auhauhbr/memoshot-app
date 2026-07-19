@@ -45,6 +45,11 @@ abstract interface class ClassificationJobStore {
     required DateTime now,
     required int limit,
   });
+
+  Future<bool> hasAvailable({
+    required int engineVersion,
+    required DateTime now,
+  });
 }
 
 class DriftClassificationJobStore implements ClassificationJobStore {
@@ -403,6 +408,32 @@ class DriftClassificationJobStore implements ClassificationJobStore {
       }
       return inserted;
     });
+  }
+
+  @override
+  Future<bool> hasAvailable({
+    required int engineVersion,
+    required DateTime now,
+  }) async {
+    final row =
+        await (_database.selectOnly(_database.classificationJobs)
+              ..addColumns([_database.classificationJobs.mediaItemId])
+              ..where(
+                _database.classificationJobs.engineVersion.equals(
+                      engineVersion,
+                    ) &
+                    _database.classificationJobs.availableAt
+                        .isSmallerOrEqualValue(now) &
+                    (_database.classificationJobs.state.equals(
+                          domain.ClassificationJobState.pending.name,
+                        ) |
+                        _database.classificationJobs.state.equals(
+                          domain.ClassificationJobState.retryScheduled.name,
+                        )),
+              )
+              ..limit(1))
+            .getSingleOrNull();
+    return row != null;
   }
 
   domain.ClassificationJob _toDomain(ClassificationJob row) {

@@ -9,6 +9,8 @@ import '../../ocr/domain/ocr_result.dart';
 import '../domain/processing_job.dart';
 import 'processing_job_store.dart';
 
+const ocrProcessingExpiration = Duration(minutes: 10);
+
 abstract interface class OcrQueue {
   Stream<int> get changes;
 
@@ -23,19 +25,39 @@ abstract interface class OcrQueue {
   Future<void> close();
 }
 
-class LocalOcrQueueProcessor implements OcrQueue {
+class OcrQueueRunSummary {
+  const OcrQueueRunSummary({
+    required this.processedCount,
+    required this.hasImmediateWork,
+  });
+
+  final int processedCount;
+  final bool hasImmediateWork;
+}
+
+abstract interface class HeadlessOcrQueue {
+  Future<int> recoverInterrupted();
+
+  Future<OcrQueueRunSummary> processAvailable({required int maximumItems});
+}
+
+class LocalOcrQueueProcessor implements OcrQueue, HeadlessOcrQueue {
   LocalOcrQueueProcessor({
     required ProcessingJobStore jobStore,
     required OcrResultStore resultStore,
     required TextRecognitionService recognitionService,
     ClassificationJobScheduler? classificationJobScheduler,
     ClassificationQueue? classificationQueue,
+    DateTime Function() now = DateTime.now,
+    Duration processingExpiration = ocrProcessingExpiration,
   }) : this._(
          jobStore,
          resultStore,
          recognitionService,
          classificationJobScheduler,
          classificationQueue,
+         now,
+         processingExpiration,
        );
 
   LocalOcrQueueProcessor._(
@@ -44,6 +66,8 @@ class LocalOcrQueueProcessor implements OcrQueue {
     this._recognitionService,
     this._classificationJobScheduler,
     this._classificationQueue,
+    this._now,
+    this._processingExpiration,
   );
 
   final ProcessingJobStore _jobStore;
@@ -51,6 +75,8 @@ class LocalOcrQueueProcessor implements OcrQueue {
   final TextRecognitionService _recognitionService;
   final ClassificationJobScheduler? _classificationJobScheduler;
   final ClassificationQueue? _classificationQueue;
+  final DateTime Function() _now;
+  final Duration _processingExpiration;
   final StreamController<int> _changes = StreamController<int>.broadcast();
   Future<void>? _draining;
   bool _signalRequested = false;
@@ -85,14 +111,22 @@ class LocalOcrQueueProcessor implements OcrQueue {
   @override
   Future<void> recoverAndStart() async {
     try {
-      final recovered = await _jobStore.recoverInterruptedOcrJobs();
-      for (final mediaItemId in recovered) {
-        _notify(mediaItemId);
-      }
+      await recoverInterrupted();
       signal();
     } catch (_) {
       // A recuperação da fila não pode impedir a abertura do aplicativo.
     }
+  }
+
+  @override
+  Future<int> recoverInterrupted() async {
+    final recovered = await _jobStore.recoverInterruptedOcrJobs(
+      startedBefore: _now().subtract(_processingExpiration),
+    );
+    for (final mediaItemId in recovered) {
+      _notify(mediaItemId);
+    }
+    return recovered.length;
   }
 
   @override
@@ -125,15 +159,35 @@ class LocalOcrQueueProcessor implements OcrQueue {
     }
   }
 
-  Future<void> _drain() async {
-    while (!_closed) {
+  Future<int> _drain({int? maximumItems}) async {
+    var processed = 0;
+    while (!_closed && (maximumItems == null || processed < maximumItems)) {
       final job = await _jobStore.claimNextPendingOcr();
       if (job == null) {
-        return;
+        return processed;
       }
+      processed++;
       _notify(job.mediaItemId);
       await _process(job);
     }
+    return processed;
+  }
+
+  @override
+  Future<OcrQueueRunSummary> processAvailable({
+    required int maximumItems,
+  }) async {
+    if (_closed || maximumItems <= 0) {
+      return const OcrQueueRunSummary(
+        processedCount: 0,
+        hasImmediateWork: false,
+      );
+    }
+    final processed = await _drain(maximumItems: maximumItems);
+    return OcrQueueRunSummary(
+      processedCount: processed,
+      hasImmediateWork: await _jobStore.hasPendingOcrJobs(),
+    );
   }
 
   Future<void> _process(ProcessingJob job) async {
