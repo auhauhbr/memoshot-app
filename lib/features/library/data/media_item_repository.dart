@@ -25,6 +25,8 @@ class ImportResult {
 abstract interface class MediaItemRepository {
   Future<List<MediaItem>> loadAvailableItems({int? tagId});
 
+  Future<MediaItem?> loadById(int mediaItemId);
+
   Future<ImportResult> importScreenshots(
     List<SelectedScreenshot> screenshots, {
     ImportOrigin origin = ImportOrigin.picker,
@@ -86,6 +88,9 @@ class LocalMediaItemRepository implements MediaItemRepository {
     }
     return available;
   }
+
+  @override
+  Future<MediaItem?> loadById(int mediaItemId) => _store.findById(mediaItemId);
 
   Future<void> _repairLibrary() async {
     var items = await _store.readItems();

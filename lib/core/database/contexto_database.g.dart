@@ -4056,6 +4056,593 @@ class ClassificationSuggestionsCompanion
   }
 }
 
+class $ClassificationJobsTable extends ClassificationJobs
+    with TableInfo<$ClassificationJobsTable, ClassificationJob> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ClassificationJobsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _mediaItemIdMeta = const VerificationMeta(
+    'mediaItemId',
+  );
+  @override
+  late final GeneratedColumn<int> mediaItemId = GeneratedColumn<int>(
+    'media_item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES media_items (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _stateMeta = const VerificationMeta('state');
+  @override
+  late final GeneratedColumn<String> state = GeneratedColumn<String>(
+    'state',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _attemptsMeta = const VerificationMeta(
+    'attempts',
+  );
+  @override
+  late final GeneratedColumn<int> attempts = GeneratedColumn<int>(
+    'attempts',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _availableAtMeta = const VerificationMeta(
+    'availableAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> availableAt = GeneratedColumn<DateTime>(
+    'available_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _engineVersionMeta = const VerificationMeta(
+    'engineVersion',
+  );
+  @override
+  late final GeneratedColumn<int> engineVersion = GeneratedColumn<int>(
+    'engine_version',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _processingStartedAtMeta =
+      const VerificationMeta('processingStartedAt');
+  @override
+  late final GeneratedColumn<DateTime> processingStartedAt =
+      GeneratedColumn<DateTime>(
+        'processing_started_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastErrorCodeMeta = const VerificationMeta(
+    'lastErrorCode',
+  );
+  @override
+  late final GeneratedColumn<String> lastErrorCode = GeneratedColumn<String>(
+    'last_error_code',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    mediaItemId,
+    state,
+    attempts,
+    availableAt,
+    engineVersion,
+    createdAt,
+    updatedAt,
+    processingStartedAt,
+    lastErrorCode,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'classification_jobs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ClassificationJob> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('media_item_id')) {
+      context.handle(
+        _mediaItemIdMeta,
+        mediaItemId.isAcceptableOrUnknown(
+          data['media_item_id']!,
+          _mediaItemIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('state')) {
+      context.handle(
+        _stateMeta,
+        state.isAcceptableOrUnknown(data['state']!, _stateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_stateMeta);
+    }
+    if (data.containsKey('attempts')) {
+      context.handle(
+        _attemptsMeta,
+        attempts.isAcceptableOrUnknown(data['attempts']!, _attemptsMeta),
+      );
+    }
+    if (data.containsKey('available_at')) {
+      context.handle(
+        _availableAtMeta,
+        availableAt.isAcceptableOrUnknown(
+          data['available_at']!,
+          _availableAtMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_availableAtMeta);
+    }
+    if (data.containsKey('engine_version')) {
+      context.handle(
+        _engineVersionMeta,
+        engineVersion.isAcceptableOrUnknown(
+          data['engine_version']!,
+          _engineVersionMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_engineVersionMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('processing_started_at')) {
+      context.handle(
+        _processingStartedAtMeta,
+        processingStartedAt.isAcceptableOrUnknown(
+          data['processing_started_at']!,
+          _processingStartedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_error_code')) {
+      context.handle(
+        _lastErrorCodeMeta,
+        lastErrorCode.isAcceptableOrUnknown(
+          data['last_error_code']!,
+          _lastErrorCodeMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {mediaItemId};
+  @override
+  ClassificationJob map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ClassificationJob(
+      mediaItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}media_item_id'],
+      )!,
+      state: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}state'],
+      )!,
+      attempts: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}attempts'],
+      )!,
+      availableAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}available_at'],
+      )!,
+      engineVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}engine_version'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      processingStartedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}processing_started_at'],
+      ),
+      lastErrorCode: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}last_error_code'],
+      ),
+    );
+  }
+
+  @override
+  $ClassificationJobsTable createAlias(String alias) {
+    return $ClassificationJobsTable(attachedDatabase, alias);
+  }
+}
+
+class ClassificationJob extends DataClass
+    implements Insertable<ClassificationJob> {
+  final int mediaItemId;
+  final String state;
+  final int attempts;
+  final DateTime availableAt;
+  final int engineVersion;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? processingStartedAt;
+  final String? lastErrorCode;
+  const ClassificationJob({
+    required this.mediaItemId,
+    required this.state,
+    required this.attempts,
+    required this.availableAt,
+    required this.engineVersion,
+    required this.createdAt,
+    required this.updatedAt,
+    this.processingStartedAt,
+    this.lastErrorCode,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['media_item_id'] = Variable<int>(mediaItemId);
+    map['state'] = Variable<String>(state);
+    map['attempts'] = Variable<int>(attempts);
+    map['available_at'] = Variable<DateTime>(availableAt);
+    map['engine_version'] = Variable<int>(engineVersion);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || processingStartedAt != null) {
+      map['processing_started_at'] = Variable<DateTime>(processingStartedAt);
+    }
+    if (!nullToAbsent || lastErrorCode != null) {
+      map['last_error_code'] = Variable<String>(lastErrorCode);
+    }
+    return map;
+  }
+
+  ClassificationJobsCompanion toCompanion(bool nullToAbsent) {
+    return ClassificationJobsCompanion(
+      mediaItemId: Value(mediaItemId),
+      state: Value(state),
+      attempts: Value(attempts),
+      availableAt: Value(availableAt),
+      engineVersion: Value(engineVersion),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      processingStartedAt: processingStartedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(processingStartedAt),
+      lastErrorCode: lastErrorCode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastErrorCode),
+    );
+  }
+
+  factory ClassificationJob.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ClassificationJob(
+      mediaItemId: serializer.fromJson<int>(json['mediaItemId']),
+      state: serializer.fromJson<String>(json['state']),
+      attempts: serializer.fromJson<int>(json['attempts']),
+      availableAt: serializer.fromJson<DateTime>(json['availableAt']),
+      engineVersion: serializer.fromJson<int>(json['engineVersion']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      processingStartedAt: serializer.fromJson<DateTime?>(
+        json['processingStartedAt'],
+      ),
+      lastErrorCode: serializer.fromJson<String?>(json['lastErrorCode']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'mediaItemId': serializer.toJson<int>(mediaItemId),
+      'state': serializer.toJson<String>(state),
+      'attempts': serializer.toJson<int>(attempts),
+      'availableAt': serializer.toJson<DateTime>(availableAt),
+      'engineVersion': serializer.toJson<int>(engineVersion),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'processingStartedAt': serializer.toJson<DateTime?>(processingStartedAt),
+      'lastErrorCode': serializer.toJson<String?>(lastErrorCode),
+    };
+  }
+
+  ClassificationJob copyWith({
+    int? mediaItemId,
+    String? state,
+    int? attempts,
+    DateTime? availableAt,
+    int? engineVersion,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> processingStartedAt = const Value.absent(),
+    Value<String?> lastErrorCode = const Value.absent(),
+  }) => ClassificationJob(
+    mediaItemId: mediaItemId ?? this.mediaItemId,
+    state: state ?? this.state,
+    attempts: attempts ?? this.attempts,
+    availableAt: availableAt ?? this.availableAt,
+    engineVersion: engineVersion ?? this.engineVersion,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    processingStartedAt: processingStartedAt.present
+        ? processingStartedAt.value
+        : this.processingStartedAt,
+    lastErrorCode: lastErrorCode.present
+        ? lastErrorCode.value
+        : this.lastErrorCode,
+  );
+  ClassificationJob copyWithCompanion(ClassificationJobsCompanion data) {
+    return ClassificationJob(
+      mediaItemId: data.mediaItemId.present
+          ? data.mediaItemId.value
+          : this.mediaItemId,
+      state: data.state.present ? data.state.value : this.state,
+      attempts: data.attempts.present ? data.attempts.value : this.attempts,
+      availableAt: data.availableAt.present
+          ? data.availableAt.value
+          : this.availableAt,
+      engineVersion: data.engineVersion.present
+          ? data.engineVersion.value
+          : this.engineVersion,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      processingStartedAt: data.processingStartedAt.present
+          ? data.processingStartedAt.value
+          : this.processingStartedAt,
+      lastErrorCode: data.lastErrorCode.present
+          ? data.lastErrorCode.value
+          : this.lastErrorCode,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ClassificationJob(')
+          ..write('mediaItemId: $mediaItemId, ')
+          ..write('state: $state, ')
+          ..write('attempts: $attempts, ')
+          ..write('availableAt: $availableAt, ')
+          ..write('engineVersion: $engineVersion, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('processingStartedAt: $processingStartedAt, ')
+          ..write('lastErrorCode: $lastErrorCode')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    mediaItemId,
+    state,
+    attempts,
+    availableAt,
+    engineVersion,
+    createdAt,
+    updatedAt,
+    processingStartedAt,
+    lastErrorCode,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ClassificationJob &&
+          other.mediaItemId == this.mediaItemId &&
+          other.state == this.state &&
+          other.attempts == this.attempts &&
+          other.availableAt == this.availableAt &&
+          other.engineVersion == this.engineVersion &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.processingStartedAt == this.processingStartedAt &&
+          other.lastErrorCode == this.lastErrorCode);
+}
+
+class ClassificationJobsCompanion extends UpdateCompanion<ClassificationJob> {
+  final Value<int> mediaItemId;
+  final Value<String> state;
+  final Value<int> attempts;
+  final Value<DateTime> availableAt;
+  final Value<int> engineVersion;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> processingStartedAt;
+  final Value<String?> lastErrorCode;
+  const ClassificationJobsCompanion({
+    this.mediaItemId = const Value.absent(),
+    this.state = const Value.absent(),
+    this.attempts = const Value.absent(),
+    this.availableAt = const Value.absent(),
+    this.engineVersion = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.processingStartedAt = const Value.absent(),
+    this.lastErrorCode = const Value.absent(),
+  });
+  ClassificationJobsCompanion.insert({
+    this.mediaItemId = const Value.absent(),
+    required String state,
+    this.attempts = const Value.absent(),
+    required DateTime availableAt,
+    required int engineVersion,
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.processingStartedAt = const Value.absent(),
+    this.lastErrorCode = const Value.absent(),
+  }) : state = Value(state),
+       availableAt = Value(availableAt),
+       engineVersion = Value(engineVersion),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<ClassificationJob> custom({
+    Expression<int>? mediaItemId,
+    Expression<String>? state,
+    Expression<int>? attempts,
+    Expression<DateTime>? availableAt,
+    Expression<int>? engineVersion,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? processingStartedAt,
+    Expression<String>? lastErrorCode,
+  }) {
+    return RawValuesInsertable({
+      if (mediaItemId != null) 'media_item_id': mediaItemId,
+      if (state != null) 'state': state,
+      if (attempts != null) 'attempts': attempts,
+      if (availableAt != null) 'available_at': availableAt,
+      if (engineVersion != null) 'engine_version': engineVersion,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (processingStartedAt != null)
+        'processing_started_at': processingStartedAt,
+      if (lastErrorCode != null) 'last_error_code': lastErrorCode,
+    });
+  }
+
+  ClassificationJobsCompanion copyWith({
+    Value<int>? mediaItemId,
+    Value<String>? state,
+    Value<int>? attempts,
+    Value<DateTime>? availableAt,
+    Value<int>? engineVersion,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? processingStartedAt,
+    Value<String?>? lastErrorCode,
+  }) {
+    return ClassificationJobsCompanion(
+      mediaItemId: mediaItemId ?? this.mediaItemId,
+      state: state ?? this.state,
+      attempts: attempts ?? this.attempts,
+      availableAt: availableAt ?? this.availableAt,
+      engineVersion: engineVersion ?? this.engineVersion,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      processingStartedAt: processingStartedAt ?? this.processingStartedAt,
+      lastErrorCode: lastErrorCode ?? this.lastErrorCode,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (mediaItemId.present) {
+      map['media_item_id'] = Variable<int>(mediaItemId.value);
+    }
+    if (state.present) {
+      map['state'] = Variable<String>(state.value);
+    }
+    if (attempts.present) {
+      map['attempts'] = Variable<int>(attempts.value);
+    }
+    if (availableAt.present) {
+      map['available_at'] = Variable<DateTime>(availableAt.value);
+    }
+    if (engineVersion.present) {
+      map['engine_version'] = Variable<int>(engineVersion.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (processingStartedAt.present) {
+      map['processing_started_at'] = Variable<DateTime>(
+        processingStartedAt.value,
+      );
+    }
+    if (lastErrorCode.present) {
+      map['last_error_code'] = Variable<String>(lastErrorCode.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ClassificationJobsCompanion(')
+          ..write('mediaItemId: $mediaItemId, ')
+          ..write('state: $state, ')
+          ..write('attempts: $attempts, ')
+          ..write('availableAt: $availableAt, ')
+          ..write('engineVersion: $engineVersion, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('processingStartedAt: $processingStartedAt, ')
+          ..write('lastErrorCode: $lastErrorCode')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ContextoDatabase extends GeneratedDatabase {
   _$ContextoDatabase(QueryExecutor e) : super(e);
   $ContextoDatabaseManager get managers => $ContextoDatabaseManager(this);
@@ -4072,6 +4659,8 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
       $AutomaticImportSettingsTable(this);
   late final $ClassificationSuggestionsTable classificationSuggestions =
       $ClassificationSuggestionsTable(this);
+  late final $ClassificationJobsTable classificationJobs =
+      $ClassificationJobsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4086,6 +4675,7 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
     mediaTags,
     automaticImportSettings,
     classificationSuggestions,
+    classificationJobs,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -4139,6 +4729,13 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
       result: [
         TableUpdate('classification_suggestions', kind: UpdateKind.delete),
       ],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'media_items',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('classification_jobs', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -4269,6 +4866,27 @@ final class $$MediaItemsTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _classificationSuggestionsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ClassificationJobsTable, List<ClassificationJob>>
+  _classificationJobsRefsTable(_$ContextoDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.classificationJobs,
+        aliasName: 'media_items__id__classification_jobs__media_item_id',
+      );
+
+  $$ClassificationJobsTableProcessedTableManager get classificationJobsRefs {
+    final manager = $$ClassificationJobsTableTableManager(
+      $_db,
+      $_db.classificationJobs,
+    ).filter((f) => f.mediaItemId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _classificationJobsRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -4459,6 +5077,31 @@ class $$MediaItemsTableFilterComposer
                     $removeJoinBuilderFromRootComposer,
               ),
         );
+    return f(composer);
+  }
+
+  Expression<bool> classificationJobsRefs(
+    Expression<bool> Function($$ClassificationJobsTableFilterComposer f) f,
+  ) {
+    final $$ClassificationJobsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.classificationJobs,
+      getReferencedColumn: (t) => t.mediaItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ClassificationJobsTableFilterComposer(
+            $db: $db,
+            $table: $db.classificationJobs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
     return f(composer);
   }
 }
@@ -4700,6 +5343,32 @@ class $$MediaItemsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> classificationJobsRefs<T extends Object>(
+    Expression<T> Function($$ClassificationJobsTableAnnotationComposer a) f,
+  ) {
+    final $$ClassificationJobsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.classificationJobs,
+          getReferencedColumn: (t) => t.mediaItemId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$ClassificationJobsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.classificationJobs,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$MediaItemsTableTableManager
@@ -4721,6 +5390,7 @@ class $$MediaItemsTableTableManager
             bool mediaCategoriesRefs,
             bool mediaTagsRefs,
             bool classificationSuggestionsRefs,
+            bool classificationJobsRefs,
           })
         > {
   $$MediaItemsTableTableManager(_$ContextoDatabase db, $MediaItemsTable table)
@@ -4797,6 +5467,7 @@ class $$MediaItemsTableTableManager
                 mediaCategoriesRefs = false,
                 mediaTagsRefs = false,
                 classificationSuggestionsRefs = false,
+                classificationJobsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -4807,6 +5478,7 @@ class $$MediaItemsTableTableManager
                     if (mediaTagsRefs) db.mediaTags,
                     if (classificationSuggestionsRefs)
                       db.classificationSuggestions,
+                    if (classificationJobsRefs) db.classificationJobs,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -4916,6 +5588,27 @@ class $$MediaItemsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (classificationJobsRefs)
+                        await $_getPrefetchedData<
+                          MediaItem,
+                          $MediaItemsTable,
+                          ClassificationJob
+                        >(
+                          currentTable: table,
+                          referencedTable: $$MediaItemsTableReferences
+                              ._classificationJobsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$MediaItemsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).classificationJobsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.mediaItemId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -4942,6 +5635,7 @@ typedef $$MediaItemsTableProcessedTableManager =
         bool mediaCategoriesRefs,
         bool mediaTagsRefs,
         bool classificationSuggestionsRefs,
+        bool classificationJobsRefs,
       })
     >;
 typedef $$OcrResultsTableCreateCompanionBuilder =
@@ -7849,6 +8543,418 @@ typedef $$ClassificationSuggestionsTableProcessedTableManager =
       ClassificationSuggestion,
       PrefetchHooks Function({bool mediaItemId})
     >;
+typedef $$ClassificationJobsTableCreateCompanionBuilder =
+    ClassificationJobsCompanion Function({
+      Value<int> mediaItemId,
+      required String state,
+      Value<int> attempts,
+      required DateTime availableAt,
+      required int engineVersion,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> processingStartedAt,
+      Value<String?> lastErrorCode,
+    });
+typedef $$ClassificationJobsTableUpdateCompanionBuilder =
+    ClassificationJobsCompanion Function({
+      Value<int> mediaItemId,
+      Value<String> state,
+      Value<int> attempts,
+      Value<DateTime> availableAt,
+      Value<int> engineVersion,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> processingStartedAt,
+      Value<String?> lastErrorCode,
+    });
+
+final class $$ClassificationJobsTableReferences
+    extends
+        BaseReferences<
+          _$ContextoDatabase,
+          $ClassificationJobsTable,
+          ClassificationJob
+        > {
+  $$ClassificationJobsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $MediaItemsTable _mediaItemIdTable(_$ContextoDatabase db) => db
+      .mediaItems
+      .createAlias('classification_jobs__media_item_id__media_items__id');
+
+  $$MediaItemsTableProcessedTableManager get mediaItemId {
+    final $_column = $_itemColumn<int>('media_item_id')!;
+
+    final manager = $$MediaItemsTableTableManager(
+      $_db,
+      $_db.mediaItems,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_mediaItemIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ClassificationJobsTableFilterComposer
+    extends Composer<_$ContextoDatabase, $ClassificationJobsTable> {
+  $$ClassificationJobsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get availableAt => $composableBuilder(
+    column: $table.availableAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get processingStartedAt => $composableBuilder(
+    column: $table.processingStartedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$MediaItemsTableFilterComposer get mediaItemId {
+    final $$MediaItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ClassificationJobsTableOrderingComposer
+    extends Composer<_$ContextoDatabase, $ClassificationJobsTable> {
+  $$ClassificationJobsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get state => $composableBuilder(
+    column: $table.state,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get attempts => $composableBuilder(
+    column: $table.attempts,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get availableAt => $composableBuilder(
+    column: $table.availableAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get processingStartedAt => $composableBuilder(
+    column: $table.processingStartedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$MediaItemsTableOrderingComposer get mediaItemId {
+    final $$MediaItemsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableOrderingComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ClassificationJobsTableAnnotationComposer
+    extends Composer<_$ContextoDatabase, $ClassificationJobsTable> {
+  $$ClassificationJobsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get state =>
+      $composableBuilder(column: $table.state, builder: (column) => column);
+
+  GeneratedColumn<int> get attempts =>
+      $composableBuilder(column: $table.attempts, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get availableAt => $composableBuilder(
+    column: $table.availableAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get engineVersion => $composableBuilder(
+    column: $table.engineVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get processingStartedAt => $composableBuilder(
+    column: $table.processingStartedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get lastErrorCode => $composableBuilder(
+    column: $table.lastErrorCode,
+    builder: (column) => column,
+  );
+
+  $$MediaItemsTableAnnotationComposer get mediaItemId {
+    final $$MediaItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ClassificationJobsTableTableManager
+    extends
+        RootTableManager<
+          _$ContextoDatabase,
+          $ClassificationJobsTable,
+          ClassificationJob,
+          $$ClassificationJobsTableFilterComposer,
+          $$ClassificationJobsTableOrderingComposer,
+          $$ClassificationJobsTableAnnotationComposer,
+          $$ClassificationJobsTableCreateCompanionBuilder,
+          $$ClassificationJobsTableUpdateCompanionBuilder,
+          (ClassificationJob, $$ClassificationJobsTableReferences),
+          ClassificationJob,
+          PrefetchHooks Function({bool mediaItemId})
+        > {
+  $$ClassificationJobsTableTableManager(
+    _$ContextoDatabase db,
+    $ClassificationJobsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ClassificationJobsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ClassificationJobsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ClassificationJobsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> mediaItemId = const Value.absent(),
+                Value<String> state = const Value.absent(),
+                Value<int> attempts = const Value.absent(),
+                Value<DateTime> availableAt = const Value.absent(),
+                Value<int> engineVersion = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> processingStartedAt = const Value.absent(),
+                Value<String?> lastErrorCode = const Value.absent(),
+              }) => ClassificationJobsCompanion(
+                mediaItemId: mediaItemId,
+                state: state,
+                attempts: attempts,
+                availableAt: availableAt,
+                engineVersion: engineVersion,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                processingStartedAt: processingStartedAt,
+                lastErrorCode: lastErrorCode,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> mediaItemId = const Value.absent(),
+                required String state,
+                Value<int> attempts = const Value.absent(),
+                required DateTime availableAt,
+                required int engineVersion,
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> processingStartedAt = const Value.absent(),
+                Value<String?> lastErrorCode = const Value.absent(),
+              }) => ClassificationJobsCompanion.insert(
+                mediaItemId: mediaItemId,
+                state: state,
+                attempts: attempts,
+                availableAt: availableAt,
+                engineVersion: engineVersion,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                processingStartedAt: processingStartedAt,
+                lastErrorCode: lastErrorCode,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ClassificationJobsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({mediaItemId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (mediaItemId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.mediaItemId,
+                                referencedTable:
+                                    $$ClassificationJobsTableReferences
+                                        ._mediaItemIdTable(db),
+                                referencedColumn:
+                                    $$ClassificationJobsTableReferences
+                                        ._mediaItemIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ClassificationJobsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ContextoDatabase,
+      $ClassificationJobsTable,
+      ClassificationJob,
+      $$ClassificationJobsTableFilterComposer,
+      $$ClassificationJobsTableOrderingComposer,
+      $$ClassificationJobsTableAnnotationComposer,
+      $$ClassificationJobsTableCreateCompanionBuilder,
+      $$ClassificationJobsTableUpdateCompanionBuilder,
+      (ClassificationJob, $$ClassificationJobsTableReferences),
+      ClassificationJob,
+      PrefetchHooks Function({bool mediaItemId})
+    >;
 
 class $ContextoDatabaseManager {
   final _$ContextoDatabase _db;
@@ -7876,4 +8982,6 @@ class $ContextoDatabaseManager {
         _db,
         _db.classificationSuggestions,
       );
+  $$ClassificationJobsTableTableManager get classificationJobs =>
+      $$ClassificationJobsTableTableManager(_db, _db.classificationJobs);
 }

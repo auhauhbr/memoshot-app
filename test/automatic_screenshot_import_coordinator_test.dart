@@ -588,6 +588,9 @@ class _FakeMediaRepository implements MediaItemRepository {
   Future<List<MediaItem>> loadAvailableItems({int? tagId}) async => const [];
 
   @override
+  Future<MediaItem?> loadById(int mediaItemId) async => null;
+
+  @override
   Future<void> removeItem(MediaItem item) async {}
 
   @override

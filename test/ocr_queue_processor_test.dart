@@ -5,14 +5,17 @@ import 'package:memoshot/core/database/contexto_database.dart'
     show ContextoDatabase;
 import 'package:memoshot/core/ocr/text_recognition_service.dart';
 import 'package:memoshot/features/classification/application/classification_processor.dart';
+import 'package:memoshot/features/classification/application/classification_queue_processor.dart';
 import 'package:memoshot/features/classification/application/automatic_classification.dart';
 import 'package:memoshot/features/classification/data/classification_suggestion_repository.dart';
+import 'package:memoshot/features/classification/data/classification_job_store.dart';
 import 'package:memoshot/features/classification/data/classification_suggestion_store.dart';
 import 'package:memoshot/features/classification/data/review_decision_store.dart';
 import 'package:memoshot/features/classification/domain/local_classification_engine.dart';
 import 'package:memoshot/features/categories/data/category_repository.dart';
 import 'package:memoshot/features/categories/data/category_store.dart';
 import 'package:memoshot/features/classification/domain/classification_models.dart';
+import 'package:memoshot/features/classification/domain/classification_job.dart';
 import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
 import 'package:memoshot/features/library/data/media_item_store.dart';
 import 'package:memoshot/features/library/domain/media_item.dart';
@@ -187,6 +190,88 @@ void main() {
 
     expect(classification.calls, 1);
   });
+
+  test('OCR persistido cria job durável antes de concluir', () async {
+    final item = await createMediaItem(mediaStore, temporaryDirectory, 62);
+    await scheduler.schedule(item.id);
+    final classificationJobs = DriftClassificationJobStore(database);
+    final classificationScheduler = LocalClassificationJobScheduler(
+      store: classificationJobs,
+      engineVersion: currentClassificationEngineVersion,
+      now: () => DateTime.utc(2026, 7, 19),
+    );
+    final recognition = FakeRecognitionService(texts: ['Texto persistido']);
+    final queue = LocalOcrQueueProcessor(
+      jobStore: jobStore,
+      resultStore: resultStore,
+      recognitionService: recognition,
+      classificationJobScheduler: classificationScheduler,
+    );
+    addTearDown(queue.close);
+
+    queue.signal();
+    await waitForState(queue, item.id, OcrItemState.completedWithText);
+
+    expect(
+      (await classificationJobs.findByMediaItemId(item.id))?.state,
+      ClassificationJobState.pending,
+    );
+    expect(recognition.callCount, 1);
+    queue.signal();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(recognition.callCount, 1);
+  });
+
+  test(
+    'falha ao enfileirar classificação mantém OCR recuperável sem reconhecê-lo de novo',
+    () async {
+      final item = await createMediaItem(mediaStore, temporaryDirectory, 63);
+      await scheduler.schedule(item.id);
+      final classificationJobs = DriftClassificationJobStore(database);
+      final classificationScheduler = LocalClassificationJobScheduler(
+        store: classificationJobs,
+        engineVersion: currentClassificationEngineVersion,
+        now: () => DateTime.utc(2026, 7, 19),
+      );
+      final failingScheduler = _FailingOnceClassificationScheduler(
+        classificationScheduler,
+      );
+      final recognition = FakeRecognitionService(texts: ['Texto persistido']);
+      final firstQueue = LocalOcrQueueProcessor(
+        jobStore: jobStore,
+        resultStore: resultStore,
+        recognitionService: recognition,
+        classificationJobScheduler: failingScheduler,
+      );
+
+      firstQueue.signal();
+      await waitForResult(resultStore, item.id, 'Texto persistido');
+      await firstQueue.close();
+
+      expect(
+        (await jobStore.findOcrJob(item.id))?.status,
+        ProcessingJobStatus.processing,
+      );
+      expect(await classificationJobs.findByMediaItemId(item.id), isNull);
+
+      final resumedQueue = LocalOcrQueueProcessor(
+        jobStore: jobStore,
+        resultStore: resultStore,
+        recognitionService: recognition,
+        classificationJobScheduler: classificationScheduler,
+      );
+      addTearDown(resumedQueue.close);
+
+      await resumedQueue.recoverAndStart();
+      await waitForState(resumedQueue, item.id, OcrItemState.completedWithText);
+
+      expect(
+        (await classificationJobs.findByMediaItemId(item.id))?.state,
+        ClassificationJobState.pending,
+      );
+      expect(recognition.callCount, 1);
+    },
+  );
 
   test(
     'origens manual, compartilhada e automática convergem para classificação',
@@ -542,11 +627,19 @@ LocalOcrQueueProcessor createQueue(
   TextRecognitionService service, {
   ClassificationProcessor? classificationProcessor,
 }) {
+  final bridge = classificationProcessor == null
+      ? null
+      : _InlineClassificationBridge(
+          jobStore,
+          resultStore,
+          classificationProcessor,
+        );
   return LocalOcrQueueProcessor(
     jobStore: jobStore,
     resultStore: resultStore,
     recognitionService: service,
-    classificationProcessor: classificationProcessor,
+    classificationJobScheduler: bridge,
+    classificationQueue: bridge,
   );
 }
 
@@ -633,6 +726,62 @@ class FakeClassificationProcessor implements ClassificationProcessor {
       reviewReason: ClassificationReviewReason.noSuggestion,
       createdAt: DateTime(2026),
     );
+  }
+}
+
+class _InlineClassificationBridge
+    implements ClassificationJobScheduler, ClassificationQueue {
+  _InlineClassificationBridge(
+    this._jobStore,
+    this._resultStore,
+    this._processor,
+  );
+
+  final ProcessingJobStore _jobStore;
+  final OcrResultStore _resultStore;
+  final ClassificationProcessor _processor;
+
+  @override
+  Stream<int> get changes => const Stream.empty();
+
+  @override
+  Future<bool> schedule(int mediaItemId) async {
+    final mediaItem = await _jobStore.findMediaItem(mediaItemId);
+    final ocrResult = await _resultStore.findByMediaItemId(mediaItemId);
+    if (mediaItem == null || ocrResult == null) return false;
+    try {
+      await _processor.process(mediaItem: mediaItem, ocrResult: ocrResult);
+    } catch (_) {
+      // Ponte exclusiva dos testes legados: em produção o scheduler apenas
+      // persiste o job e a fila de classificação isola esta falha.
+    }
+    return true;
+  }
+
+  @override
+  Future<void> recoverAndStart() async {}
+
+  @override
+  void signal() {}
+
+  @override
+  Future<void> close() async {}
+}
+
+class _FailingOnceClassificationScheduler
+    implements ClassificationJobScheduler {
+  _FailingOnceClassificationScheduler(this._delegate);
+
+  final ClassificationJobScheduler _delegate;
+  var _failed = false;
+
+  @override
+  Future<bool> schedule(int mediaItemId) {
+    if (!_failed) {
+      _failed = true;
+      throw StateError('falha técnica controlada');
+    }
+    return _delegate.schedule(mediaItemId);
   }
 }
 

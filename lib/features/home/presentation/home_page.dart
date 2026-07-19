@@ -18,6 +18,7 @@ import '../../categories/domain/category.dart';
 import '../../categories/presentation/categories_page.dart';
 import '../../categories/presentation/category_detail_page.dart';
 import '../../classification/application/classification_composition.dart';
+import '../../classification/application/classification_queue_processor.dart';
 import '../../classification/application/review_queue.dart';
 import '../../classification/application/review_decision.dart';
 import '../../classification/data/classification_suggestion_repository.dart';
@@ -52,6 +53,7 @@ class HomePage extends StatefulWidget {
     this.mediaRepository,
     this.ocrRepository,
     this.ocrQueue,
+    this.classificationQueue,
     this.categoryRepository,
     this.classificationSuggestionRepository,
     this.reviewDecisionProcessor,
@@ -65,6 +67,7 @@ class HomePage extends StatefulWidget {
   final MediaItemRepository? mediaRepository;
   final OcrRepository? ocrRepository;
   final OcrQueue? ocrQueue;
+  final ClassificationQueue? classificationQueue;
   final CategoryRepository? categoryRepository;
   final ClassificationSuggestionRepository? classificationSuggestionRepository;
   final ReviewDecisionProcessor? reviewDecisionProcessor;
@@ -82,6 +85,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final MediaItemRepository _mediaRepository;
   late final OcrRepository _ocrRepository;
   late final OcrQueue _ocrQueue;
+  ClassificationQueue? _classificationQueue;
   late final CategoryRepository _categoryRepository;
   late final ClassificationSuggestionRepository _classificationRepository;
   late final ReviewQueueLoader _reviewQueueLoader;
@@ -90,6 +94,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final bool _ownsMediaRepository;
   ContextoDatabase? _ownedAuxiliaryDatabase;
   StreamSubscription<int>? _queueSubscription;
+  StreamSubscription<int>? _classificationQueueSubscription;
   late final SharedImageImportCoordinator _sharedImportCoordinator;
   late final AutomaticScreenshotImportCoordinator _automaticImportCoordinator;
   late final AutomaticImportSettingsRepository _automaticSettingsRepository;
@@ -165,19 +170,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           store: resultStore!,
           recognitionService: const MlKitTextRecognitionService(),
         );
+    _classificationQueue =
+        widget.classificationQueue ??
+        (database == null
+            ? null
+            : createLocalClassificationQueue(
+                database: database,
+                suggestionRepository: _classificationRepository,
+                categoryRepository: _categoryRepository,
+                mediaRepository: _mediaRepository,
+                ocrRepository: _ocrRepository,
+              ));
     _ocrQueue =
         widget.ocrQueue ??
         LocalOcrQueueProcessor(
           jobStore: jobStore!,
           resultStore: resultStore!,
           recognitionService: const MlKitTextRecognitionService(),
-          classificationProcessor: createLocalClassificationProcessor(
-            _classificationRepository,
-            automaticApplier: createLocalAutomaticClassificationApplier(
-              database!,
-              _categoryRepository,
-            ),
+          classificationJobScheduler: createLocalClassificationJobScheduler(
+            database!,
           ),
+          classificationQueue: _classificationQueue,
         );
     _tagRepository =
         widget.tagRepository ??
@@ -189,6 +202,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _ownedAuxiliaryDatabase = database;
     }
     _queueSubscription = _ocrQueue.changes.listen(_handleQueueChange);
+    _classificationQueueSubscription = _classificationQueue?.changes.listen(
+      _handleClassificationQueueChange,
+    );
     _sharedImportCoordinator = SharedImageImportCoordinator(
       source: widget.incomingShareSource ?? const ReceiveSharingIntentSource(),
       repository: _mediaRepository,
@@ -217,6 +233,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       unawaited(_automaticImportCoordinator.resume());
       unawaited(_reloadPendingReviewCount());
+      unawaited(_classificationQueue?.recoverAndStart());
     }
   }
 
@@ -233,7 +250,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _automaticImportCoordinator.dispose();
     await _sharedImportCoordinator.dispose();
     await _queueSubscription?.cancel();
+    await _classificationQueueSubscription?.cancel();
     await _ocrQueue.close();
+    await _classificationQueue?.close();
     if (_ownsMediaRepository) {
       await _mediaRepository.close();
     } else if (_ownedAuxiliaryDatabase != null) {
@@ -349,6 +368,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _reloadTagCountIgnoringErrors();
       await _reloadPendingReviewCount();
       unawaited(_ocrQueue.recoverAndStart());
+      unawaited(_classificationQueue?.recoverAndStart());
       final lost = await _screenshotPicker.retrieveLostScreenshots();
       if (lost.isNotEmpty) {
         await _importSelected(lost);
@@ -479,6 +499,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _reloadTagCountIgnoringErrors(),
       ]);
     }
+  }
+
+  Future<void> _handleClassificationQueueChange(int mediaItemId) async {
+    await Future.wait([
+      _reloadPendingReviewCount(),
+      _reloadCategories(),
+      _reloadTagCountIgnoringErrors(),
+    ]);
+    if (_selectedTag != null) await _reloadItemsIgnoringErrors();
+    if (_searchActive) await _searchNow();
   }
 
   Future<void> _reloadPendingReviewCount() async {

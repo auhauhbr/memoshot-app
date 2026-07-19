@@ -475,6 +475,10 @@ class _MediaRepository implements MediaItemRepository {
   Future<List<MediaItem>> loadAvailableItems({int? tagId}) async => [...items];
 
   @override
+  Future<MediaItem?> loadById(int mediaItemId) async =>
+      items.where((item) => item.id == mediaItemId).firstOrNull;
+
+  @override
   Future<void> removeItem(MediaItem item) async => items.remove(item);
 
   @override

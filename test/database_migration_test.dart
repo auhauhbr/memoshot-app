@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 8 para 12 preservando dados e hierarquia', () async {
+  test('migra schema 8 para 13 preservando dados e hierarquia', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_test_',
     );
@@ -100,7 +100,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 12);
+    expect(version.read<int>('user_version'), 13);
     expect(rows, hasLength(2));
     expect(rows.first.internalName, 'copia.png');
     expect(rows.first.mediaHash, isNull);
@@ -130,6 +130,7 @@ void main() {
       await migrated.select(migrated.classificationSuggestions).get(),
       isEmpty,
     );
+    expect(await migrated.select(migrated.classificationJobs).get(), isEmpty);
     final settings = await migrated
         .select(migrated.automaticImportSettings)
         .getSingle();
@@ -220,7 +221,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 10 para 12 preservando IDs e associações', () async {
+  test('migra schema 10 para 13 preservando IDs e associações', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_10_test_',
     );
@@ -277,7 +278,7 @@ void main() {
         .select(migrated.mediaCategories)
         .getSingle();
 
-    expect(version.read<int>('user_version'), 12);
+    expect(version.read<int>('user_version'), 13);
     expect(category.id, 7);
     expect(category.name, 'Livros');
     expect(category.parentId, isNull);
@@ -288,12 +289,13 @@ void main() {
       await migrated.select(migrated.classificationSuggestions).get(),
       isEmpty,
     );
+    expect(await migrated.select(migrated.classificationJobs).get(), isEmpty);
 
     await migrated.close();
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 11 para 12 e cria fila vazia', () async {
+  test('migra schema 11 para 13 e cria filas novas vazias', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_11_test_',
     );
@@ -356,7 +358,7 @@ void main() {
     expect(
       (await migrated.customSelect('PRAGMA user_version').getSingle())
           .read<int>('user_version'),
-      12,
+      13,
     );
     expect((await migrated.select(migrated.mediaItems).getSingle()).id, 4);
     expect((await migrated.select(migrated.categories).getSingle()).id, 9);
@@ -372,8 +374,151 @@ void main() {
       await migrated.select(migrated.classificationSuggestions).get(),
       isEmpty,
     );
+    expect(await migrated.select(migrated.classificationJobs).get(), isEmpty);
 
     await migrated.close();
+    directory.deleteSync(recursive: true);
+  });
+
+  test('migra schema 12 para 13 preservando sugestões e organização', () async {
+    final directory = Directory.systemTemp.createTempSync(
+      'memoshot_migration_12_test_',
+    );
+    final databaseFile = File('${directory.path}/contexto.sqlite');
+    final timestamp = DateTime.utc(2026, 7, 19);
+    var database = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
+    final mediaIds = <int>[];
+    for (var index = 0; index < 4; index++) {
+      mediaIds.add(
+        await database
+            .into(database.mediaItems)
+            .insert(
+              MediaItemsCompanion.insert(
+                privatePath: '${directory.path}/item-$index.png',
+                internalName: 'item-$index.png',
+                importedAt: timestamp,
+                sourceMode: 'photoPicker',
+                status: 'ready',
+              ),
+            ),
+      );
+      await database
+          .into(database.ocrResults)
+          .insert(
+            OcrResultsCompanion.insert(
+              mediaItemId: Value(mediaIds.last),
+              fullText: 'Texto preservado $index',
+              normalizedText: Value('texto preservado $index'),
+              engine: 'Teste',
+              engineVersion: '1',
+              processedAt: timestamp,
+            ),
+          );
+    }
+    final rootId = await database
+        .into(database.categories)
+        .insert(
+          CategoriesCompanion.insert(
+            name: 'Carreira',
+            normalizedName: 'carreira',
+            createdAt: timestamp,
+          ),
+        );
+    final childId = await database
+        .into(database.categories)
+        .insert(
+          CategoriesCompanion.insert(
+            name: 'Entrevistas',
+            normalizedName: 'entrevistas',
+            parentId: Value(rootId),
+            createdAt: timestamp,
+          ),
+        );
+    await database
+        .into(database.mediaCategories)
+        .insert(
+          MediaCategoriesCompanion.insert(
+            mediaItemId: mediaIds.first,
+            categoryId: childId,
+            createdAt: timestamp,
+          ),
+        );
+    final tagId = await database
+        .into(database.tags)
+        .insert(
+          TagsCompanion.insert(
+            name: 'Urgente',
+            normalizedName: 'urgente',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          ),
+        );
+    await database
+        .into(database.mediaTags)
+        .insert(
+          MediaTagsCompanion.insert(
+            mediaItemId: mediaIds.first,
+            tagId: tagId,
+            createdAt: timestamp,
+          ),
+        );
+    const statuses = ['pendingReview', 'accepted', 'rejected', 'autoApplied'];
+    for (var index = 0; index < statuses.length; index++) {
+      await database
+          .into(database.classificationSuggestions)
+          .insert(
+            ClassificationSuggestionsCompanion.insert(
+              mediaItemId: Value(mediaIds[index]),
+              suggestedCategoryName: const Value('Carreira'),
+              confidence: 0.9,
+              hasSuggestion: true,
+              suggestedTagsJson: '[]',
+              evidenceJson: '[]',
+              status: statuses[index],
+              reviewReason: const Value('manualReview'),
+              engineVersion: 1,
+              createdAt: timestamp,
+              updatedAt: timestamp,
+              resolvedAt: Value(index == 0 ? null : timestamp),
+            ),
+          );
+    }
+    await database.close();
+
+    final schemaEditor = _SchemaEditorDatabase(NativeDatabase(databaseFile));
+    await schemaEditor.customStatement('DROP TABLE classification_jobs');
+    await schemaEditor.customStatement('PRAGMA user_version = 12');
+    await schemaEditor.close();
+
+    database = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
+    expect(
+      (await database.customSelect('PRAGMA user_version').getSingle())
+          .read<int>('user_version'),
+      13,
+    );
+    expect(await database.select(database.mediaItems).get(), hasLength(4));
+    expect(await database.select(database.ocrResults).get(), hasLength(4));
+    expect(
+      (await database.select(database.ocrResults).get()).map(
+        (row) => row.fullText,
+      ),
+      contains('Texto preservado 0'),
+    );
+    final categories = await database.select(database.categories).get();
+    expect(categories, hasLength(2));
+    expect(categories.singleWhere((row) => row.id == childId).parentId, rootId);
+    expect(await database.select(database.mediaCategories).get(), hasLength(1));
+    expect(await database.select(database.tags).get(), hasLength(1));
+    expect(await database.select(database.mediaTags).get(), hasLength(1));
+    expect(
+      (await database.select(database.classificationSuggestions).get()).map(
+        (row) => row.status,
+      ),
+      containsAll(statuses),
+    );
+    expect(await database.select(database.classificationJobs).get(), isEmpty);
+
+    await database.close();
     directory.deleteSync(recursive: true);
   });
 }
@@ -463,4 +608,14 @@ class _LegacyDatabase extends GeneratedDatabase {
       ''');
     },
   );
+}
+
+class _SchemaEditorDatabase extends GeneratedDatabase {
+  _SchemaEditorDatabase(super.executor);
+
+  @override
+  final List<TableInfo> allTables = const [];
+
+  @override
+  int get schemaVersion => 13;
 }

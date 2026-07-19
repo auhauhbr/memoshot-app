@@ -18,6 +18,8 @@ abstract interface class MediaItemStore {
 
   Future<List<domain.MediaItem>> readItems({int? tagId});
 
+  Future<domain.MediaItem?> findById(int id);
+
   Future<domain.MediaItem?> findByHash(String mediaHash);
 
   Future<void> updateHash(int id, String mediaHash);
@@ -111,6 +113,14 @@ class DriftMediaItemStore implements MediaItemStore {
     final row = await (_database.select(
       _database.mediaItems,
     )..where((item) => item.mediaHash.equals(mediaHash))).getSingleOrNull();
+    return row == null ? null : _toDomain(row);
+  }
+
+  @override
+  Future<domain.MediaItem?> findById(int id) async {
+    final row = await (_database.select(
+      _database.mediaItems,
+    )..where((item) => item.id.equals(id))).getSingleOrNull();
     return row == null ? null : _toDomain(row);
   }
 

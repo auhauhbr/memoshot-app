@@ -182,6 +182,30 @@ class ClassificationSuggestions extends Table {
   ];
 }
 
+class ClassificationJobs extends Table {
+  IntColumn get mediaItemId =>
+      integer().references(MediaItems, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get state => text()();
+
+  IntColumn get attempts => integer().withDefault(const Constant(0))();
+
+  DateTimeColumn get availableAt => dateTime()();
+
+  IntColumn get engineVersion => integer()();
+
+  DateTimeColumn get createdAt => dateTime()();
+
+  DateTimeColumn get updatedAt => dateTime()();
+
+  DateTimeColumn get processingStartedAt => dateTime().nullable()();
+
+  TextColumn get lastErrorCode => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {mediaItemId};
+}
+
 @DriftDatabase(
   tables: [
     MediaItems,
@@ -193,6 +217,7 @@ class ClassificationSuggestions extends Table {
     MediaTags,
     AutomaticImportSettings,
     ClassificationSuggestions,
+    ClassificationJobs,
   ],
 )
 class ContextoDatabase extends _$ContextoDatabase {
@@ -201,7 +226,7 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -209,6 +234,7 @@ class ContextoDatabase extends _$ContextoDatabase {
       await migrator.createAll();
       await _createMediaHashIndex();
       await _createCategoryNameIndexes();
+      await _createClassificationJobIndexes();
     },
     onUpgrade: (migrator, from, to) async {
       if (from < 2) {
@@ -257,6 +283,10 @@ class ContextoDatabase extends _$ContextoDatabase {
       if (from < 12) {
         await migrator.createTable(classificationSuggestions);
       }
+      if (from < 13) {
+        await migrator.createTable(classificationJobs);
+        await _createClassificationJobIndexes();
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -280,6 +310,13 @@ class ContextoDatabase extends _$ContextoDatabase {
       'CREATE UNIQUE INDEX IF NOT EXISTS categories_child_name_unique '
       'ON categories (parent_id, normalized_name) '
       'WHERE parent_id IS NOT NULL',
+    );
+  }
+
+  Future<void> _createClassificationJobIndexes() {
+    return customStatement(
+      'CREATE INDEX IF NOT EXISTS classification_jobs_available_idx '
+      'ON classification_jobs (state, available_at, created_at, media_item_id)',
     );
   }
 

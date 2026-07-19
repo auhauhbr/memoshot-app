@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import '../../../core/ocr/text_recognition_service.dart';
-import '../../classification/application/classification_processor.dart';
+import '../../classification/application/classification_queue_processor.dart';
 import '../../library/domain/media_item.dart';
 import '../../ocr/data/ocr_result_store.dart';
 import '../../ocr/domain/ocr_result.dart';
@@ -28,25 +28,29 @@ class LocalOcrQueueProcessor implements OcrQueue {
     required ProcessingJobStore jobStore,
     required OcrResultStore resultStore,
     required TextRecognitionService recognitionService,
-    ClassificationProcessor? classificationProcessor,
+    ClassificationJobScheduler? classificationJobScheduler,
+    ClassificationQueue? classificationQueue,
   }) : this._(
          jobStore,
          resultStore,
          recognitionService,
-         classificationProcessor,
+         classificationJobScheduler,
+         classificationQueue,
        );
 
   LocalOcrQueueProcessor._(
     this._jobStore,
     this._resultStore,
     this._recognitionService,
-    this._classificationProcessor,
+    this._classificationJobScheduler,
+    this._classificationQueue,
   );
 
   final ProcessingJobStore _jobStore;
   final OcrResultStore _resultStore;
   final TextRecognitionService _recognitionService;
-  final ClassificationProcessor? _classificationProcessor;
+  final ClassificationJobScheduler? _classificationJobScheduler;
+  final ClassificationQueue? _classificationQueue;
   final StreamController<int> _changes = StreamController<int>.broadcast();
   Future<void>? _draining;
   bool _signalRequested = false;
@@ -136,9 +140,7 @@ class LocalOcrQueueProcessor implements OcrQueue {
     try {
       final existing = await _resultStore.findByMediaItemId(job.mediaItemId);
       if (existing != null && job.errorCode != 'manual_retry') {
-        final mediaItem = await _jobStore.findMediaItem(job.mediaItemId);
-        if (mediaItem == null) return;
-        await _classifySafely(mediaItem, existing);
+        if (!await _ensureClassificationJob(job.mediaItemId)) return;
         if (!await _jobStore.mediaItemExists(job.mediaItemId)) return;
         await _jobStore.markCompleted(job.id);
         _notify(job.mediaItemId);
@@ -170,7 +172,7 @@ class LocalOcrQueueProcessor implements OcrQueue {
       if (!await _jobStore.mediaItemExists(job.mediaItemId)) {
         return;
       }
-      await _classifySafely(mediaItem, ocrResult);
+      if (!await _ensureClassificationJob(job.mediaItemId)) return;
       if (!await _jobStore.mediaItemExists(job.mediaItemId)) {
         return;
       }
@@ -186,14 +188,15 @@ class LocalOcrQueueProcessor implements OcrQueue {
     }
   }
 
-  Future<void> _classifySafely(MediaItem mediaItem, OcrResult ocrResult) async {
+  Future<bool> _ensureClassificationJob(int mediaItemId) async {
     try {
-      await _classificationProcessor?.process(
-        mediaItem: mediaItem,
-        ocrResult: ocrResult,
-      );
+      await _classificationJobScheduler?.schedule(mediaItemId);
+      _classificationQueue?.signal();
+      return true;
     } catch (_) {
-      // A classificação é isolada: OCR concluído e fila seguem preservados.
+      // Mantém o job OCR recuperável. Na retomada, o resultado persistido é
+      // reutilizado e o reconhecedor não é executado novamente.
+      return false;
     }
   }
 

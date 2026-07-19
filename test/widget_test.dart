@@ -13,6 +13,7 @@ import 'package:memoshot/features/categories/data/category_repository.dart';
 import 'package:memoshot/features/categories/domain/category.dart';
 import 'package:memoshot/features/categories/presentation/category_detail_page.dart';
 import 'package:memoshot/features/classification/data/classification_suggestion_repository.dart';
+import 'package:memoshot/features/classification/application/classification_queue_processor.dart';
 import 'package:memoshot/features/classification/application/review_decision.dart';
 import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
 import 'package:memoshot/features/automatic_import/data/automatic_import_settings_repository.dart';
@@ -154,6 +155,7 @@ void main() {
   ) async {
     final ocr = FakeOcrRepository();
     final queue = FakeOcrQueue(ocr);
+    final classificationQueue = FakeClassificationQueue();
     final repository = FakeClassificationSuggestionRepository(counts: [0, 1]);
     final categories = FakeCategoryRepository();
     await tester.pumpWidget(
@@ -161,6 +163,7 @@ void main() {
         FakeScreenshotPicker(),
         ocrRepository: ocr,
         ocrQueue: queue,
+        classificationQueue: classificationQueue,
         classificationRepository: repository,
         categoryRepository: categories,
       ),
@@ -168,7 +171,7 @@ void main() {
     await tester.pump();
 
     await categories.createRootCategory('Carreira');
-    queue.emitState(1, OcrItemState.completedWithText);
+    classificationQueue.emit(1);
     await tester.pump();
 
     expect(find.text('1 print precisa de confirmação'), findsOneWidget);
@@ -3896,6 +3899,7 @@ Widget buildTestApp(
   FakeMediaItemRepository? repository,
   FakeOcrRepository? ocrRepository,
   FakeOcrQueue? ocrQueue,
+  FakeClassificationQueue? classificationQueue,
   FakeCategoryRepository? categoryRepository,
   FakeTagRepository? tagRepository,
   FakeClassificationSuggestionRepository? classificationRepository,
@@ -3917,6 +3921,7 @@ Widget buildTestApp(
     mediaRepository: resolvedMediaRepository,
     ocrRepository: resolvedOcrRepository,
     ocrQueue: ocrQueue ?? FakeOcrQueue(resolvedOcrRepository),
+    classificationQueue: classificationQueue,
     categoryRepository: resolvedCategoryRepository,
     classificationSuggestionRepository:
         classificationRepository ?? FakeClassificationSuggestionRepository(),
@@ -4883,6 +4888,10 @@ class FakeMediaItemRepository implements MediaItemRepository {
   int get itemCount => _items.length;
 
   @override
+  Future<MediaItem?> loadById(int mediaItemId) async =>
+      _items.where((item) => item.id == mediaItemId).firstOrNull;
+
+  @override
   Future<ImportResult> importScreenshots(
     List<SelectedScreenshot> screenshots, {
     ImportOrigin origin = ImportOrigin.picker,
@@ -5112,6 +5121,24 @@ class FakeOcrQueue implements OcrQueue {
   void emitState(int mediaItemId, OcrItemState state) {
     _setState(mediaItemId, state);
   }
+
+  @override
+  void signal() {}
+
+  @override
+  Future<void> close() => _changes.close();
+}
+
+class FakeClassificationQueue implements ClassificationQueue {
+  final StreamController<int> _changes = StreamController<int>.broadcast();
+
+  @override
+  Stream<int> get changes => _changes.stream;
+
+  void emit(int mediaItemId) => _changes.add(mediaItemId);
+
+  @override
+  Future<void> recoverAndStart() async {}
 
   @override
   void signal() {}

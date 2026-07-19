@@ -636,6 +636,9 @@ class FailingMediaItemStore implements MediaItemStore {
   Future<List<MediaItem>> readItems({int? tagId}) async => const [];
 
   @override
+  Future<MediaItem?> findById(int id) async => null;
+
+  @override
   Future<MediaItem?> findByHash(String mediaHash) async => null;
 
   @override

@@ -8,6 +8,7 @@ import '../core/theme/app_theme.dart';
 import '../features/categories/data/category_repository.dart';
 import '../features/classification/data/classification_suggestion_repository.dart';
 import '../features/classification/application/review_decision.dart';
+import '../features/classification/application/classification_queue_processor.dart';
 import '../features/automatic_import/data/automatic_import_settings_repository.dart';
 import '../features/home/presentation/home_page.dart';
 import '../features/library/data/media_item_repository.dart';
@@ -24,6 +25,7 @@ class MemoShotApp extends StatelessWidget {
     this.mediaRepository,
     this.ocrRepository,
     this.ocrQueue,
+    this.classificationQueue,
     this.categoryRepository,
     this.classificationSuggestionRepository,
     this.reviewDecisionProcessor,
@@ -38,6 +40,7 @@ class MemoShotApp extends StatelessWidget {
   final MediaItemRepository? mediaRepository;
   final OcrRepository? ocrRepository;
   final OcrQueue? ocrQueue;
+  final ClassificationQueue? classificationQueue;
   final CategoryRepository? categoryRepository;
   final ClassificationSuggestionRepository? classificationSuggestionRepository;
   final ReviewDecisionProcessor? reviewDecisionProcessor;
@@ -66,6 +69,7 @@ class MemoShotApp extends StatelessWidget {
           mediaRepository: mediaRepository,
           ocrRepository: ocrRepository,
           ocrQueue: ocrQueue,
+          classificationQueue: classificationQueue,
           categoryRepository: categoryRepository,
           classificationSuggestionRepository:
               classificationSuggestionRepository,
