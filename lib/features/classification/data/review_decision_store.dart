@@ -26,7 +26,9 @@ class DriftReviewDecisionStore implements ReviewDecisionStore {
   @override
   Future<StoredClassificationSuggestion> autoApply({
     required int mediaItemId,
-    required int expectedCategoryId,
+    required int? expectedCategoryId,
+    required String officialCategoryName,
+    required bool allowSafeRootCreation,
     required Set<String> safeTagNames,
     required DateTime resolvedAt,
   }) {
@@ -68,12 +70,46 @@ class DriftReviewDecisionStore implements ReviewDecisionStore {
             ),
           )
           .toList(growable: false);
-      final category = const AutoClassificationPolicy().eligibleRoot(
+      final plan = const AutoClassificationPolicy().plan(
         suggestion: suggestion,
         rootCategories: roots,
       );
-      if (category == null || category.id != expectedCategoryId) {
+      if (plan == null || plan.officialCategoryName != officialCategoryName) {
         return suggestion;
+      }
+      int categoryId;
+      if (plan.type == AutoClassificationPlanType.useExistingRoot) {
+        final root = plan.existingRoot!;
+        if ((expectedCategoryId != null && root.id != expectedCategoryId) ||
+            (expectedCategoryId == null && !allowSafeRootCreation)) {
+          return suggestion;
+        }
+        categoryId = root.id;
+      } else {
+        if (!allowSafeRootCreation || expectedCategoryId != null) {
+          return suggestion;
+        }
+        final normalizedName = _normalizer.normalize(plan.officialCategoryName);
+        await _database
+            .into(_database.categories)
+            .insert(
+              CategoriesCompanion.insert(
+                name: plan.officialCategoryName,
+                normalizedName: normalizedName,
+                parentId: const Value(null),
+                createdAt: resolvedAt,
+              ),
+              mode: InsertMode.insertOrIgnore,
+            );
+        final createdOrConcurrent =
+            await (_database.select(_database.categories)..where(
+                  (category) =>
+                      category.parentId.isNull() &
+                      category.normalizedName.equals(normalizedName),
+                ))
+                .getSingleOrNull();
+        if (createdOrConcurrent == null) return suggestion;
+        categoryId = createdOrConcurrent.id;
       }
 
       final allowedNames = {
@@ -122,7 +158,7 @@ class DriftReviewDecisionStore implements ReviewDecisionStore {
           .insert(
             MediaCategoriesCompanion.insert(
               mediaItemId: mediaItemId,
-              categoryId: category.id,
+              categoryId: categoryId,
               createdAt: resolvedAt,
             ),
             mode: InsertMode.insertOrIgnore,

@@ -478,62 +478,62 @@ void main() {
     expect(await suggestions.countPendingReview(), 0);
   });
 
-  test(
-    'OCR fraco e pasta inexistente permanecem disponíveis para revisão',
-    () async {
-      final weak = await createMediaItem(mediaStore, temporaryDirectory, 41);
-      final noFolder = await createMediaItem(
-        mediaStore,
-        temporaryDirectory,
-        42,
-      );
-      await scheduler.schedule(weak.id);
-      await scheduler.schedule(noFolder.id);
-      final categories = LocalCategoryRepository(
-        store: DriftCategoryStore(database),
-      );
-      final suggestions = LocalClassificationSuggestionRepository(
-        DriftClassificationSuggestionStore(database),
-      );
-      final classification = LocalClassificationProcessor(
-        engine: const LocalClassificationEngine(),
-        repository: suggestions,
-        now: () => DateTime.utc(2026, 7, 18, 12),
-        engineVersion: 1,
-        automaticApplier: LocalAutomaticClassificationApplier(
-          categoryRepository: categories,
-          store: DriftReviewDecisionStore(database),
-        ),
-      );
-      final queue = createQueue(
-        jobStore,
-        resultStore,
-        FakeRecognitionService(
-          texts: [
-            'vaga',
-            'vaga entrevista recrutadora currículo candidatura processo seletivo',
-          ],
-        ),
-        classificationProcessor: classification,
-      );
-      addTearDown(queue.close);
+  test('OCR fraco fica pendente e OCR forte cria pasta segura ausente', () async {
+    final weak = await createMediaItem(mediaStore, temporaryDirectory, 41);
+    final noFolder = await createMediaItem(mediaStore, temporaryDirectory, 42);
+    await scheduler.schedule(weak.id);
+    await scheduler.schedule(noFolder.id);
+    final categories = LocalCategoryRepository(
+      store: DriftCategoryStore(database),
+    );
+    final suggestions = LocalClassificationSuggestionRepository(
+      DriftClassificationSuggestionStore(database),
+    );
+    final classification = LocalClassificationProcessor(
+      engine: const LocalClassificationEngine(),
+      repository: suggestions,
+      now: () => DateTime.utc(2026, 7, 18, 12),
+      engineVersion: 1,
+      automaticApplier: LocalAutomaticClassificationApplier(
+        categoryRepository: categories,
+        store: DriftReviewDecisionStore(database),
+      ),
+    );
+    final queue = createQueue(
+      jobStore,
+      resultStore,
+      FakeRecognitionService(
+        texts: [
+          'vaga',
+          'vaga entrevista recrutadora currículo candidatura processo seletivo',
+        ],
+      ),
+      classificationProcessor: classification,
+    );
+    addTearDown(queue.close);
 
-      queue.signal();
-      await waitForState(queue, weak.id, OcrItemState.completedWithText);
-      await waitForState(queue, noFolder.id, OcrItemState.completedWithText);
+    queue.signal();
+    await waitForState(queue, weak.id, OcrItemState.completedWithText);
+    await waitForState(queue, noFolder.id, OcrItemState.completedWithText);
 
-      expect(
-        (await suggestions.loadByMediaItemId(weak.id))?.status,
-        ClassificationSuggestionStatus.pendingReview,
-      );
-      expect(
-        (await suggestions.loadByMediaItemId(noFolder.id))?.status,
-        ClassificationSuggestionStatus.pendingReview,
-      );
-      expect(await suggestions.countPendingReview(), 2);
-      expect(await categories.loadCategories(), isEmpty);
-    },
-  );
+    expect(
+      (await suggestions.loadByMediaItemId(weak.id))?.status,
+      ClassificationSuggestionStatus.pendingReview,
+    );
+    expect(
+      (await suggestions.loadByMediaItemId(noFolder.id))?.status,
+      ClassificationSuggestionStatus.autoApplied,
+    );
+    expect(await suggestions.countPendingReview(), 1);
+    final roots = await categories.loadRootCategories();
+    expect(roots, hasLength(1));
+    expect(roots.single.name, 'Carreira');
+    expect(roots.single.parentId, isNull);
+    expect(
+      (await categories.loadForMedia(noFolder.id)).map((item) => item.id),
+      [roots.single.id],
+    );
+  });
 }
 
 LocalOcrQueueProcessor createQueue(

@@ -155,20 +155,24 @@ void main() {
     final ocr = FakeOcrRepository();
     final queue = FakeOcrQueue(ocr);
     final repository = FakeClassificationSuggestionRepository(counts: [0, 1]);
+    final categories = FakeCategoryRepository();
     await tester.pumpWidget(
       buildTestApp(
         FakeScreenshotPicker(),
         ocrRepository: ocr,
         ocrQueue: queue,
         classificationRepository: repository,
+        categoryRepository: categories,
       ),
     );
     await tester.pump();
 
+    await categories.createRootCategory('Carreira');
     queue.emitState(1, OcrItemState.completedWithText);
     await tester.pump();
 
     expect(find.text('1 print precisa de confirmação'), findsOneWidget);
+    expect(find.text('Carreira'), findsOneWidget);
     expect(repository.countCallCount, 2);
   });
 

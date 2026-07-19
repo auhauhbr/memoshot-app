@@ -57,7 +57,9 @@ abstract interface class ReviewDecisionStore {
 
   Future<StoredClassificationSuggestion> autoApply({
     required int mediaItemId,
-    required int expectedCategoryId,
+    required int? expectedCategoryId,
+    required String officialCategoryName,
+    required bool allowSafeRootCreation,
     required Set<String> safeTagNames,
     required DateTime resolvedAt,
   });

@@ -9,6 +9,7 @@ import 'package:memoshot/features/classification/data/classification_suggestion_
 import 'package:memoshot/features/classification/data/classification_suggestion_store.dart';
 import 'package:memoshot/features/classification/data/review_decision_store.dart';
 import 'package:memoshot/features/classification/domain/classification_models.dart';
+import 'package:memoshot/features/classification/domain/local_classification_engine.dart';
 import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
 import 'package:memoshot/features/tags/data/tag_repository.dart';
 import 'package:memoshot/features/tags/data/tag_store.dart';
@@ -28,6 +29,54 @@ void main() {
     parentId: 9,
     createdAt: DateTime.utc(2026),
   );
+
+  group('catálogo seguro de pastas', () {
+    test('expõe exatamente as oito categorias oficiais', () {
+      expect(LocalClassificationCategoryCatalog.names, {
+        'Carreira',
+        'Estudos',
+        'Compras',
+        'Finanças',
+        'Conversas',
+        'Desenvolvimento',
+        'Documentos',
+        'Viagens',
+      });
+      expect(LocalClassificationCategoryCatalog.definitions, hasLength(8));
+    });
+
+    test('normaliza a consulta e preserva a capitalização oficial', () {
+      expect(
+        LocalClassificationCategoryCatalog.officialNameFor('  carreira  '),
+        'Carreira',
+      );
+      expect(
+        LocalClassificationCategoryCatalog.officialNameFor('FINANCAS'),
+        'Finanças',
+      );
+    });
+
+    test('rejeita nome arbitrário e nome de etiqueta', () {
+      expect(LocalClassificationCategoryCatalog.contains('Pessoal'), isFalse);
+      expect(LocalClassificationCategoryCatalog.contains('Urgente'), isFalse);
+    });
+
+    test('catálogo é imutável', () {
+      expect(
+        () => LocalClassificationCategoryCatalog.names.add('Outra'),
+        throwsUnsupportedError,
+      );
+      expect(
+        () => LocalClassificationCategoryCatalog.definitions.add(
+          const LocalClassificationCategoryDefinition(
+            ruleId: 'other',
+            name: 'Outra',
+          ),
+        ),
+        throwsUnsupportedError,
+      );
+    });
+  });
 
   group('política conservadora', () {
     test('confiança 0.85 e raiz equivalente são elegíveis', () {
@@ -139,6 +188,84 @@ void main() {
       );
     });
 
+    test('raiz ausente exige confiança 0.90', () {
+      expect(
+        policy.plan(
+          suggestion: _suggestion(confidence: 0.899),
+          rootCategories: const [],
+        ),
+        isNull,
+      );
+      expect(
+        policy
+            .plan(
+              suggestion: _suggestion(confidence: 0.90),
+              rootCategories: const [],
+            )
+            ?.type,
+        AutoClassificationPlanType.createSafeRoot,
+      );
+    });
+
+    test('raiz nova exige duas evidências independentes da categoria', () {
+      expect(
+        policy.plan(
+          suggestion: _suggestion(
+            evidenceRuleIds: const ['category.career.interview'],
+          ),
+          rootCategories: const [],
+        ),
+        isNull,
+      );
+      expect(
+        policy.plan(
+          suggestion: _suggestion(
+            evidenceRuleIds: const [
+              'category.career.interview',
+              'category.career.interview',
+            ],
+          ),
+          rootCategories: const [],
+        ),
+        isNull,
+      );
+      expect(
+        policy.plan(
+          suggestion: _suggestion(
+            evidenceRuleIds: const [
+              'category.career.interview',
+              'pattern.date',
+              'pattern.url',
+            ],
+          ),
+          rootCategories: const [],
+        ),
+        isNull,
+      );
+    });
+
+    test('categoria fora do catálogo nunca é autoaplicada', () {
+      final arbitraryRoot = domain.Category(
+        id: 4,
+        name: 'Pessoal',
+        normalizedName: 'pessoal',
+        createdAt: DateTime.utc(2026),
+      );
+      expect(
+        policy.plan(
+          suggestion: _suggestion(
+            category: 'Pessoal',
+            evidenceRuleIds: const [
+              'category.personal.one',
+              'category.personal.two',
+            ],
+          ),
+          rootCategories: [arbitraryRoot],
+        ),
+        isNull,
+      );
+    });
+
     for (final status in [
       ClassificationSuggestionStatus.accepted,
       ClassificationSuggestionStatus.rejected,
@@ -197,15 +324,42 @@ void main() {
 
     Future<StoredClassificationSuggestion> save({
       List<String> tagNames = const ['Urgente', 'Entrevista', 'Arbitrária'],
+      String? category = 'Carreira',
+      double confidence = 0.9,
+      List<String> evidenceRuleIds = const [
+        'category.career.interview',
+        'category.career.recruiter_f',
+      ],
       ClassificationSuggestionStatus status =
           ClassificationSuggestionStatus.pendingReview,
     }) async {
       final value = _suggestion(
         mediaItemId: mediaItemId,
         tagNames: tagNames,
+        category: category,
+        confidence: confidence,
+        evidenceRuleIds: evidenceRuleIds,
         status: status,
       );
       return suggestions.saveSuggestion(value);
+    }
+
+    Future<void> expectAutomaticRollback(String triggerSql) async {
+      final suggestion = await save(tagNames: const ['Urgente']);
+      await database.customStatement(triggerSql);
+      try {
+        await applier.apply(suggestion);
+      } catch (_) {
+        // O processador do pipeline isola esta falha e mantém a sugestão.
+      }
+      expect(await categories.loadRootCategories(), isEmpty);
+      expect(await tags.loadTags(), isEmpty);
+      expect(await database.select(database.mediaCategories).get(), isEmpty);
+      expect(await database.select(database.mediaTags).get(), isEmpty);
+      expect(
+        (await suggestions.loadByMediaItemId(mediaItemId))?.status,
+        ClassificationSuggestionStatus.pendingReview,
+      );
     }
 
     test(
@@ -226,7 +380,7 @@ void main() {
         expect(result.status, ClassificationSuggestionStatus.autoApplied);
         expect(result.resolvedAt, resolvedAt);
         expect(result.confidence, 0.9);
-        expect(result.evidence.single.description, 'Evidência sanitizada.');
+        expect(result.evidence.first.description, 'Evidência sanitizada.');
         expect(
           (await categories.loadForMedia(mediaItemId)).map((item) => item.id),
           containsAll([previousCategory.id, career.id]),
@@ -257,26 +411,96 @@ void main() {
       expect(await database.select(database.mediaTags).get(), hasLength(1));
     });
 
-    test('sem raiz equivalente permanece pending e não cria pasta', () async {
+    test('sem raiz equivalente cria e aplica somente a raiz segura', () async {
       final suggestion = await save();
 
       final result = await applier.apply(suggestion);
 
-      expect(result.status, ClassificationSuggestionStatus.pendingReview);
-      expect(await categories.loadCategories(), isEmpty);
-      expect(await tags.loadTags(), isEmpty);
+      expect(result.status, ClassificationSuggestionStatus.autoApplied);
+      final created = await categories.loadRootCategories();
+      expect(created, hasLength(1));
+      expect(created.single.name, 'Carreira');
+      expect(created.single.parentId, isNull);
+      expect(await categories.loadForMedia(mediaItemId), hasLength(1));
+      expect(
+        (await tags.loadTags()).map((tag) => tag.name),
+        containsAll(['Urgente', 'Entrevista']),
+      );
     });
 
-    test('somente subpasta equivalente permanece pending', () async {
-      final parent = await categories.createRootCategory('Trabalho');
-      await categories.createSubcategory(parentId: parent.id, name: 'Carreira');
-      final suggestion = await save();
+    test('usa o nome oficial ao receber sugestão normalizada', () async {
+      final suggestion = await save(category: ' carreira ');
+
+      expect(
+        (await applier.apply(suggestion)).status,
+        ClassificationSuggestionStatus.autoApplied,
+      );
+      expect((await categories.loadRootCategories()).single.name, 'Carreira');
+    });
+
+    test('retry após criação não cria pasta ou associação extra', () async {
+      final suggestion = await save(tagNames: const []);
+
+      final first = await applier.apply(suggestion);
+      final second = await applier.apply(first);
+
+      expect(second.status, ClassificationSuggestionStatus.autoApplied);
+      expect(await categories.loadRootCategories(), hasLength(1));
+      expect(
+        await database.select(database.mediaCategories).get(),
+        hasLength(1),
+      );
+    });
+
+    test('criação preserva pasta e etiqueta anteriores', () async {
+      final previousCategory = await categories.createRootCategory('Anterior');
+      final previousTag = await tags.createTag('Anterior');
+      await categories.replaceForMedia(mediaItemId, {previousCategory.id});
+      await tags.addToMedia(tagId: previousTag.id, mediaItemId: mediaItemId);
+      final suggestion = await save(tagNames: const ['Urgente']);
+
+      await applier.apply(suggestion);
+
+      expect(
+        (await categories.loadForMedia(mediaItemId)).map((item) => item.name),
+        containsAll(['Anterior', 'Carreira']),
+      );
+      expect(
+        (await tags.loadForMedia(mediaItemId)).map((item) => item.name),
+        containsAll(['Anterior', 'Urgente']),
+      );
+    });
+
+    test(
+      'somente subpasta equivalente não é reutilizada e cria raiz',
+      () async {
+        final parent = await categories.createRootCategory('Trabalho');
+        await categories.createSubcategory(
+          parentId: parent.id,
+          name: 'Carreira',
+        );
+        final suggestion = await save();
+
+        expect(
+          (await applier.apply(suggestion)).status,
+          ClassificationSuggestionStatus.autoApplied,
+        );
+        final careerRoots = (await categories.loadRootCategories()).where(
+          (category) => category.normalizedName == 'carreira',
+        );
+        expect(careerRoots, hasLength(1));
+        expect(careerRoots.single.parentId, isNull);
+      },
+    );
+
+    test('confiança 0.85 sem raiz permanece pending', () async {
+      final suggestion = await save(confidence: 0.85);
 
       expect(
         (await applier.apply(suggestion)).status,
         ClassificationSuggestionStatus.pendingReview,
       );
-      expect(await database.select(database.mediaCategories).get(), isEmpty);
+      expect(await categories.loadRootCategories(), isEmpty);
     });
 
     test('pasta removida antes da transação mantém pending', () async {
@@ -287,6 +511,8 @@ void main() {
       final result = await store.autoApply(
         mediaItemId: mediaItemId,
         expectedCategoryId: career.id,
+        officialCategoryName: 'Carreira',
+        allowSafeRootCreation: false,
         safeTagNames: {'Urgente'},
         resolvedAt: resolvedAt,
       );
@@ -314,6 +540,80 @@ void main() {
         hasLength(1),
       );
       expect(await database.select(database.mediaTags).get(), hasLength(1));
+    });
+
+    test('duas classificações criam e reutilizam uma única raiz', () async {
+      final secondMediaItemId = await database
+          .into(database.mediaItems)
+          .insert(
+            MediaItemsCompanion.insert(
+              privatePath: '/tmp/automatic-2.png',
+              internalName: 'automatic-2.png',
+              importedAt: createdAt,
+              sourceMode: 'photoPicker',
+              status: 'ready',
+            ),
+          );
+      final first = await save(tagNames: const []);
+      final second = await suggestions.saveSuggestion(
+        _suggestion(mediaItemId: secondMediaItemId),
+      );
+
+      final results = await Future.wait([
+        applier.apply(first),
+        applier.apply(second),
+      ]);
+
+      expect(
+        results.map((result) => result.status),
+        everyElement(ClassificationSuggestionStatus.autoApplied),
+      );
+      expect(await categories.loadRootCategories(), hasLength(1));
+      expect(
+        await database.select(database.mediaCategories).get(),
+        hasLength(2),
+      );
+    });
+
+    test('falha ao criar pasta não deixa estrutura parcial', () async {
+      await expectAutomaticRollback('''
+        CREATE TRIGGER fail_category_insert
+        BEFORE INSERT ON categories
+        BEGIN
+          SELECT RAISE(ABORT, 'forced test failure');
+        END;
+      ''');
+    });
+
+    test('falha ao criar etiqueta reverte a pasta criada', () async {
+      await expectAutomaticRollback('''
+        CREATE TRIGGER fail_tag_insert
+        BEFORE INSERT ON tags
+        BEGIN
+          SELECT RAISE(ABORT, 'forced test failure');
+        END;
+      ''');
+    });
+
+    test('falha ao associar pasta reverte pasta e etiqueta', () async {
+      await expectAutomaticRollback('''
+        CREATE TRIGGER fail_media_category_insert
+        BEFORE INSERT ON media_categories
+        BEGIN
+          SELECT RAISE(ABORT, 'forced test failure');
+        END;
+      ''');
+    });
+
+    test('falha ao atualizar status reverte toda a transação', () async {
+      await expectAutomaticRollback('''
+        CREATE TRIGGER fail_auto_applied_status
+        BEFORE UPDATE OF status ON classification_suggestions
+        WHEN NEW.status = 'autoApplied'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced test failure');
+        END;
+      ''');
     });
 
     for (final status in [
@@ -358,14 +658,21 @@ StoredClassificationSuggestion _suggestion({
   ClassificationSuggestionStatus status =
       ClassificationSuggestionStatus.pendingReview,
   List<String> tagNames = const [],
+  List<String> evidenceRuleIds = const [
+    'category.career.interview',
+    'category.career.recruiter_f',
+  ],
 }) {
-  final evidence = ClassificationEvidence(
-    ruleId: 'safe.rule',
-    type: ClassificationEvidenceType.keyword,
-    description: 'Evidência sanitizada.',
-    weight: confidence,
-    safeMatch: 'carreira',
-  );
+  final evidence = [
+    for (final ruleId in evidenceRuleIds)
+      ClassificationEvidence(
+        ruleId: ruleId,
+        type: ClassificationEvidenceType.keyword,
+        description: 'Evidência sanitizada.',
+        weight: confidence,
+        safeMatch: 'termo seguro',
+      ),
+  ];
   return StoredClassificationSuggestion(
     mediaItemId: mediaItemId,
     suggestedCategoryName: category,
@@ -373,9 +680,9 @@ StoredClassificationSuggestion _suggestion({
     hasSuggestion: hasSuggestion,
     suggestedTags: [
       for (final name in tagNames)
-        SuggestedTag(name: name, confidence: confidence, evidence: [evidence]),
+        SuggestedTag(name: name, confidence: confidence, evidence: evidence),
     ],
-    evidence: [evidence],
+    evidence: evidence,
     status: status,
     reviewReason: reason,
     engineVersion: 1,

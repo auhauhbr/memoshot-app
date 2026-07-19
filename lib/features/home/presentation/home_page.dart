@@ -473,7 +473,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     if (state == OcrItemState.completedWithText ||
         state == OcrItemState.completedWithoutText) {
-      await _reloadPendingReviewCount();
+      await Future.wait([
+        _reloadPendingReviewCount(),
+        _reloadCategories(),
+        _reloadTagCountIgnoringErrors(),
+      ]);
     }
   }
 

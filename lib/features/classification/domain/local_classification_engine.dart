@@ -1,6 +1,106 @@
 import '../../../core/text/text_normalizer.dart';
 import 'classification_models.dart';
 
+class LocalClassificationCategoryDefinition {
+  const LocalClassificationCategoryDefinition({
+    required this.ruleId,
+    required this.name,
+  });
+
+  final String ruleId;
+  final String name;
+}
+
+class LocalClassificationCategoryCatalog {
+  const LocalClassificationCategoryCatalog._();
+
+  static const careerRuleId = 'career';
+  static const careerName = 'Carreira';
+  static const studiesRuleId = 'studies';
+  static const studiesName = 'Estudos';
+  static const shoppingRuleId = 'shopping';
+  static const shoppingName = 'Compras';
+  static const financeRuleId = 'finance';
+  static const financeName = 'Finanças';
+  static const conversationsRuleId = 'conversations';
+  static const conversationsName = 'Conversas';
+  static const developmentRuleId = 'development';
+  static const developmentName = 'Desenvolvimento';
+  static const documentsRuleId = 'documents';
+  static const documentsName = 'Documentos';
+  static const travelRuleId = 'travel';
+  static const travelName = 'Viagens';
+
+  static const career = LocalClassificationCategoryDefinition(
+    ruleId: careerRuleId,
+    name: careerName,
+  );
+  static const studies = LocalClassificationCategoryDefinition(
+    ruleId: studiesRuleId,
+    name: studiesName,
+  );
+  static const shopping = LocalClassificationCategoryDefinition(
+    ruleId: shoppingRuleId,
+    name: shoppingName,
+  );
+  static const finance = LocalClassificationCategoryDefinition(
+    ruleId: financeRuleId,
+    name: financeName,
+  );
+  static const conversations = LocalClassificationCategoryDefinition(
+    ruleId: conversationsRuleId,
+    name: conversationsName,
+  );
+  static const development = LocalClassificationCategoryDefinition(
+    ruleId: developmentRuleId,
+    name: developmentName,
+  );
+  static const documents = LocalClassificationCategoryDefinition(
+    ruleId: documentsRuleId,
+    name: documentsName,
+  );
+  static const travel = LocalClassificationCategoryDefinition(
+    ruleId: travelRuleId,
+    name: travelName,
+  );
+
+  static const definitions = <LocalClassificationCategoryDefinition>[
+    career,
+    studies,
+    shopping,
+    finance,
+    conversations,
+    development,
+    documents,
+    travel,
+  ];
+
+  static const names = <String>{
+    careerName,
+    studiesName,
+    shoppingName,
+    financeName,
+    conversationsName,
+    developmentName,
+    documentsName,
+    travelName,
+  };
+
+  static final Map<String, LocalClassificationCategoryDefinition>
+  _byNormalizedName = {
+    for (final definition in definitions)
+      const TextNormalizer().normalize(definition.name): definition,
+  };
+
+  static LocalClassificationCategoryDefinition? definitionFor(String name) {
+    return _byNormalizedName[const TextNormalizer().normalize(name)];
+  }
+
+  static String? officialNameFor(String name) => definitionFor(name)?.name;
+
+  static bool contains(String name) => definitionFor(name) != null;
+}
+
 class LocalClassificationTagCatalog {
   const LocalClassificationTagCatalog._();
 
@@ -383,8 +483,8 @@ class _DetectedSignal {
 
 const _categoryRules = <_CategoryRule>[
   _CategoryRule(
-    id: 'career',
-    name: 'Carreira',
+    id: LocalClassificationCategoryCatalog.careerRuleId,
+    name: LocalClassificationCategoryCatalog.careerName,
     description: 'Encontrou termos relacionados a processos seletivos.',
     terms: [
       _WeightedTerm('job', 'vaga', 0.34),
@@ -400,8 +500,8 @@ const _categoryRules = <_CategoryRule>[
     ],
   ),
   _CategoryRule(
-    id: 'studies',
-    name: 'Estudos',
+    id: LocalClassificationCategoryCatalog.studiesRuleId,
+    name: LocalClassificationCategoryCatalog.studiesName,
     description: 'Encontrou termos relacionados a estudos.',
     terms: [
       _WeightedTerm('class', 'aula', 0.36),
@@ -416,8 +516,8 @@ const _categoryRules = <_CategoryRule>[
     ],
   ),
   _CategoryRule(
-    id: 'shopping',
-    name: 'Compras',
+    id: LocalClassificationCategoryCatalog.shoppingRuleId,
+    name: LocalClassificationCategoryCatalog.shoppingName,
     description: 'Encontrou termos relacionados a compras.',
     terms: [
       _WeightedTerm('buy', 'comprar', 0.44),
@@ -432,8 +532,8 @@ const _categoryRules = <_CategoryRule>[
     ],
   ),
   _CategoryRule(
-    id: 'finance',
-    name: 'Finanças',
+    id: LocalClassificationCategoryCatalog.financeRuleId,
+    name: LocalClassificationCategoryCatalog.financeName,
     description: 'Encontrou termos relacionados a finanças.',
     terms: [
       _WeightedTerm('pix', 'pix', 0.58, 'Pix'),
@@ -447,8 +547,8 @@ const _categoryRules = <_CategoryRule>[
     ],
   ),
   _CategoryRule(
-    id: 'conversations',
-    name: 'Conversas',
+    id: LocalClassificationCategoryCatalog.conversationsRuleId,
+    name: LocalClassificationCategoryCatalog.conversationsName,
     description: 'Encontrou termos relacionados a conversas.',
     terms: [
       _WeightedTerm('whatsapp', 'whatsapp', 0.50, 'WhatsApp'),
@@ -461,8 +561,8 @@ const _categoryRules = <_CategoryRule>[
     ],
   ),
   _CategoryRule(
-    id: 'development',
-    name: 'Desenvolvimento',
+    id: LocalClassificationCategoryCatalog.developmentRuleId,
+    name: LocalClassificationCategoryCatalog.developmentName,
     description: 'Encontrou termos relacionados a desenvolvimento de software.',
     terms: [
       _WeightedTerm('code', 'codigo', 0.46, 'código'),
@@ -484,8 +584,8 @@ const _categoryRules = <_CategoryRule>[
     ],
   ),
   _CategoryRule(
-    id: 'documents',
-    name: 'Documentos',
+    id: LocalClassificationCategoryCatalog.documentsRuleId,
+    name: LocalClassificationCategoryCatalog.documentsName,
     description: 'Encontrou termos relacionados a documentos.',
     terms: [
       _WeightedTerm('cpf', 'cpf', 0.50, 'CPF'),
@@ -498,8 +598,8 @@ const _categoryRules = <_CategoryRule>[
     ],
   ),
   _CategoryRule(
-    id: 'travel',
-    name: 'Viagens',
+    id: LocalClassificationCategoryCatalog.travelRuleId,
+    name: LocalClassificationCategoryCatalog.travelName,
     description: 'Encontrou termos relacionados a viagens.',
     terms: [
       _WeightedTerm('ticket', 'passagem', 0.44),
