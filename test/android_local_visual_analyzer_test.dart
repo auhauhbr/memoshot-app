@@ -33,6 +33,13 @@ void main() {
     expect(worker, contains('LocalVisualAnalyzerBridge'));
   });
 
+  test('não cria o ImageLabeler durante a inicialização da Activity', () {
+    expect(bridge, contains('private var labeler: ImageLabeler? = null'));
+    expect(bridge, isNot(contains('labeler: ImageLabeler? = createLabeler()')));
+    expect(bridge, contains('labeler ?: createLabeler().also'));
+    expect(bridge, contains('result.error("visualTemporaryFailure"'));
+  });
+
   test('aceita somente arquivo local controlado e não transporta imagem', () {
     expect(bridge, contains('isControlledLocalFile'));
     expect(bridge, contains('appContext.filesDir'));

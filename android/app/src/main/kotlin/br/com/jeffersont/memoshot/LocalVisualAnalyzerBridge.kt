@@ -17,7 +17,8 @@ internal class LocalVisualAnalyzerBridge(
 ) : MethodChannel.MethodCallHandler {
     private val appContext = context.applicationContext
     private val channel = MethodChannel(messenger, CHANNEL_NAME)
-    private var labeler: ImageLabeler? = createLabeler()
+    private var labeler: ImageLabeler? = null
+    private var isClosed = false
 
     init {
         channel.setMethodCallHandler(this)
@@ -41,9 +42,14 @@ internal class LocalVisualAnalyzerBridge(
             result.error("visualSourceUnavailable", null, null)
             return
         }
-        val activeLabeler = labeler
-        if (activeLabeler == null) {
+        if (isClosed) {
             result.error("visualAnalyzerClosed", null, null)
+            return
+        }
+        val activeLabeler = try {
+            labeler ?: createLabeler().also { labeler = it }
+        } catch (_: Exception) {
+            result.error("visualTemporaryFailure", null, null)
             return
         }
         val input = try {
@@ -98,6 +104,7 @@ internal class LocalVisualAnalyzerBridge(
     }
 
     private fun closeLabeler() {
+        isClosed = true
         labeler?.close()
         labeler = null
     }
