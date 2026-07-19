@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/media_store/media_store_content.dart';
+import '../../../core/media/original_media_viewer.dart';
 import '../../categories/data/category_repository.dart';
 import '../../categories/domain/category.dart';
 import '../../categories/presentation/category_selection_page.dart';
@@ -29,6 +30,7 @@ class ScreenshotDetailPage extends StatefulWidget {
     required this.tagRepository,
     this.classificationReprocessor,
     this.thumbnailGateway = const MethodChannelMediaStoreContentGateway(),
+    this.originalMediaViewer = const MethodChannelOriginalMediaViewer(),
     super.key,
   });
 
@@ -40,6 +42,7 @@ class ScreenshotDetailPage extends StatefulWidget {
   final TagRepository tagRepository;
   final IndividualClassificationReprocessor? classificationReprocessor;
   final MediaStoreContentGateway thumbnailGateway;
+  final OriginalMediaViewer originalMediaViewer;
 
   @override
   State<ScreenshotDetailPage> createState() => _ScreenshotDetailPageState();
@@ -61,6 +64,8 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
   bool _isLoadingTags = true;
   bool _isChangingTags = false;
   bool _isReorganizing = false;
+  bool _isOpeningOriginal = false;
+  String? _originalErrorMessage;
   String? _tagError;
 
   @override
@@ -185,6 +190,32 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
         ).showSnackBar(SnackBar(content: Text(message)));
       }
     }
+  }
+
+  Future<void> _openOriginal() async {
+    if (_isOpeningOriginal) return;
+    setState(() {
+      _isOpeningOriginal = true;
+      _originalErrorMessage = null;
+    });
+    final result = await widget.originalMediaViewer.open(widget.mediaItem);
+    if (!mounted) return;
+    setState(() {
+      _isOpeningOriginal = false;
+      _originalErrorMessage = switch (result) {
+        OriginalMediaOpenResult.opened => null,
+        OriginalMediaOpenResult.unavailable ||
+        OriginalMediaOpenResult.invalidPrivateFile ||
+        OriginalMediaOpenResult.invalidReference =>
+          'Esta imagem não está mais disponível no dispositivo.',
+        OriginalMediaOpenResult.permissionDenied =>
+          'Revise o acesso às imagens para abrir o original.',
+        OriginalMediaOpenResult.noCompatibleApp =>
+          'Não encontramos um aplicativo para abrir esta imagem.',
+        OriginalMediaOpenResult.temporaryFailure =>
+          'Não foi possível abrir a imagem agora.',
+      };
+    });
   }
 
   Future<void> _loadTags() async {
@@ -396,6 +427,35 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                           )
                         : const _MissingImageState(),
                   ),
+                  const SizedBox(height: 8),
+                  Semantics(
+                    button: true,
+                    label: 'Abrir imagem original em Fotos ou Galeria',
+                    child: OutlinedButton.icon(
+                      key: const Key('open-original-button'),
+                      onPressed: _isOpeningOriginal ? null : _openOriginal,
+                      icon: _isOpeningOriginal
+                          ? const SizedBox.square(
+                              dimension: 17,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.open_in_new, size: 19),
+                      label: const Text('Abrir original'),
+                    ),
+                  ),
+                  if (_originalErrorMessage case final message?) ...[
+                    const SizedBox(height: 6),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        message,
+                        key: const Key('open-original-error'),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.error,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 14),
                   _MetadataCard(
                     capturedAt: _formatImportedAt(

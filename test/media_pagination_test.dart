@@ -111,6 +111,17 @@ void main() {
       expect(page.items.last.isPrivateFile, isTrue);
     });
 
+    test('consulta recente retorna exatamente 12 na ordem keyset', () async {
+      await _insertReferencedItems(database, 70, sameCapturedAt: true);
+
+      final recent = await store.readRecentItems(
+        limit: homeRecentMediaItemLimit,
+      );
+
+      expect(recent, hasLength(homeRecentMediaItemLimit));
+      expect(recent.map((item) => item.id), List.generate(12, (i) => 70 - i));
+    });
+
     test('pesquisa e etiquetas AND continuam paginadas', () async {
       await _insertReferencedItems(database, 130, sameCapturedAt: false);
       final tagOne = await database

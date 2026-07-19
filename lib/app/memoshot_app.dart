@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/media/screenshot_picker.dart';
+import '../core/media/original_media_viewer.dart';
 import '../core/media_store/media_store_content.dart';
 import '../core/ocr/media_ocr_input.dart';
 import '../core/automatic_import/automatic_screenshot_source.dart';
@@ -42,6 +43,7 @@ class MemoShotApp extends StatelessWidget {
     this.historicalArchivePreparationCoordinator,
     this.mediaStoreContentGateway,
     this.mediaOcrInputResolver,
+    this.originalMediaViewer,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -63,6 +65,7 @@ class MemoShotApp extends StatelessWidget {
   historicalArchivePreparationCoordinator;
   final MediaStoreContentGateway? mediaStoreContentGateway;
   final MediaOcrInputResolver? mediaOcrInputResolver;
+  final OriginalMediaViewer? originalMediaViewer;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +101,7 @@ class MemoShotApp extends StatelessWidget {
               historicalArchivePreparationCoordinator,
           mediaStoreContentGateway: mediaStoreContentGateway,
           mediaOcrInputResolver: mediaOcrInputResolver,
+          originalMediaViewer: originalMediaViewer,
         ),
       ),
     );

@@ -2,6 +2,7 @@ import 'media_item.dart';
 
 const defaultMediaPageSize = 60;
 const maximumMediaPageSize = 60;
+const homeRecentMediaItemLimit = 12;
 
 final class MediaPageCursor {
   const MediaPageCursor({required this.capturedAt, required this.id});

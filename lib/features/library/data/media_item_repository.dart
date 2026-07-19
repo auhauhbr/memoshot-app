@@ -64,6 +64,14 @@ abstract interface class PagedMediaItemRepository
   Future<int> countMediaItems({Set<int> tagIds = const {}});
 }
 
+abstract interface class RecentMediaItemRepository
+    implements MediaItemRepository {
+  Future<List<MediaItem>> loadRecentItems({
+    int limit = homeRecentMediaItemLimit,
+    Set<int> tagIds = const {},
+  });
+}
+
 abstract interface class MediaStoreReferenceMediaItemRepository
     implements MediaItemRepository {
   Future<MediaItem?> loadBySourceKey(String sourceKey);
@@ -79,7 +87,8 @@ abstract interface class MediaStoreReferenceMediaItemRepository
 class LocalMediaItemRepository
     implements
         MediaStoreReferenceMediaItemRepository,
-        PagedMediaItemRepository {
+        PagedMediaItemRepository,
+        RecentMediaItemRepository {
   LocalMediaItemRepository({
     required MediaItemStore store,
     required ScreenshotStorage storage,
@@ -111,6 +120,25 @@ class LocalMediaItemRepository
   final OcrJobScheduler? _ocrJobScheduler;
   final TextNormalizer _normalizer;
   final SearchSnippetBuilder _snippetBuilder;
+
+  @override
+  Future<List<MediaItem>> loadRecentItems({
+    int limit = homeRecentMediaItemLimit,
+    Set<int> tagIds = const {},
+  }) async {
+    final store = _store;
+    if (store is RecentMediaItemStore) {
+      return List.unmodifiable(
+        await _availableItems(
+          await store.readRecentItems(limit: limit, tagIds: tagIds),
+        ),
+      );
+    }
+    final page = await loadMediaPage(
+      MediaPageRequest(pageSize: limit, tagIds: tagIds),
+    );
+    return page.items;
+  }
 
   @override
   Future<MediaPage<MediaItem>> loadMediaPage([

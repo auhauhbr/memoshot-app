@@ -59,6 +59,13 @@ abstract interface class PagedMediaItemStore implements MediaItemStore {
   Future<int> countMediaItems({Set<int> tagIds = const {}});
 }
 
+abstract interface class RecentMediaItemStore implements MediaItemStore {
+  Future<List<domain.MediaItem>> readRecentItems({
+    required int limit,
+    Set<int> tagIds = const {},
+  });
+}
+
 class RecognizedTextMatch {
   const RecognizedTextMatch({required this.mediaItem, required this.fullText});
 
@@ -66,10 +73,20 @@ class RecognizedTextMatch {
   final String fullText;
 }
 
-class DriftMediaItemStore implements PagedMediaItemStore {
+class DriftMediaItemStore implements PagedMediaItemStore, RecentMediaItemStore {
   DriftMediaItemStore(this._database);
 
   final ContextoDatabase _database;
+
+  @override
+  Future<List<domain.MediaItem>> readRecentItems({
+    required int limit,
+    Set<int> tagIds = const {},
+  }) async {
+    final request = MediaPageRequest(pageSize: limit, tagIds: tagIds);
+    final rows = await _readPageRows(request: request, exactLimit: true);
+    return List.unmodifiable(rows.map(_queryRowToDomain));
+  }
 
   @override
   Future<MediaPage<domain.MediaItem>> readMediaPage(
@@ -117,6 +134,7 @@ class DriftMediaItemStore implements PagedMediaItemStore {
     required MediaPageRequest request,
     String? normalizedQuery,
     bool includeOcrText = false,
+    bool exactLimit = false,
   }) {
     final variables = <Variable<Object>>[];
     final joins = <String>[];
@@ -151,7 +169,9 @@ class DriftMediaItemStore implements PagedMediaItemStore {
         ..add(Variable<DateTime>(cursor.capturedAt))
         ..add(Variable<int>(cursor.id));
     }
-    variables.add(Variable<int>(request.effectivePageSize + 1));
+    variables.add(
+      Variable<int>(request.effectivePageSize + (exactLimit ? 0 : 1)),
+    );
     final selectOcr = includeOcrText
         ? ', ocr_results.full_text AS ocr_full_text'
         : '';

@@ -7,6 +7,7 @@ import '../../../core/automatic_import/automatic_screenshot_source.dart';
 import '../../../core/automatic_import/method_channel_automatic_screenshot_source.dart';
 import '../../../core/database/contexto_database.dart' show ContextoDatabase;
 import '../../../core/media/image_picker_screenshot_picker.dart';
+import '../../../core/media/original_media_viewer.dart';
 import '../../../core/media/screenshot_picker.dart';
 import '../../../core/media/screenshot_storage.dart';
 import '../../../core/media_store/existing_screenshot_scanner.dart';
@@ -39,6 +40,7 @@ import '../../library/domain/media_item.dart';
 import '../../library/domain/media_page.dart';
 import '../../library/domain/selected_screenshot.dart';
 import '../../library/domain/screenshot_search_result.dart';
+import '../../library/presentation/all_screenshots_page.dart';
 import '../../library/presentation/screenshot_detail_page.dart';
 import '../../library/presentation/screenshot_grid.dart';
 import '../../ocr/data/ocr_repository.dart';
@@ -76,6 +78,7 @@ class HomePage extends StatefulWidget {
     this.historicalArchivePreparationCoordinator,
     this.mediaStoreContentGateway,
     this.mediaOcrInputResolver,
+    this.originalMediaViewer,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -96,6 +99,7 @@ class HomePage extends StatefulWidget {
   historicalArchivePreparationCoordinator;
   final MediaStoreContentGateway? mediaStoreContentGateway;
   final MediaOcrInputResolver? mediaOcrInputResolver;
+  final OriginalMediaViewer? originalMediaViewer;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -135,9 +139,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<ScreenshotSearchResult> _searchResults = const [];
   bool _isLoading = true;
   bool _isSearching = false;
-  bool _isLoadingNextPage = false;
-  String? _nextPageErrorMessage;
-  MediaPageCursor? _nextCursor;
   bool _searchActive = false;
   String? _errorMessage;
   bool _initialPageFailed = false;
@@ -302,7 +303,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       onError: _handleAutomaticImportError,
     );
     _initialize();
-    _scrollController.addListener(_handleScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_sharedImportCoordinator.start());
       unawaited(_automaticImportCoordinator.initialize());
@@ -534,24 +534,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _reloadItems({int? generation}) async {
     final tagId = _selectedTag?.id;
-    final request = MediaPageRequest(tagIds: {?tagId});
+    final request = MediaPageRequest(
+      pageSize: homeRecentMediaItemLimit,
+      tagIds: {?tagId},
+    );
     final repository = _mediaRepository;
-    final previousItemCount = _mediaItems.length;
-    var page = repository is PagedMediaItemRepository
-        ? await repository.loadMediaPageByTags(request)
-        : MediaPage<MediaItem>(
-            items: await repository.loadAvailableItems(tagId: tagId),
-            nextCursor: null,
-          );
-    final items = [...page.items];
-    while (repository is PagedMediaItemRepository &&
-        items.length < previousItemCount &&
-        page.nextCursor != null) {
-      page = await repository.loadMediaPageByTags(
-        MediaPageRequest(cursor: page.nextCursor, tagIds: request.tagIds),
-      );
-      items.addAll(page.items);
-    }
+    final items = repository is RecentMediaItemRepository
+        ? await repository.loadRecentItems(
+            limit: homeRecentMediaItemLimit,
+            tagIds: request.tagIds,
+          )
+        : repository is PagedMediaItemRepository
+        ? (await repository.loadMediaPageByTags(request)).items
+        : (await repository.loadAvailableItems(
+            tagId: tagId,
+          )).take(homeRecentMediaItemLimit).toList();
     final states = <int, OcrItemState>{};
     for (final item in items) {
       states[item.id] = await _ocrQueue.loadState(item.id);
@@ -566,83 +563,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _ocrStates
           ..clear()
           ..addAll(states);
-        _nextCursor = page.nextCursor;
-        _nextPageErrorMessage = null;
-        _isLoadingNextPage = false;
       });
     }
-  }
-
-  void _handleScroll() {
-    if (!_scrollController.hasClients) return;
-    if (_scrollController.position.extentAfter < 600) {
-      unawaited(_loadNextPage());
-    }
-  }
-
-  Future<void> _loadNextPage() async {
-    final cursor = _nextCursor;
-    if (cursor == null || _isLoadingNextPage) return;
-    final repository = _mediaRepository;
-    if (repository is! PagedMediaItemRepository) return;
-    final generation = _searchGeneration;
-    final tagId = _selectedTag?.id;
-    final query = _searchController.text;
-    setState(() {
-      _isLoadingNextPage = true;
-      _nextPageErrorMessage = null;
-    });
-    try {
-      final request = MediaPageRequest(cursor: cursor, tagIds: {?tagId});
-      final MediaPageCursor? nextCursor;
-      final List<MediaItem> pageItems;
-      List<ScreenshotSearchResult>? searchItems;
-      if (_searchActive) {
-        final page = await repository.searchMediaPageByTags(query, request);
-        searchItems = page.items;
-        pageItems = page.items
-            .map((item) => item.mediaItem)
-            .toList(growable: false);
-        nextCursor = page.nextCursor;
-      } else {
-        final page = await repository.loadMediaPageByTags(request);
-        pageItems = page.items;
-        nextCursor = page.nextCursor;
-      }
-      final states = await _loadOcrStates(pageItems);
-      if (!mounted || generation != _searchGeneration) return;
-      setState(() {
-        if (_searchActive) {
-          final existing = _searchResults
-              .map((item) => item.mediaItem.id)
-              .toSet();
-          _searchResults = [
-            ..._searchResults,
-            ...searchItems!.where((item) => existing.add(item.mediaItem.id)),
-          ];
-        } else {
-          final existing = _mediaItems.map((item) => item.id).toSet();
-          _mediaItems.addAll(pageItems.where((item) => existing.add(item.id)));
-        }
-        _ocrStates.addAll(states);
-        _nextCursor = nextCursor;
-        _isLoadingNextPage = false;
-      });
-    } catch (_) {
-      if (!mounted || generation != _searchGeneration) return;
-      setState(() {
-        _isLoadingNextPage = false;
-        _nextPageErrorMessage = 'Não foi possível carregar mais prints.';
-      });
-    }
-  }
-
-  Future<Map<int, OcrItemState>> _loadOcrStates(List<MediaItem> items) async {
-    final states = <int, OcrItemState>{};
-    for (final item in items) {
-      states[item.id] = await _ocrQueue.loadState(item.id);
-    }
-    return states;
   }
 
   void _scrollToLibraryStart() {
@@ -653,9 +575,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _refreshCurrentFirstPage() async {
     final generation = ++_searchGeneration;
-    _nextCursor = null;
-    _nextPageErrorMessage = null;
-    _isLoadingNextPage = false;
     if (_searchActive) {
       await _performSearch(
         _searchController.text,
@@ -705,9 +624,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _searchDebounce?.cancel();
     final normalized = _textNormalizer.normalize(value);
     final generation = ++_searchGeneration;
-    _nextCursor = null;
-    _nextPageErrorMessage = null;
-    _isLoadingNextPage = false;
     _scrollToLibraryStart();
     if (normalized.isEmpty) {
       setState(() {
@@ -769,26 +685,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     try {
       final tagId = _selectedTag?.id;
       final repository = _mediaRepository;
-      final previousResultCount = _searchResults.length;
-      var page = repository is PagedMediaItemRepository
+      final page = repository is PagedMediaItemRepository
           ? await repository.searchMediaPageByTags(
               query,
-              MediaPageRequest(tagIds: {?tagId}),
+              MediaPageRequest(
+                pageSize: homeRecentMediaItemLimit,
+                tagIds: {?tagId},
+              ),
             )
           : MediaPage<ScreenshotSearchResult>(
-              items: await repository.searchRecognizedText(query, tagId: tagId),
+              items: await repository.searchRecognizedText(
+                query,
+                tagId: tagId,
+                limit: homeRecentMediaItemLimit,
+              ),
               nextCursor: null,
             );
-      final results = [...page.items];
-      while (repository is PagedMediaItemRepository &&
-          results.length < previousResultCount &&
-          page.nextCursor != null) {
-        page = await repository.searchMediaPageByTags(
-          query,
-          MediaPageRequest(cursor: page.nextCursor, tagIds: {?tagId}),
-        );
-        results.addAll(page.items);
-      }
+      final results = page.items;
       if (!mounted || generation != _searchGeneration) {
         return;
       }
@@ -796,9 +709,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _searchResults = results;
         _isSearching = false;
         _searchErrorMessage = null;
-        _nextCursor = page.nextCursor;
-        _nextPageErrorMessage = null;
-        _isLoadingNextPage = false;
       });
     } catch (_) {
       if (!mounted || generation != _searchGeneration) {
@@ -815,9 +725,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _searchDebounce?.cancel();
     final generation = ++_searchGeneration;
     _searchController.clear();
-    _nextCursor = null;
-    _nextPageErrorMessage = null;
-    _isLoadingNextPage = false;
     _scrollToLibraryStart();
     setState(() {
       _searchActive = false;
@@ -864,9 +771,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _applyTagFilter(Tag? tag) async {
     if (_selectedTag?.id == tag?.id) return;
     _searchDebounce?.cancel();
-    _nextCursor = null;
-    _nextPageErrorMessage = null;
-    _isLoadingNextPage = false;
     _scrollToLibraryStart();
     setState(() {
       _selectedTag = tag;
@@ -1054,6 +958,38 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (_searchActive) await _searchNow();
   }
 
+  Future<void> _openLibrary() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => AllScreenshotsPage(
+          mediaRepository: _mediaRepository,
+          ocrRepository: _ocrRepository,
+          ocrQueue: _ocrQueue,
+          categoryRepository: _categoryRepository,
+          tagRepository: _tagRepository,
+          classificationReprocessor:
+              _classificationQueue is IndividualClassificationReprocessor
+              ? _classificationQueue as IndividualClassificationReprocessor
+              : null,
+          initialQuery: _searchController.text,
+          initialTag: _selectedTag,
+          thumbnailGateway:
+              widget.mediaStoreContentGateway ??
+              const MethodChannelMediaStoreContentGateway(),
+          originalMediaViewer:
+              widget.originalMediaViewer ??
+              const MethodChannelOriginalMediaViewer(),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    await _reloadItemsIgnoringErrors();
+    await _reloadCategories();
+    await _reloadRecentFolders();
+    await _reloadTagCountIgnoringErrors();
+    if (_searchActive) await _searchNow();
+  }
+
   Future<void> _openDetails(MediaItem item) async {
     final removed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
@@ -1071,14 +1007,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           thumbnailGateway:
               widget.mediaStoreContentGateway ??
               const MethodChannelMediaStoreContentGateway(),
+          originalMediaViewer:
+              widget.originalMediaViewer ??
+              const MethodChannelOriginalMediaViewer(),
         ),
       ),
     );
     await _reloadCategories();
     await _reloadTagCountIgnoringErrors();
-    if (_selectedTag != null) {
-      await _reloadItemsIgnoringErrors();
-    }
+    await _reloadItemsIgnoringErrors();
     if (removed == true) {
       await _reloadItemsIgnoringErrors();
       if (_searchActive) {
@@ -1221,25 +1158,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           onRetry: _reloadCategories,
                         ),
                         const SizedBox(height: 22),
-                        Row(
-                          children: [
-                            const Expanded(
-                              child: _SectionTitle(
-                                'Todos os prints',
-                                key: Key('all-prints-title'),
-                              ),
-                            ),
-                            Text(
+                        _SectionHeader(
+                          title: _searchActive
+                              ? 'Resultados recentes'
+                              : 'Últimos prints',
+                          titleKey: const Key('all-prints-title'),
+                          actionLabel: 'Ver todos',
+                          actionKey: const Key('view-all-screenshots'),
+                          actionIcon: Icons.arrow_forward,
+                          supportingText:
                               '${_searchActive ? _searchResults.length : _mediaItems.length} '
                               '${(_searchActive ? _searchResults.length : _mediaItems.length) == 1 ? 'item' : 'itens'}',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ],
+                          onAction: _openLibrary,
                         ),
                         if (_searchActive) ...[
                           const SizedBox(height: 8),
@@ -1350,10 +1280,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       const MethodChannelMediaStoreContentGateway(),
                 ),
               ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-              sliver: SliverToBoxAdapter(child: _buildPageFooter()),
-            ),
+            const SliverPadding(padding: EdgeInsets.only(bottom: 96)),
           ],
         ),
       ),
@@ -1362,40 +1289,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   EdgeInsets _gridPadding(BuildContext context) {
     return const EdgeInsets.symmetric(horizontal: 16);
-  }
-
-  Widget _buildPageFooter() {
-    if (_isLoadingNextPage) {
-      return Semantics(
-        label: 'Carregando mais prints',
-        child: const Center(
-          child: SizedBox.square(
-            key: Key('next-page-loading'),
-            dimension: 24,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
-      );
-    }
-    if (_nextPageErrorMessage case final message?) {
-      return Semantics(
-        liveRegion: true,
-        label: message,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(child: Text(message)),
-            const SizedBox(width: 8),
-            TextButton(
-              key: const Key('retry-next-page'),
-              onPressed: () => unawaited(_loadNextPage()),
-              child: const Text('Tentar novamente'),
-            ),
-          ],
-        ),
-      );
-    }
-    return const SizedBox.shrink();
   }
 }
 
@@ -1533,23 +1426,43 @@ class _SectionHeader extends StatelessWidget {
     required this.actionLabel,
     required this.actionKey,
     required this.onAction,
+    this.titleKey,
+    this.actionIcon = Icons.edit_outlined,
+    this.supportingText,
   });
 
   final String title;
   final String actionLabel;
   final Key actionKey;
   final VoidCallback onAction;
+  final Key? titleKey;
+  final IconData actionIcon;
+  final String? supportingText;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _SectionTitle(title, key: const Key('folders-title'))),
-        IconButton(
+        Expanded(
+          child: _SectionTitle(
+            title,
+            key: titleKey ?? const Key('folders-title'),
+          ),
+        ),
+        if (supportingText case final text?) ...[
+          Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
+        TextButton.icon(
           key: actionKey,
           onPressed: onAction,
-          tooltip: actionLabel,
-          icon: const Icon(Icons.edit_outlined),
+          icon: Icon(actionIcon, size: 18),
+          label: Text(actionLabel),
         ),
       ],
     );

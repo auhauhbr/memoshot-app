@@ -42,7 +42,13 @@ void main() {
     expect(manifest, isNot(contains('android:mimeType="text/*"')));
     expect(manifest, isNot(contains('android:mimeType="video/*"')));
     expect(manifest, isNot(contains('android:mimeType="*/*"')));
-    expect(manifest, isNot(contains('android.intent.action.VIEW')));
+    final activity = manifest.substring(
+      manifest.indexOf('<activity'),
+      manifest.indexOf('</activity>') + '</activity>'.length,
+    );
+    expect(activity, isNot(contains('android.intent.action.VIEW')));
+    expect(manifest, contains('<queries>'));
+    expect(manifest, contains('android.intent.action.VIEW'));
   });
 
   test('manifest adiciona imagens e notificação sem permissões proibidas', () {

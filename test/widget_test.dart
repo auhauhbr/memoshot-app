@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:memoshot/app/memoshot_app.dart';
 import 'package:memoshot/core/automatic_import/automatic_screenshot_source.dart';
 import 'package:memoshot/core/media/screenshot_picker.dart';
+import 'package:memoshot/core/media/original_media_viewer.dart';
 import 'package:memoshot/core/media_store/existing_screenshot_scanner.dart';
 import 'package:memoshot/core/media_store/media_store_content.dart';
 import 'package:memoshot/core/sharing/incoming_share_source.dart';
@@ -72,8 +73,8 @@ void main() {
     expect(find.text('Pesquisar nos seus prints...'), findsOneWidget);
     expect(find.text('Pastas'), findsOneWidget);
     expect(find.text('Todos'), findsOneWidget);
-    expect(find.text('Todos os prints'), findsOneWidget);
-    expect(find.text('0 itens'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
+    expect(find.text('Ver todos'), findsOneWidget);
     expect(find.text('Nenhuma pasta criada.'), findsOneWidget);
     expect(find.text('Criar pasta'), findsOneWidget);
     expect(find.text('Nenhum print salvo.'), findsOneWidget);
@@ -220,7 +221,7 @@ void main() {
 
     expect(find.text('MemoShot'), findsOneWidget);
     expect(find.text('Pastas'), findsOneWidget);
-    expect(find.text('Todos os prints'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
     expect(find.byKey(const Key('recent-folders-title')), findsNothing);
   });
 
@@ -402,7 +403,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
-    expect(find.text('Todos os prints'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
     expect(find.text('1 item'), findsOneWidget);
   });
 
@@ -826,7 +827,7 @@ void main() {
       addCompleter.complete();
       await tester.pump();
 
-      expect(find.text('Todos os prints'), findsOneWidget);
+      expect(find.text('Últimos prints'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -906,7 +907,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
-    expect(find.text('Todos os prints'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
   });
 
   testWidgets('falha ao excluir cópia mantém detalhe e item coerentes', (
@@ -1223,7 +1224,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Todos os prints'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
     expect(find.text('Adicionar print'), findsWidgets);
     recovery.complete();
   });
@@ -3291,7 +3292,7 @@ void main() {
     expect(onboarding.completeCalls, 1);
     expect(source.requestCount, 1);
     expect(settings.enabled, isTrue);
-    expect(find.text('Todos os prints'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
   });
 
   testWidgets('onboarding concluído não reaparece', (tester) async {
@@ -3304,7 +3305,7 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('onboarding-next')), findsNothing);
-    expect(find.text('Todos os prints'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
   });
 
   testWidgets('Agora não conclui sem pedir permissão e sem loop', (
@@ -3334,7 +3335,7 @@ void main() {
 
     expect(source.requestCount, 0);
     expect(onboarding.completed, isTrue);
-    expect(find.text('Todos os prints'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
 
     await tester.pumpWidget(
       buildTestApp(FakeScreenshotPicker(), onboardingRepository: onboarding),
@@ -3370,7 +3371,7 @@ void main() {
 
     expect(settings.enabled, isFalse);
     expect(find.byKey(const Key('automatic-import-notice')), findsOneWidget);
-    expect(find.text('Todos os prints'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
   });
 
   testWidgets('descarte durante solicitação do onboarding é seguro', (
@@ -3895,7 +3896,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('MemoShot'), findsOneWidget);
-    expect(find.text('Todos os prints'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
 
     inboxCompleter.complete(const []);
     await tester.pump();
@@ -4025,7 +4026,59 @@ void main() {
     },
   );
 
-  testWidgets('Home mantém somente a primeira página e miniaturas visíveis', (
+  testWidgets('detalhe abre original e traduz falhas controladas', (
+    tester,
+  ) async {
+    const cases = {
+      OriginalMediaOpenResult.unavailable:
+          'Esta imagem não está mais disponível no dispositivo.',
+      OriginalMediaOpenResult.permissionDenied:
+          'Revise o acesso às imagens para abrir o original.',
+      OriginalMediaOpenResult.noCompatibleApp:
+          'Não encontramos um aplicativo para abrir esta imagem.',
+      OriginalMediaOpenResult.temporaryFailure:
+          'Não foi possível abrir a imagem agora.',
+    };
+    for (final entry in cases.entries) {
+      final viewer = FakeOriginalMediaViewer(entry.key);
+      await tester.pumpWidget(
+        buildTestApp(
+          FakeScreenshotPicker(),
+          repository: FakeMediaItemRepository(
+            initialItems: [createReferencedMediaItem(1)],
+          ),
+          originalMediaViewer: viewer,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await openFirstScreenshot(tester);
+      await tapDetailAction(tester, 'Abrir original');
+      await tester.pumpAndSettle();
+
+      expect(find.text(entry.value), findsOneWidget);
+      expect(viewer.openedIds, [1]);
+      expect(find.text('Alterar organização'), findsOneWidget);
+      expect(find.textContaining('content://'), findsNothing);
+    }
+
+    final viewer = FakeOriginalMediaViewer(OriginalMediaOpenResult.opened);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        repository: FakeMediaItemRepository(
+          initialItems: [createReferencedMediaItem(1)],
+        ),
+        originalMediaViewer: viewer,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await openFirstScreenshot(tester);
+    await tapDetailAction(tester, 'Abrir original');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('open-original-error')), findsNothing);
+  });
+
+  testWidgets('Home consulta e mantém somente os 12 prints mais recentes', (
     tester,
   ) async {
     final repository = FakeMediaItemRepository(
@@ -4039,36 +4092,45 @@ void main() {
     final grid = tester.widget<ScreenshotSliverGrid>(
       find.byType(ScreenshotSliverGrid),
     );
-    expect(grid.mediaItems, hasLength(defaultMediaPageSize));
+    expect(grid.mediaItems, hasLength(homeRecentMediaItemLimit));
     expect(repository.loadCallCount, 1);
+    expect(repository.pageRequests.single.pageSize, homeRecentMediaItemLimit);
+    expect(find.text('Últimos prints'), findsOneWidget);
+    expect(find.text('Ver todos'), findsOneWidget);
     expect(
       find.byType(MediaItemThumbnail).evaluate().length,
-      lessThan(defaultMediaPageSize),
+      lessThanOrEqualTo(homeRecentMediaItemLimit),
     );
   });
 
-  testWidgets('rolagem carrega uma próxima página e para no fim', (
-    tester,
-  ) async {
+  testWidgets('Ver todos abre biblioteca e pagina até o fim', (tester) async {
     final repository = FakeMediaItemRepository(
       initialItems: _manyMediaItems(65),
     );
     await tester.pumpWidget(
       buildTestApp(FakeScreenshotPicker(), repository: repository),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('view-all-screenshots')));
+    await tester.pumpAndSettle();
+    expect(find.text('Biblioteca'), findsOneWidget);
+    var grid = tester.widget<ScreenshotSliverGrid>(
+      find.byType(ScreenshotSliverGrid),
+    );
+    expect(grid.mediaItems, hasLength(defaultMediaPageSize));
+    expect(repository.pageRequests.last.pageSize, defaultMediaPageSize);
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('screenshot-tile-6')),
+      find.byKey(const ValueKey('screenshot-tile-1')),
       500,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
 
-    var grid = tester.widget<ScreenshotSliverGrid>(
+    grid = tester.widget<ScreenshotSliverGrid>(
       find.byType(ScreenshotSliverGrid),
     );
     expect(grid.mediaItems, hasLength(65));
-    expect(repository.loadCallCount, 2);
+    expect(repository.loadCallCount, 3);
 
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -1000));
     await tester.pumpAndSettle();
@@ -4076,45 +4138,52 @@ void main() {
       find.byType(ScreenshotSliverGrid),
     );
     expect(grid.mediaItems, hasLength(65));
-    expect(repository.loadCallCount, 2);
+    expect(repository.loadCallCount, 3);
   });
 
-  testWidgets('erro da próxima página preserva itens e permite retry', (
-    tester,
-  ) async {
-    final repository = FakeMediaItemRepository(
-      initialItems: _manyMediaItems(70),
-      failNextPage: true,
-    );
-    await tester.pumpWidget(
-      buildTestApp(FakeScreenshotPicker(), repository: repository),
-    );
-    await tester.pump();
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('screenshot-tile-11')),
-      500,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
+  testWidgets(
+    'erro intermediário da biblioteca preserva itens e permite retry',
+    (tester) async {
+      final repository = FakeMediaItemRepository(
+        initialItems: _manyMediaItems(70),
+        failNextPage: true,
+      );
+      await tester.pumpWidget(
+        buildTestApp(FakeScreenshotPicker(), repository: repository),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('view-all-screenshots')));
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byType(CustomScrollView).last,
+        const Offset(0, -5000),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Não foi possível carregar mais prints.'), findsOneWidget);
-    expect(
-      tester
-          .widget<ScreenshotSliverGrid>(find.byType(ScreenshotSliverGrid))
-          .mediaItems,
-      hasLength(60),
-    );
+      expect(
+        find.text('Não foi possível carregar mais prints.'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<ScreenshotSliverGrid>(find.byType(ScreenshotSliverGrid))
+            .mediaItems,
+        hasLength(60),
+      );
 
-    repository.failNextPage = false;
-    await tester.tap(find.byKey(const Key('retry-next-page')));
-    await tester.pumpAndSettle();
-    expect(
+      repository.failNextPage = false;
       tester
-          .widget<ScreenshotSliverGrid>(find.byType(ScreenshotSliverGrid))
-          .mediaItems,
-      hasLength(70),
-    );
-  });
+          .widget<TextButton>(find.byKey(const Key('library-message-action')))
+          .onPressed!();
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<ScreenshotSliverGrid>(find.byType(ScreenshotSliverGrid))
+            .mediaItems,
+        hasLength(70),
+      );
+    },
+  );
 
   testWidgets('erro da primeira página usa mensagem e retry próprios', (
     tester,
@@ -4133,7 +4202,7 @@ void main() {
     repository._loadError = null;
     await tester.tap(find.text('Tentar novamente'));
     await tester.pumpAndSettle();
-    expect(find.text('1 item'), findsOneWidget);
+    expect(find.text('Últimos prints'), findsOneWidget);
   });
 }
 
@@ -4167,6 +4236,7 @@ Widget buildTestApp(
   ExistingScreenshotInventoryCoordinator?
   existingScreenshotInventoryCoordinator,
   MediaStoreContentGateway? mediaStoreContentGateway,
+  OriginalMediaViewer? originalMediaViewer,
 }) {
   final resolvedOcrRepository = ocrRepository ?? FakeOcrRepository();
   final resolvedMediaRepository = repository ?? FakeMediaItemRepository();
@@ -4209,6 +4279,7 @@ Widget buildTestApp(
           repository: _EmptyExistingScreenshotRepository(),
         ),
     mediaStoreContentGateway: mediaStoreContentGateway,
+    originalMediaViewer: originalMediaViewer,
   );
 }
 
@@ -5227,6 +5298,19 @@ Future<void> tapDetailAction(WidgetTester tester, String label) async {
   await tester.pump();
 }
 
+class FakeOriginalMediaViewer implements OriginalMediaViewer {
+  FakeOriginalMediaViewer(this.result);
+
+  final OriginalMediaOpenResult result;
+  final List<int> openedIds = [];
+
+  @override
+  Future<OriginalMediaOpenResult> open(MediaItem mediaItem) async {
+    openedIds.add(mediaItem.id);
+    return result;
+  }
+}
+
 class FakeMediaItemRepository implements PagedMediaItemRepository {
   FakeMediaItemRepository({
     List<MediaItem> initialItems = const [],
@@ -5284,12 +5368,14 @@ class FakeMediaItemRepository implements PagedMediaItemRepository {
   int loadCallCount = 0;
   int removeCallCount = 0;
   int searchCallCount = 0;
+  final List<MediaPageRequest> pageRequests = [];
   int get itemCount => _items.length;
 
   @override
   Future<MediaPage<MediaItem>> loadMediaPage([
     MediaPageRequest request = const MediaPageRequest(),
   ]) async {
+    pageRequests.add(request);
     if (request.cursor != null && failNextPage) {
       throw StateError('Falha privada na próxima página');
     }
