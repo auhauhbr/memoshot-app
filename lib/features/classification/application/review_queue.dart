@@ -46,21 +46,17 @@ class ReviewQueueLoader {
   final MediaItemRepository _mediaRepository;
 
   Future<List<ReviewQueueItem>> loadPending() async {
-    final values = await Future.wait<Object>([
-      _suggestionRepository.loadPendingReview(),
-      _mediaRepository.loadAvailableItems(),
-    ]);
-    final suggestions = values[0] as List<StoredClassificationSuggestion>;
-    final mediaItems = values[1] as List<MediaItem>;
-    final mediaById = {for (final item in mediaItems) item.id: item};
-    return suggestions
-        .map((suggestion) {
-          final mediaItem = mediaById[suggestion.mediaItemId];
-          return mediaItem == null
-              ? null
-              : ReviewQueueItem(mediaItem: mediaItem, suggestion: suggestion);
-        })
-        .whereType<ReviewQueueItem>()
-        .toList(growable: false);
+    final suggestions = await _suggestionRepository.loadPendingReview();
+    final items = await Future.wait(
+      suggestions.map((suggestion) async {
+        final mediaItem = await _mediaRepository.loadById(
+          suggestion.mediaItemId,
+        );
+        return mediaItem == null
+            ? null
+            : ReviewQueueItem(mediaItem: mediaItem, suggestion: suggestion);
+      }),
+    );
+    return items.whereType<ReviewQueueItem>().toList(growable: false);
   }
 }

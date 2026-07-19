@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../../../core/database/contexto_database.dart';
 import '../../library/domain/media_item.dart' as media_domain;
+import '../../library/domain/media_page.dart';
 import '../domain/category.dart' as domain;
 
 enum CategoryMoveStoreResult {
@@ -60,13 +61,80 @@ abstract interface class CategoryStore {
 
   Future<void> deleteCategory(int id);
 
+  /// Carregamento completo legado. Não usar em pastas potencialmente grandes.
   Future<List<media_domain.MediaItem>> listMediaForCategory(int categoryId);
 }
 
-class DriftCategoryStore implements CategoryStore {
+abstract interface class PagedCategoryStore implements CategoryStore {
+  Future<MediaPage<media_domain.MediaItem>> listMediaPageForCategory(
+    int categoryId,
+    MediaPageRequest request,
+  );
+
+  Future<int> countMediaForCategory(int categoryId);
+}
+
+class DriftCategoryStore implements PagedCategoryStore {
   DriftCategoryStore(this._database);
 
   final ContextoDatabase _database;
+
+  @override
+  Future<MediaPage<media_domain.MediaItem>> listMediaPageForCategory(
+    int categoryId,
+    MediaPageRequest request,
+  ) async {
+    final variables = <Variable>[Variable<int>(categoryId)];
+    final cursorSql = request.cursor == null
+        ? ''
+        : '''
+          AND (COALESCE(media_items.captured_at, media_items.imported_at) < ?
+            OR (COALESCE(media_items.captured_at, media_items.imported_at) = ?
+              AND media_items.id < ?))
+        ''';
+    if (request.cursor case final cursor?) {
+      variables
+        ..add(Variable<DateTime>(cursor.capturedAt))
+        ..add(Variable<DateTime>(cursor.capturedAt))
+        ..add(Variable<int>(cursor.id));
+    }
+    variables.add(Variable<int>(request.effectivePageSize + 1));
+    final rows = await _database
+        .customSelect(
+          '''
+      SELECT media_items.*
+      FROM media_items
+      INNER JOIN media_categories
+        ON media_categories.media_item_id = media_items.id
+      WHERE media_categories.category_id = ?
+      $cursorSql
+      ORDER BY COALESCE(media_items.captured_at, media_items.imported_at) DESC,
+        media_items.id DESC
+      LIMIT ?
+      ''',
+          variables: variables,
+          readsFrom: {_database.mediaItems, _database.mediaCategories},
+        )
+        .get();
+    final pageSize = request.effectivePageSize;
+    final hasMore = rows.length > pageSize;
+    final items = rows.take(pageSize).map(_mediaQueryRowToDomain).toList();
+    return MediaPage(
+      items: List.unmodifiable(items),
+      nextCursor: hasMore && items.isNotEmpty
+          ? MediaPage.cursorFor(items.last)
+          : null,
+    );
+  }
+
+  @override
+  Future<int> countMediaForCategory(int categoryId) async {
+    final count = _database.mediaCategories.mediaItemId.count();
+    final query = _database.selectOnly(_database.mediaCategories)
+      ..addColumns([count])
+      ..where(_database.mediaCategories.categoryId.equals(categoryId));
+    return (await query.map((row) => row.read(count) ?? 0).getSingle());
+  }
 
   @override
   Future<int> insertCategory({
@@ -400,6 +468,31 @@ class DriftCategoryStore implements CategoryStore {
       sourceMode: row.sourceMode,
       status: row.status,
       importOrigin: media_domain.ImportOrigin.fromDatabase(row.importOrigin),
+    );
+  }
+
+  media_domain.MediaItem _mediaQueryRowToDomain(QueryRow row) {
+    return media_domain.MediaItem(
+      id: row.read<int>('id'),
+      location: media_domain.mediaItemLocationFromStorage(
+        storageKind: row.read<String>('storage_kind'),
+        privatePath: row.readNullable<String>('private_path'),
+        internalName: row.readNullable<String>('internal_name'),
+        sourceKey: row.readNullable<String>('source_key'),
+        mediaStoreId: row.readNullable<int>('media_store_id'),
+        volumeName: row.readNullable<String>('volume_name'),
+        contentUri: row.readNullable<String>('content_uri'),
+        sourceDateModified: row.readNullable<DateTime>('source_date_modified'),
+      ),
+      mimeType: row.readNullable<String>('mime_type'),
+      mediaHash: row.readNullable<String>('media_hash'),
+      importedAt: row.read<DateTime>('imported_at'),
+      capturedAt: row.readNullable<DateTime>('captured_at'),
+      sourceMode: row.read<String>('source_mode'),
+      status: row.read<String>('status'),
+      importOrigin: media_domain.ImportOrigin.fromDatabase(
+        row.read<String>('import_origin'),
+      ),
     );
   }
 }

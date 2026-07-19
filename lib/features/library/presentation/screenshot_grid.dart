@@ -60,71 +60,144 @@ class ScreenshotGrid extends StatelessWidget {
           ),
           itemBuilder: (context, index) {
             final item = mediaItems[index];
-            return Material(
-              color: colors.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: colors.outlineVariant),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                key: ValueKey('screenshot-tile-${item.id}'),
-                onTap: () => onItemTap(item),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          MediaItemThumbnail(
-                            mediaItem: item,
-                            key: ValueKey(item.id),
-                            fit: BoxFit.cover,
-                            gateway: thumbnailGateway,
-                          ),
-                          Positioned(
-                            top: 5,
-                            right: 5,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: colors.surface.withValues(alpha: 0.88),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Icon(
-                                Icons.open_in_full,
-                                size: 14,
-                                color: colors.secondary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (snippets[item.id] case final snippet?)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(5, 4, 5, 2),
-                        child: Text(
-                          snippet,
-                          key: ValueKey('search-snippet-${item.id}'),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colors.onSurfaceVariant,
-                            height: 1.2,
-                          ),
-                        ),
-                      ),
-                    _OcrStatusLabel(
-                      state: ocrStates[item.id] ?? OcrItemState.notScheduled,
-                    ),
-                  ],
-                ),
-              ),
+            return _ScreenshotTile(
+              item: item,
+              state: ocrStates[item.id] ?? OcrItemState.notScheduled,
+              snippet: snippets[item.id],
+              onTap: onItemTap,
+              thumbnailGateway: thumbnailGateway,
             );
           },
         ),
       ],
+    );
+  }
+}
+
+/// Grade em sliver para bibliotecas incrementais. Somente células montadas
+/// solicitam miniaturas.
+class ScreenshotSliverGrid extends StatelessWidget {
+  const ScreenshotSliverGrid({
+    required this.mediaItems,
+    required this.ocrStates,
+    required this.onItemTap,
+    this.snippets = const {},
+    this.thumbnailGateway = const MethodChannelMediaStoreContentGateway(),
+    super.key,
+  });
+
+  final List<MediaItem> mediaItems;
+  final Map<int, OcrItemState> ocrStates;
+  final Map<int, String> snippets;
+  final ValueChanged<MediaItem> onItemTap;
+  final MediaStoreContentGateway thumbnailGateway;
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverGrid(
+      key: const Key('persisted-screenshot-grid'),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: snippets.isEmpty ? 0.82 : 0.58,
+      ),
+      delegate: SliverChildBuilderDelegate((context, index) {
+        final item = mediaItems[index];
+        return _ScreenshotTile(
+          item: item,
+          state: ocrStates[item.id] ?? OcrItemState.notScheduled,
+          snippet: snippets[item.id],
+          onTap: onItemTap,
+          thumbnailGateway: thumbnailGateway,
+        );
+      }, childCount: mediaItems.length),
+    );
+  }
+}
+
+class _ScreenshotTile extends StatelessWidget {
+  const _ScreenshotTile({
+    required this.item,
+    required this.state,
+    required this.snippet,
+    required this.onTap,
+    required this.thumbnailGateway,
+  });
+
+  final MediaItem item;
+  final OcrItemState state;
+  final String? snippet;
+  final ValueChanged<MediaItem> onTap;
+  final MediaStoreContentGateway thumbnailGateway;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Semantics(
+      button: true,
+      label: 'Abrir print',
+      child: Material(
+        color: colors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: colors.outlineVariant),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: ValueKey('screenshot-tile-${item.id}'),
+          onTap: () => onTap(item),
+          child: Column(
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    MediaItemThumbnail(
+                      mediaItem: item,
+                      key: ValueKey(item.id),
+                      fit: BoxFit.cover,
+                      gateway: thumbnailGateway,
+                    ),
+                    Positioned(
+                      top: 5,
+                      right: 5,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: colors.surface.withValues(alpha: 0.88),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(
+                          Icons.open_in_full,
+                          size: 14,
+                          color: colors.secondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (snippet case final value?)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(5, 4, 5, 2),
+                  child: Text(
+                    value,
+                    key: ValueKey('search-snippet-${item.id}'),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+              _OcrStatusLabel(state: state),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

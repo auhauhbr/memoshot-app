@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../../../core/automatic_import/automatic_screenshot_source.dart';
 import '../../../core/automatic_import/method_channel_automatic_screenshot_source.dart';
@@ -33,6 +34,7 @@ import '../../existing_screenshots/data/existing_screenshot_candidate_store.dart
 import '../../library/data/media_item_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
+import '../../library/domain/media_page.dart';
 import '../../library/domain/selected_screenshot.dart';
 import '../../library/domain/screenshot_search_result.dart';
 import '../../library/presentation/screenshot_detail_page.dart';
@@ -122,6 +124,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final ExistingScreenshotInventoryCoordinator
   _existingScreenshotInventoryCoordinator;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final TextNormalizer _textNormalizer = const TextNormalizer();
   Timer? _searchDebounce;
   int _searchGeneration = 0;
@@ -130,8 +133,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<ScreenshotSearchResult> _searchResults = const [];
   bool _isLoading = true;
   bool _isSearching = false;
+  bool _isLoadingNextPage = false;
+  String? _nextPageErrorMessage;
+  MediaPageCursor? _nextCursor;
   bool _searchActive = false;
   String? _errorMessage;
+  bool _initialPageFailed = false;
   String? _duplicateMessage;
   String? _searchErrorMessage;
   Tag? _selectedTag;
@@ -271,6 +278,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       onError: _handleAutomaticImportError,
     );
     _initialize();
+    _scrollController.addListener(_handleScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_sharedImportCoordinator.start());
       unawaited(_automaticImportCoordinator.initialize());
@@ -293,6 +301,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     unawaited(_disposeResources());
     super.dispose();
   }
@@ -415,6 +424,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _initialize() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+        _initialPageFailed = false;
+      });
+    }
     try {
       await _reloadItems();
       await _reloadCategories();
@@ -430,7 +446,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } catch (_) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Não foi possível carregar a biblioteca.';
+          _errorMessage = 'Não foi possível carregar seus prints.';
+          _initialPageFailed = true;
         });
       }
     } finally {
@@ -481,15 +498,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!mounted) {
       return;
     }
-    setState(() {
-      if (_selectedTag == null) {
-        _mediaItems.insertAll(0, result.importedItems.reversed);
-      }
-      _duplicateMessage = _duplicateText(result.duplicateCount);
-    });
-    if (_selectedTag != null) {
-      await _refreshLibraryForCurrentFilter();
-    }
+    setState(() => _duplicateMessage = _duplicateText(result.duplicateCount));
+    await _refreshCurrentFirstPage();
   }
 
   String? _duplicateText(int count) {
@@ -504,7 +514,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> _reloadItems({int? generation}) async {
     final tagId = _selectedTag?.id;
-    final items = await _mediaRepository.loadAvailableItems(tagId: tagId);
+    final request = MediaPageRequest(tagIds: {?tagId});
+    final repository = _mediaRepository;
+    final previousItemCount = _mediaItems.length;
+    var page = repository is PagedMediaItemRepository
+        ? await repository.loadMediaPageByTags(request)
+        : MediaPage<MediaItem>(
+            items: await repository.loadAvailableItems(tagId: tagId),
+            nextCursor: null,
+          );
+    final items = [...page.items];
+    while (repository is PagedMediaItemRepository &&
+        items.length < previousItemCount &&
+        page.nextCursor != null) {
+      page = await repository.loadMediaPageByTags(
+        MediaPageRequest(cursor: page.nextCursor, tagIds: request.tagIds),
+      );
+      items.addAll(page.items);
+    }
     final states = <int, OcrItemState>{};
     for (final item in items) {
       states[item.id] = await _ocrQueue.loadState(item.id);
@@ -519,7 +546,104 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _ocrStates
           ..clear()
           ..addAll(states);
+        _nextCursor = page.nextCursor;
+        _nextPageErrorMessage = null;
+        _isLoadingNextPage = false;
       });
+    }
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.extentAfter < 600) {
+      unawaited(_loadNextPage());
+    }
+  }
+
+  Future<void> _loadNextPage() async {
+    final cursor = _nextCursor;
+    if (cursor == null || _isLoadingNextPage) return;
+    final repository = _mediaRepository;
+    if (repository is! PagedMediaItemRepository) return;
+    final generation = _searchGeneration;
+    final tagId = _selectedTag?.id;
+    final query = _searchController.text;
+    setState(() {
+      _isLoadingNextPage = true;
+      _nextPageErrorMessage = null;
+    });
+    try {
+      final request = MediaPageRequest(cursor: cursor, tagIds: {?tagId});
+      final MediaPageCursor? nextCursor;
+      final List<MediaItem> pageItems;
+      List<ScreenshotSearchResult>? searchItems;
+      if (_searchActive) {
+        final page = await repository.searchMediaPageByTags(query, request);
+        searchItems = page.items;
+        pageItems = page.items
+            .map((item) => item.mediaItem)
+            .toList(growable: false);
+        nextCursor = page.nextCursor;
+      } else {
+        final page = await repository.loadMediaPageByTags(request);
+        pageItems = page.items;
+        nextCursor = page.nextCursor;
+      }
+      final states = await _loadOcrStates(pageItems);
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() {
+        if (_searchActive) {
+          final existing = _searchResults
+              .map((item) => item.mediaItem.id)
+              .toSet();
+          _searchResults = [
+            ..._searchResults,
+            ...searchItems!.where((item) => existing.add(item.mediaItem.id)),
+          ];
+        } else {
+          final existing = _mediaItems.map((item) => item.id).toSet();
+          _mediaItems.addAll(pageItems.where((item) => existing.add(item.id)));
+        }
+        _ocrStates.addAll(states);
+        _nextCursor = nextCursor;
+        _isLoadingNextPage = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() {
+        _isLoadingNextPage = false;
+        _nextPageErrorMessage = 'Não foi possível carregar mais prints.';
+      });
+    }
+  }
+
+  Future<Map<int, OcrItemState>> _loadOcrStates(List<MediaItem> items) async {
+    final states = <int, OcrItemState>{};
+    for (final item in items) {
+      states[item.id] = await _ocrQueue.loadState(item.id);
+    }
+    return states;
+  }
+
+  void _scrollToLibraryStart() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    });
+  }
+
+  Future<void> _refreshCurrentFirstPage() async {
+    final generation = ++_searchGeneration;
+    _nextCursor = null;
+    _nextPageErrorMessage = null;
+    _isLoadingNextPage = false;
+    if (_searchActive) {
+      await _performSearch(
+        _searchController.text,
+        generation,
+        showLoading: false,
+      );
+    } else {
+      await _reloadItems(generation: generation);
     }
   }
 
@@ -636,6 +760,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _searchDebounce?.cancel();
     final normalized = _textNormalizer.normalize(value);
     final generation = ++_searchGeneration;
+    _nextCursor = null;
+    _nextPageErrorMessage = null;
+    _isLoadingNextPage = false;
+    _scrollToLibraryStart();
     if (normalized.isEmpty) {
       setState(() {
         _searchActive = false;
@@ -649,6 +777,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _searchActive = true;
       _isSearching = true;
+      _searchResults = const [];
       _searchErrorMessage = null;
     });
     _searchDebounce = Timer(
@@ -667,6 +796,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       _searchActive = true;
       _isSearching = true;
+      _searchResults = const [];
       _searchErrorMessage = null;
     });
     unawaited(_performSearch(value, generation));
@@ -693,10 +823,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     try {
       final tagId = _selectedTag?.id;
-      final results = await _mediaRepository.searchRecognizedText(
-        query,
-        tagId: tagId,
-      );
+      final repository = _mediaRepository;
+      final previousResultCount = _searchResults.length;
+      var page = repository is PagedMediaItemRepository
+          ? await repository.searchMediaPageByTags(
+              query,
+              MediaPageRequest(tagIds: {?tagId}),
+            )
+          : MediaPage<ScreenshotSearchResult>(
+              items: await repository.searchRecognizedText(query, tagId: tagId),
+              nextCursor: null,
+            );
+      final results = [...page.items];
+      while (repository is PagedMediaItemRepository &&
+          results.length < previousResultCount &&
+          page.nextCursor != null) {
+        page = await repository.searchMediaPageByTags(
+          query,
+          MediaPageRequest(cursor: page.nextCursor, tagIds: {?tagId}),
+        );
+        results.addAll(page.items);
+      }
       if (!mounted || generation != _searchGeneration) {
         return;
       }
@@ -704,6 +851,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         _searchResults = results;
         _isSearching = false;
         _searchErrorMessage = null;
+        _nextCursor = page.nextCursor;
+        _nextPageErrorMessage = null;
+        _isLoadingNextPage = false;
       });
     } catch (_) {
       if (!mounted || generation != _searchGeneration) {
@@ -720,6 +870,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _searchDebounce?.cancel();
     final generation = ++_searchGeneration;
     _searchController.clear();
+    _nextCursor = null;
+    _nextPageErrorMessage = null;
+    _isLoadingNextPage = false;
+    _scrollToLibraryStart();
     setState(() {
       _searchActive = false;
       _isSearching = false;
@@ -765,6 +919,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _applyTagFilter(Tag? tag) async {
     if (_selectedTag?.id == tag?.id) return;
     _searchDebounce?.cancel();
+    _nextCursor = null;
+    _nextPageErrorMessage = null;
+    _isLoadingNextPage = false;
+    _scrollToLibraryStart();
     setState(() {
       _selectedTag = tag;
       _filterErrorMessage = null;
@@ -1009,192 +1167,288 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         label: const Text('Adicionar print'),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _AppHeader(
-                    onOpenTags: _openTags,
-                    onOpenSettings: _openSettings,
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _SearchField(
-                          controller: _searchController,
-                          showClearAction: _searchController.text.isNotEmpty,
-                          onChanged: _onSearchChanged,
-                          onSubmitted: _submitSearch,
-                          onClear: _clearSearch,
+        child: CustomScrollView(
+          controller: _scrollController,
+          scrollCacheExtent: const ScrollCacheExtent.pixels(600),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              sliver: SliverToBoxAdapter(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _AppHeader(
+                          onOpenTags: _openTags,
+                          onOpenSettings: _openSettings,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton.filledTonal(
-                        key: const Key('open-tag-filter'),
-                        onPressed: _openTagFilter,
-                        tooltip: _selectedTag == null
-                            ? 'Filtrar biblioteca por etiqueta'
-                            : 'Alterar filtro de etiqueta',
-                        isSelected: _selectedTag != null,
-                        icon: const Icon(Icons.filter_alt_outlined),
-                        selectedIcon: const Icon(Icons.filter_alt),
-                      ),
-                    ],
-                  ),
-                  if (_selectedTag != null || _filterErrorMessage != null) ...[
-                    const SizedBox(height: 8),
-                    _ActiveTagFilter(
-                      tag: _selectedTag,
-                      isLoading: _isFiltering,
-                      errorMessage: _filterErrorMessage,
-                      onClear: () => unawaited(_applyTagFilter(null)),
-                      onRetry: () => unawaited(_retryCurrentResults()),
-                    ),
-                  ],
-                  if (_automaticImportState !=
-                          AutomaticImportUiState.disabled &&
-                      _automaticImportState !=
-                          AutomaticImportUiState.active) ...[
-                    const SizedBox(height: 10),
-                    _AutomaticImportNotice(
-                      state: _automaticImportState,
-                      onAction: () => unawaited(_openSettings()),
-                    ),
-                  ],
-                  if (_errorMessage != null || _duplicateMessage != null) ...[
-                    const SizedBox(height: 10),
-                    _ImportFeedback(
-                      errorMessage: _errorMessage,
-                      infoMessage: _duplicateMessage,
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  if ((_pendingReviewCount ?? 0) > 0) ...[
-                    _ReviewSummary(
-                      count: _pendingReviewCount!,
-                      onReview: _openReviewQueue,
-                    ),
-                    if (_reviewNotificationState != null &&
-                        !_reviewNotificationState!.enabled &&
-                        !_reviewNotificationState!.promptHandled) ...[
-                      const SizedBox(height: 8),
-                      _ReviewNotificationInvite(
-                        isLoading: _isChangingReviewNotifications,
-                        onEnable: _enableReviewNotifications,
-                        onDismiss: _dismissReviewNotificationPrompt,
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                  ],
-                  _SectionHeader(
-                    title: 'Pastas',
-                    actionLabel: 'Gerenciar pastas',
-                    actionKey: const Key('categories-summary'),
-                    onAction: _openCategories,
-                  ),
-                  const SizedBox(height: 8),
-                  _FoldersSection(
-                    categories: _categories,
-                    isLoading: _areCategoriesLoading,
-                    errorMessage: _categoriesErrorMessage,
-                    onAll: () => unawaited(_applyTagFilter(null)),
-                    onCategory: _openCategory,
-                    onCreate: _openCategories,
-                    onRetry: _reloadCategories,
-                  ),
-                  const SizedBox(height: 22),
-                  Row(
-                    children: [
-                      const Expanded(child: _SectionTitle('Todos os prints')),
-                      Text(
-                        '${_searchActive ? _searchResults.length : _mediaItems.length} '
-                        '${(_searchActive ? _searchResults.length : _mediaItems.length) == 1 ? 'item' : 'itens'}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _SearchField(
+                                controller: _searchController,
+                                showClearAction:
+                                    _searchController.text.isNotEmpty,
+                                onChanged: _onSearchChanged,
+                                onSubmitted: _submitSearch,
+                                onClear: _clearSearch,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton.filledTonal(
+                              key: const Key('open-tag-filter'),
+                              onPressed: _openTagFilter,
+                              tooltip: _selectedTag == null
+                                  ? 'Filtrar biblioteca por etiqueta'
+                                  : 'Alterar filtro de etiqueta',
+                              isSelected: _selectedTag != null,
+                              icon: const Icon(Icons.filter_alt_outlined),
+                              selectedIcon: const Icon(Icons.filter_alt),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                        if (_selectedTag != null ||
+                            _filterErrorMessage != null) ...[
+                          const SizedBox(height: 8),
+                          _ActiveTagFilter(
+                            tag: _selectedTag,
+                            isLoading: _isFiltering,
+                            errorMessage: _filterErrorMessage,
+                            onClear: () => unawaited(_applyTagFilter(null)),
+                            onRetry: () => unawaited(_retryCurrentResults()),
+                          ),
+                        ],
+                        if (_automaticImportState !=
+                                AutomaticImportUiState.disabled &&
+                            _automaticImportState !=
+                                AutomaticImportUiState.active) ...[
+                          const SizedBox(height: 10),
+                          _AutomaticImportNotice(
+                            state: _automaticImportState,
+                            onAction: () => unawaited(_openSettings()),
+                          ),
+                        ],
+                        if (_errorMessage != null ||
+                            _duplicateMessage != null) ...[
+                          const SizedBox(height: 10),
+                          _ImportFeedback(
+                            errorMessage: _errorMessage,
+                            infoMessage: _duplicateMessage,
+                            onRetry: _initialPageFailed
+                                ? () => unawaited(_initialize())
+                                : null,
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+                        if ((_pendingReviewCount ?? 0) > 0) ...[
+                          _ReviewSummary(
+                            count: _pendingReviewCount!,
+                            onReview: _openReviewQueue,
+                          ),
+                          if (_reviewNotificationState != null &&
+                              !_reviewNotificationState!.enabled &&
+                              !_reviewNotificationState!.promptHandled) ...[
+                            const SizedBox(height: 8),
+                            _ReviewNotificationInvite(
+                              isLoading: _isChangingReviewNotifications,
+                              onEnable: _enableReviewNotifications,
+                              onDismiss: _dismissReviewNotificationPrompt,
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                        ],
+                        _SectionHeader(
+                          title: 'Pastas',
+                          actionLabel: 'Gerenciar pastas',
+                          actionKey: const Key('categories-summary'),
+                          onAction: _openCategories,
+                        ),
+                        const SizedBox(height: 8),
+                        _FoldersSection(
+                          categories: _categories,
+                          isLoading: _areCategoriesLoading,
+                          errorMessage: _categoriesErrorMessage,
+                          onAll: () => unawaited(_applyTagFilter(null)),
+                          onCategory: _openCategory,
+                          onCreate: _openCategories,
+                          onRetry: _reloadCategories,
+                        ),
+                        const SizedBox(height: 22),
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: _SectionTitle('Todos os prints'),
+                            ),
+                            Text(
+                              '${_searchActive ? _searchResults.length : _mediaItems.length} '
+                              '${(_searchActive ? _searchResults.length : _mediaItems.length) == 1 ? 'item' : 'itens'}',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        if (_searchActive) ...[
+                          const SizedBox(height: 8),
+                          _SearchSummary(
+                            query: _searchController.text.trim(),
+                            resultCount: _searchResults.length,
+                            isSearching: _isSearching,
+                            errorMessage: _searchErrorMessage,
+                            hasPendingItems: _ocrStates.values.any(
+                              (state) =>
+                                  state == OcrItemState.pending ||
+                                  state == OcrItemState.processing,
+                            ),
+                            onRetry: () => unawaited(_retryCurrentResults()),
+                          ),
+                          if (!_isSearching &&
+                              _searchErrorMessage == null &&
+                              _searchResults.isEmpty)
+                            _EmptySearchState(
+                              message: 'Nenhum print corresponde à pesquisa.',
+                              onClearFilter: _selectedTag == null
+                                  ? null
+                                  : () => unawaited(_applyTagFilter(null)),
+                            )
+                          else if (_searchResults.isNotEmpty)
+                            const SizedBox(height: 8),
+                        ] else if (_mediaItems.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                        ] else if (!_isLoading && !_isFiltering) ...[
+                          const SizedBox(height: 10),
+                          _EmptySearchState(
+                            message: _selectedTag == null
+                                ? 'Nenhum print salvo.'
+                                : 'Nenhum print encontrado com esta etiqueta.',
+                            onClearFilter: _selectedTag == null
+                                ? null
+                                : () => unawaited(_applyTagFilter(null)),
+                            actionLabel: _selectedTag == null
+                                ? 'Adicionar print'
+                                : null,
+                            onAction: _selectedTag == null
+                                ? _pickScreenshots
+                                : null,
+                          ),
+                        ] else if (_isLoading) ...[
+                          const SizedBox(height: 20),
+                          const Center(child: CircularProgressIndicator()),
+                        ],
+                        if ((_searchActive && _searchResults.isNotEmpty) ||
+                            (!_searchActive && _mediaItems.isNotEmpty)) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.secondary,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Salvo neste dispositivo.',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                      ],
+                    ),
                   ),
-                  if (_searchActive) ...[
-                    const SizedBox(height: 8),
-                    _SearchSummary(
-                      query: _searchController.text.trim(),
-                      resultCount: _searchResults.length,
-                      isSearching: _isSearching,
-                      errorMessage: _searchErrorMessage,
-                      hasPendingItems: _ocrStates.values.any(
-                        (state) =>
-                            state == OcrItemState.pending ||
-                            state == OcrItemState.processing,
-                      ),
-                      onRetry: () => unawaited(_retryCurrentResults()),
-                    ),
-                    if (!_isSearching &&
-                        _searchErrorMessage == null &&
-                        _searchResults.isEmpty)
-                      _EmptySearchState(
-                        message: 'Nenhum print corresponde à pesquisa.',
-                        onClearFilter: _selectedTag == null
-                            ? null
-                            : () => unawaited(_applyTagFilter(null)),
-                      )
-                    else if (_searchResults.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      ScreenshotGrid(
-                        mediaItems: _searchResults
-                            .map((result) => result.mediaItem)
-                            .toList(growable: false),
-                        ocrStates: _ocrStates,
-                        snippets: {
-                          for (final result in _searchResults)
-                            result.mediaItem.id: result.snippet,
-                        },
-                        onItemTap: _openDetails,
-                        thumbnailGateway:
-                            widget.mediaStoreContentGateway ??
-                            const MethodChannelMediaStoreContentGateway(),
-                      ),
-                    ],
-                  ] else if (_mediaItems.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    ScreenshotGrid(
-                      mediaItems: _mediaItems,
-                      ocrStates: _ocrStates,
-                      onItemTap: _openDetails,
-                      thumbnailGateway:
-                          widget.mediaStoreContentGateway ??
-                          const MethodChannelMediaStoreContentGateway(),
-                    ),
-                  ] else if (!_isLoading && !_isFiltering) ...[
-                    const SizedBox(height: 10),
-                    _EmptySearchState(
-                      message: _selectedTag == null
-                          ? 'Nenhum print salvo.'
-                          : 'Nenhum print encontrado com esta etiqueta.',
-                      onClearFilter: _selectedTag == null
-                          ? null
-                          : () => unawaited(_applyTagFilter(null)),
-                      actionLabel: _selectedTag == null
-                          ? 'Adicionar print'
-                          : null,
-                      onAction: _selectedTag == null ? _pickScreenshots : null,
-                    ),
-                  ] else if (_isLoading) ...[
-                    const SizedBox(height: 20),
-                    const Center(child: CircularProgressIndicator()),
-                  ],
-                ],
+                ),
               ),
             ),
-          ),
+            if (_searchActive && _searchResults.isNotEmpty)
+              SliverPadding(
+                padding: _gridPadding(context),
+                sliver: ScreenshotSliverGrid(
+                  mediaItems: _searchResults
+                      .map((result) => result.mediaItem)
+                      .toList(growable: false),
+                  ocrStates: _ocrStates,
+                  snippets: {
+                    for (final result in _searchResults)
+                      result.mediaItem.id: result.snippet,
+                  },
+                  onItemTap: _openDetails,
+                  thumbnailGateway:
+                      widget.mediaStoreContentGateway ??
+                      const MethodChannelMediaStoreContentGateway(),
+                ),
+              )
+            else if (!_searchActive && _mediaItems.isNotEmpty)
+              SliverPadding(
+                padding: _gridPadding(context),
+                sliver: ScreenshotSliverGrid(
+                  mediaItems: _mediaItems,
+                  ocrStates: _ocrStates,
+                  onItemTap: _openDetails,
+                  thumbnailGateway:
+                      widget.mediaStoreContentGateway ??
+                      const MethodChannelMediaStoreContentGateway(),
+                ),
+              ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+              sliver: SliverToBoxAdapter(child: _buildPageFooter()),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  EdgeInsets _gridPadding(BuildContext context) {
+    return const EdgeInsets.symmetric(horizontal: 16);
+  }
+
+  Widget _buildPageFooter() {
+    if (_isLoadingNextPage) {
+      return Semantics(
+        label: 'Carregando mais prints',
+        child: const Center(
+          child: SizedBox.square(
+            key: Key('next-page-loading'),
+            dimension: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    if (_nextPageErrorMessage case final message?) {
+      return Semantics(
+        liveRegion: true,
+        label: message,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(child: Text(message)),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const Key('retry-next-page'),
+              onPressed: () => unawaited(_loadNextPage()),
+              child: const Text('Tentar novamente'),
+            ),
+          ],
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
 
@@ -1623,10 +1877,12 @@ class _ImportFeedback extends StatelessWidget {
   const _ImportFeedback({
     required this.errorMessage,
     required this.infoMessage,
+    this.onRetry,
   });
 
   final String? errorMessage;
   final String? infoMessage;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1634,6 +1890,8 @@ class _ImportFeedback extends StatelessWidget {
     return _CompactMessage(
       icon: error ? Icons.error_outline : Icons.info_outline,
       message: error ? errorMessage! : infoMessage!,
+      actionLabel: onRetry == null ? null : 'Tentar novamente',
+      onAction: onRetry,
     );
   }
 }

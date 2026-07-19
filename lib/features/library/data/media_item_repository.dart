@@ -5,6 +5,7 @@ import '../../../core/media/screenshot_storage.dart';
 import '../../../core/text/search_snippet_builder.dart';
 import '../../../core/text/text_normalizer.dart';
 import '../domain/media_item.dart';
+import '../domain/media_page.dart';
 import '../domain/selected_screenshot.dart';
 import '../domain/screenshot_search_result.dart';
 import '../../processing/data/ocr_job_scheduler.dart';
@@ -23,6 +24,7 @@ class ImportResult {
 }
 
 abstract interface class MediaItemRepository {
+  /// Carregamento completo legado. Não usar em telas de biblioteca grandes.
   Future<List<MediaItem>> loadAvailableItems({int? tagId});
 
   Future<MediaItem?> loadById(int mediaItemId);
@@ -43,6 +45,25 @@ abstract interface class MediaItemRepository {
   Future<void> close();
 }
 
+abstract interface class PagedMediaItemRepository
+    implements MediaItemRepository {
+  Future<MediaPage<MediaItem>> loadMediaPage([MediaPageRequest request]);
+
+  Future<MediaPage<MediaItem>> loadMediaPageByTags(MediaPageRequest request);
+
+  Future<MediaPage<ScreenshotSearchResult>> searchMediaPage(
+    String query, [
+    MediaPageRequest request,
+  ]);
+
+  Future<MediaPage<ScreenshotSearchResult>> searchMediaPageByTags(
+    String query,
+    MediaPageRequest request,
+  );
+
+  Future<int> countMediaItems({Set<int> tagIds = const {}});
+}
+
 abstract interface class MediaStoreReferenceMediaItemRepository
     implements MediaItemRepository {
   Future<MediaItem?> loadBySourceKey(String sourceKey);
@@ -56,7 +77,9 @@ abstract interface class MediaStoreReferenceMediaItemRepository
 }
 
 class LocalMediaItemRepository
-    implements MediaStoreReferenceMediaItemRepository {
+    implements
+        MediaStoreReferenceMediaItemRepository,
+        PagedMediaItemRepository {
   LocalMediaItemRepository({
     required MediaItemStore store,
     required ScreenshotStorage storage,
@@ -88,6 +111,124 @@ class LocalMediaItemRepository
   final OcrJobScheduler? _ocrJobScheduler;
   final TextNormalizer _normalizer;
   final SearchSnippetBuilder _snippetBuilder;
+
+  @override
+  Future<MediaPage<MediaItem>> loadMediaPage([
+    MediaPageRequest request = const MediaPageRequest(),
+  ]) async {
+    final store = _store;
+    if (store is! PagedMediaItemStore) {
+      return _legacyMediaPage(await loadAvailableItems(), request);
+    }
+    final page = await store.readMediaPage(request);
+    return MediaPage(
+      items: List.unmodifiable(await _availableItems(page.items)),
+      nextCursor: page.nextCursor,
+    );
+  }
+
+  @override
+  Future<MediaPage<MediaItem>> loadMediaPageByTags(MediaPageRequest request) {
+    return loadMediaPage(request);
+  }
+
+  @override
+  Future<MediaPage<ScreenshotSearchResult>> searchMediaPage(
+    String query, [
+    MediaPageRequest request = const MediaPageRequest(),
+  ]) async {
+    final normalizedQuery = _normalizer.normalize(query);
+    if (normalizedQuery.isEmpty) {
+      return const MediaPage(items: [], nextCursor: null);
+    }
+    final store = _store;
+    if (store is! PagedMediaItemStore) {
+      final all = await searchRecognizedText(
+        query,
+        tagId: request.tagIds.firstOrNull,
+        limit: maximumMediaPageSize,
+      );
+      return _legacySearchPage(all, request);
+    }
+    final page = await store.searchMediaPage(normalizedQuery, request);
+    final results = <ScreenshotSearchResult>[];
+    for (final match in page.items) {
+      final path = match.mediaItem.privatePath;
+      if (path == null || await File(path).exists()) {
+        results.add(
+          ScreenshotSearchResult(
+            mediaItem: match.mediaItem,
+            snippet: _snippetBuilder.build(match.fullText, normalizedQuery),
+          ),
+        );
+      }
+    }
+    return MediaPage(
+      items: List.unmodifiable(results),
+      nextCursor: page.nextCursor,
+    );
+  }
+
+  @override
+  Future<MediaPage<ScreenshotSearchResult>> searchMediaPageByTags(
+    String query,
+    MediaPageRequest request,
+  ) => searchMediaPage(query, request);
+
+  @override
+  Future<int> countMediaItems({Set<int> tagIds = const {}}) async {
+    final store = _store;
+    if (store is PagedMediaItemStore) {
+      return store.countMediaItems(tagIds: tagIds);
+    }
+    return (await loadAvailableItems(tagId: tagIds.firstOrNull)).length;
+  }
+
+  Future<List<MediaItem>> _availableItems(List<MediaItem> items) async {
+    final available = <MediaItem>[];
+    for (final item in items) {
+      final path = item.privatePath;
+      if (path == null || await File(path).exists()) available.add(item);
+    }
+    return available;
+  }
+
+  MediaPage<MediaItem> _legacyMediaPage(
+    List<MediaItem> items,
+    MediaPageRequest request,
+  ) {
+    final filtered = request.cursor == null
+        ? items
+        : items.where((item) {
+            final cursor = request.cursor!;
+            final comparison = item.effectiveCapturedAt.compareTo(
+              cursor.capturedAt,
+            );
+            return comparison < 0 || (comparison == 0 && item.id < cursor.id);
+          }).toList();
+    final visible = filtered.take(request.effectivePageSize).toList();
+    return MediaPage(
+      items: List.unmodifiable(visible),
+      nextCursor: filtered.length > visible.length && visible.isNotEmpty
+          ? MediaPage.cursorFor(visible.last)
+          : null,
+    );
+  }
+
+  MediaPage<ScreenshotSearchResult> _legacySearchPage(
+    List<ScreenshotSearchResult> items,
+    MediaPageRequest request,
+  ) {
+    final mediaPage = _legacyMediaPage(
+      items.map((result) => result.mediaItem).toList(),
+      request,
+    );
+    final byId = {for (final item in items) item.mediaItem.id: item};
+    return MediaPage(
+      items: List.unmodifiable(mediaPage.items.map((item) => byId[item.id]!)),
+      nextCursor: mediaPage.nextCursor,
+    );
+  }
 
   @override
   Future<List<MediaItem>> loadAvailableItems({int? tagId}) async {

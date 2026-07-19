@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../../../core/text/text_normalizer.dart';
 import '../../library/domain/media_item.dart';
+import '../../library/domain/media_page.dart';
 import '../domain/category.dart';
 import 'category_store.dart';
 
@@ -72,10 +73,20 @@ abstract interface class CategoryRepository {
 
   Future<void> deleteCategory(int categoryId);
 
+  /// Carregamento completo legado. Não usar em pastas potencialmente grandes.
   Future<List<MediaItem>> loadMediaForCategory(int categoryId);
 }
 
-class LocalCategoryRepository implements CategoryRepository {
+abstract interface class PagedCategoryRepository implements CategoryRepository {
+  Future<MediaPage<MediaItem>> loadMediaPageByCategory(
+    int categoryId, [
+    MediaPageRequest request,
+  ]);
+
+  Future<int> countMediaItemsByCategory(int categoryId);
+}
+
+class LocalCategoryRepository implements PagedCategoryRepository {
   LocalCategoryRepository({
     required CategoryStore store,
     TextNormalizer normalizer = const TextNormalizer(),
@@ -85,6 +96,52 @@ class LocalCategoryRepository implements CategoryRepository {
 
   final CategoryStore _store;
   final TextNormalizer _normalizer;
+
+  @override
+  Future<MediaPage<MediaItem>> loadMediaPageByCategory(
+    int categoryId, [
+    MediaPageRequest request = const MediaPageRequest(),
+  ]) async {
+    await _requireCategory(categoryId);
+    final store = _store;
+    if (store is! PagedCategoryStore) {
+      final all = await loadMediaForCategory(categoryId);
+      final filtered = request.cursor == null
+          ? all
+          : all.where((item) {
+              final cursor = request.cursor!;
+              final comparison = item.effectiveCapturedAt.compareTo(
+                cursor.capturedAt,
+              );
+              return comparison < 0 || (comparison == 0 && item.id < cursor.id);
+            }).toList();
+      final items = filtered.take(request.effectivePageSize).toList();
+      return MediaPage(
+        items: List.unmodifiable(items),
+        nextCursor: filtered.length > items.length && items.isNotEmpty
+            ? MediaPage.cursorFor(items.last)
+            : null,
+      );
+    }
+    final page = await store.listMediaPageForCategory(categoryId, request);
+    final available = page.items
+        .where((item) {
+          final path = item.privatePath;
+          return path == null || File(path).existsSync();
+        })
+        .toList(growable: false);
+    return MediaPage(items: available, nextCursor: page.nextCursor);
+  }
+
+  @override
+  Future<int> countMediaItemsByCategory(int categoryId) async {
+    await _requireCategory(categoryId);
+    final store = _store;
+    if (store is PagedCategoryStore) {
+      return store.countMediaForCategory(categoryId);
+    }
+    return (await loadMediaForCategory(categoryId)).length;
+  }
 
   @override
   Future<List<CategorySummary>> loadCategories() {

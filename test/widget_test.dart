@@ -30,9 +30,11 @@ import 'package:memoshot/features/automatic_import/data/automatic_import_setting
 import 'package:memoshot/features/automatic_import/domain/automatic_import_settings.dart';
 import 'package:memoshot/features/library/data/media_item_repository.dart';
 import 'package:memoshot/features/library/domain/media_item.dart';
+import 'package:memoshot/features/library/domain/media_page.dart';
 import 'package:memoshot/features/library/domain/selected_screenshot.dart';
 import 'package:memoshot/features/library/domain/screenshot_search_result.dart';
 import 'package:memoshot/features/library/presentation/screenshot_grid.dart';
+import 'package:memoshot/features/library/presentation/media_item_thumbnail.dart';
 import 'package:memoshot/features/ocr/data/ocr_repository.dart';
 import 'package:memoshot/features/ocr/domain/ocr_result.dart';
 import 'package:memoshot/features/onboarding/data/onboarding_repository.dart';
@@ -1086,11 +1088,20 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Aguardando'), findsOneWidget);
-    expect(find.text('Processando'), findsOneWidget);
-    expect(find.text('Texto extraído'), findsOneWidget);
-    expect(find.text('Sem texto'), findsOneWidget);
-    expect(find.text('Falha'), findsOneWidget);
+    for (final value in const [
+      (1, 'Aguardando'),
+      (2, 'Processando'),
+      (3, 'Texto extraído'),
+      (4, 'Sem texto'),
+      (5, 'Falha'),
+    ]) {
+      await tester.scrollUntilVisible(
+        find.byKey(ValueKey('screenshot-tile-${value.$1}')),
+        180,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text(value.$2), findsOneWidget);
+    }
   });
 
   testWidgets('falha oferece nova tentativa e redefine a tarefa', (
@@ -3925,7 +3936,9 @@ void main() {
     );
     await tester.pump();
 
-    final grid = tester.widget<ScreenshotGrid>(find.byType(ScreenshotGrid));
+    final grid = tester.widget<ScreenshotSliverGrid>(
+      find.byType(ScreenshotSliverGrid),
+    );
     expect(grid.mediaItems.map((item) => item.id), [2, 3, 1]);
   });
 
@@ -4167,6 +4180,130 @@ void main() {
         findsOneWidget,
       );
     },
+  );
+
+  testWidgets('Home mantém somente a primeira página e miniaturas visíveis', (
+    tester,
+  ) async {
+    final repository = FakeMediaItemRepository(
+      initialItems: _manyMediaItems(125),
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+
+    final grid = tester.widget<ScreenshotSliverGrid>(
+      find.byType(ScreenshotSliverGrid),
+    );
+    expect(grid.mediaItems, hasLength(defaultMediaPageSize));
+    expect(repository.loadCallCount, 1);
+    expect(
+      find.byType(MediaItemThumbnail).evaluate().length,
+      lessThan(defaultMediaPageSize),
+    );
+  });
+
+  testWidgets('rolagem carrega uma próxima página e para no fim', (
+    tester,
+  ) async {
+    final repository = FakeMediaItemRepository(
+      initialItems: _manyMediaItems(65),
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('screenshot-tile-6')),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    var grid = tester.widget<ScreenshotSliverGrid>(
+      find.byType(ScreenshotSliverGrid),
+    );
+    expect(grid.mediaItems, hasLength(65));
+    expect(repository.loadCallCount, 2);
+
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -1000));
+    await tester.pumpAndSettle();
+    grid = tester.widget<ScreenshotSliverGrid>(
+      find.byType(ScreenshotSliverGrid),
+    );
+    expect(grid.mediaItems, hasLength(65));
+    expect(repository.loadCallCount, 2);
+  });
+
+  testWidgets('erro da próxima página preserva itens e permite retry', (
+    tester,
+  ) async {
+    final repository = FakeMediaItemRepository(
+      initialItems: _manyMediaItems(70),
+      failNextPage: true,
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('screenshot-tile-11')),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Não foi possível carregar mais prints.'), findsOneWidget);
+    expect(
+      tester
+          .widget<ScreenshotSliverGrid>(find.byType(ScreenshotSliverGrid))
+          .mediaItems,
+      hasLength(60),
+    );
+
+    repository.failNextPage = false;
+    await tester.tap(find.byKey(const Key('retry-next-page')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ScreenshotSliverGrid>(find.byType(ScreenshotSliverGrid))
+          .mediaItems,
+      hasLength(70),
+    );
+  });
+
+  testWidgets('erro da primeira página usa mensagem e retry próprios', (
+    tester,
+  ) async {
+    final repository = FakeMediaItemRepository(
+      initialItems: _manyMediaItems(1),
+      loadError: StateError('Falha privada'),
+    );
+    await tester.pumpWidget(
+      buildTestApp(FakeScreenshotPicker(), repository: repository),
+    );
+    await tester.pump();
+    expect(find.text('Não foi possível carregar seus prints.'), findsOneWidget);
+    expect(find.text('Tentar novamente'), findsOneWidget);
+
+    repository._loadError = null;
+    await tester.tap(find.text('Tentar novamente'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 item'), findsOneWidget);
+  });
+}
+
+List<MediaItem> _manyMediaItems(int count) {
+  final capturedAt = DateTime.utc(2026, 7, 19);
+  return List.generate(
+    count,
+    (index) => createMediaItem(
+      index + 1,
+      '/tmp/memoshot-page-${index + 1}.png',
+      importedAt: capturedAt,
+      capturedAt: capturedAt,
+    ),
   );
 }
 
@@ -5252,7 +5389,13 @@ class ControlledCategoryRepository extends FakeCategoryRepository {
 
 Future<void> openFirstScreenshot(WidgetTester tester) async {
   final tile = find.byKey(const ValueKey('screenshot-tile-1'));
+  await tester.scrollUntilVisible(
+    tile,
+    250,
+    scrollable: find.byType(Scrollable).first,
+  );
   await tester.ensureVisible(tile);
+  await tester.pump();
   await tester.tap(tile);
   await tester.pumpAndSettle();
 }
@@ -5311,7 +5454,7 @@ Future<void> tapDetailAction(WidgetTester tester, String label) async {
   await tester.pump();
 }
 
-class FakeMediaItemRepository implements MediaItemRepository {
+class FakeMediaItemRepository implements PagedMediaItemRepository {
   FakeMediaItemRepository({
     List<MediaItem> initialItems = const [],
     bool failRemoval = false,
@@ -5321,6 +5464,7 @@ class FakeMediaItemRepository implements MediaItemRepository {
     Object? searchError,
     Object? loadError,
     bool failFilteredLoad = false,
+    bool failNextPage = false,
     Set<String> rejectedPaths = const {},
   }) : this._(
          initialItems,
@@ -5330,6 +5474,7 @@ class FakeMediaItemRepository implements MediaItemRepository {
          searchError,
          loadError,
          failFilteredLoad,
+         failNextPage,
          rejectedPaths,
        );
 
@@ -5341,6 +5486,7 @@ class FakeMediaItemRepository implements MediaItemRepository {
     this._searchError,
     this._loadError,
     this._failFilteredLoad,
+    this.failNextPage,
     Set<String> rejectedPaths,
   ) : _items = [...initialItems],
       _sourcePaths = initialItems
@@ -5357,14 +5503,94 @@ class FakeMediaItemRepository implements MediaItemRepository {
   final Map<int, String> _recognizedTexts;
   final Map<String, Completer<List<ScreenshotSearchResult>>> _searchCompleters;
   final Object? _searchError;
-  final Object? _loadError;
+  Object? _loadError;
   final bool _failFilteredLoad;
+  bool failNextPage;
   Map<int, Set<int>> tagAssociations = {};
   final List<String> searchQueries = [];
   int loadCallCount = 0;
   int removeCallCount = 0;
   int searchCallCount = 0;
   int get itemCount => _items.length;
+
+  @override
+  Future<MediaPage<MediaItem>> loadMediaPage([
+    MediaPageRequest request = const MediaPageRequest(),
+  ]) async {
+    if (request.cursor != null && failNextPage) {
+      throw StateError('Falha privada na próxima página');
+    }
+    final tagId = request.tagIds.firstOrNull;
+    final items = await loadAvailableItems(tagId: tagId);
+    return _mediaPage(items, request);
+  }
+
+  @override
+  Future<MediaPage<MediaItem>> loadMediaPageByTags(MediaPageRequest request) {
+    return loadMediaPage(request);
+  }
+
+  @override
+  Future<MediaPage<ScreenshotSearchResult>> searchMediaPage(
+    String query, [
+    MediaPageRequest request = const MediaPageRequest(),
+  ]) async {
+    final results = await searchRecognizedText(
+      query,
+      tagId: request.tagIds.firstOrNull,
+    );
+    final filtered = _afterCursor(
+      results,
+      request,
+      (result) => result.mediaItem,
+    );
+    final visible = filtered.take(request.effectivePageSize).toList();
+    return MediaPage(
+      items: visible,
+      nextCursor: filtered.length > visible.length && visible.isNotEmpty
+          ? MediaPage.cursorFor(visible.last.mediaItem)
+          : null,
+    );
+  }
+
+  @override
+  Future<MediaPage<ScreenshotSearchResult>> searchMediaPageByTags(
+    String query,
+    MediaPageRequest request,
+  ) => searchMediaPage(query, request);
+
+  @override
+  Future<int> countMediaItems({Set<int> tagIds = const {}}) async {
+    return (await loadAvailableItems(tagId: tagIds.firstOrNull)).length;
+  }
+
+  MediaPage<MediaItem> _mediaPage(
+    List<MediaItem> items,
+    MediaPageRequest request,
+  ) {
+    final filtered = _afterCursor(items, request, (item) => item);
+    final visible = filtered.take(request.effectivePageSize).toList();
+    return MediaPage(
+      items: visible,
+      nextCursor: filtered.length > visible.length && visible.isNotEmpty
+          ? MediaPage.cursorFor(visible.last)
+          : null,
+    );
+  }
+
+  List<T> _afterCursor<T>(
+    List<T> items,
+    MediaPageRequest request,
+    MediaItem Function(T item) mediaOf,
+  ) {
+    final cursor = request.cursor;
+    if (cursor == null) return items;
+    return items.where((value) {
+      final item = mediaOf(value);
+      final comparison = item.effectiveCapturedAt.compareTo(cursor.capturedAt);
+      return comparison < 0 || (comparison == 0 && item.id < cursor.id);
+    }).toList();
+  }
 
   @override
   Future<MediaItem?> loadById(int mediaItemId) async =>
@@ -5406,7 +5632,7 @@ class FakeMediaItemRepository implements MediaItemRepository {
   @override
   Future<List<MediaItem>> loadAvailableItems({int? tagId}) async {
     loadCallCount++;
-    if (_loadError != null) throw _loadError;
+    if (_loadError != null) throw _loadError!;
     if (tagId != null && _failFilteredLoad) {
       throw StateError('Falha privada ao filtrar');
     }
