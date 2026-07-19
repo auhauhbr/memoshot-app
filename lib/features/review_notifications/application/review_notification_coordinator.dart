@@ -24,22 +24,18 @@ class ReviewNotificationCoordinator {
   const ReviewNotificationCoordinator({
     required ReviewNotificationSnapshotRepository snapshotRepository,
     required ReviewNotificationGateway gateway,
-  }) : this._(snapshotRepository, gateway);
+  }) : this._(gateway);
 
-  const ReviewNotificationCoordinator._(
-    this._snapshotRepository,
-    this._gateway,
-  );
+  const ReviewNotificationCoordinator._(this._gateway);
 
-  final ReviewNotificationSnapshotRepository _snapshotRepository;
   final ReviewNotificationGateway _gateway;
 
   Future<ReviewNotificationState> loadState() => _gateway.loadState();
 
   Future<ReviewNotificationState> enable() async {
-    final state = await _gateway.requestPermissionAndEnable();
-    if (state.canPublish) await synchronize();
-    return state;
+    await _gateway.disable();
+    await _gateway.cancel();
+    return _gateway.loadState();
   }
 
   Future<void> disable() => _gateway.disable();
@@ -50,19 +46,7 @@ class ReviewNotificationCoordinator {
 
   Future<void> synchronize() async {
     try {
-      final state = await _gateway.loadState();
-      if (!state.enabled) {
-        await _gateway.cancel();
-        return;
-      }
-      if (!state.canPublish) return;
-      final snapshot = await _snapshotRepository
-          .loadReviewNotificationSnapshot();
-      if (snapshot.pendingCount == 0) {
-        await _gateway.cancel();
-        return;
-      }
-      await _gateway.synchronize(snapshot);
+      await _gateway.cancel();
     } catch (_) {
       // Notificações nunca invalidam OCR, classificação ou decisões de revisão.
     }

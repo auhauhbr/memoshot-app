@@ -17,12 +17,10 @@ class MethodChannelReviewNavigationSource implements ReviewNavigationSource {
   ]);
 
   final MethodChannel _channel;
-  Future<void> Function()? _onReviewQueueRequested;
   bool _handling = false;
 
   @override
   Future<void> start(Future<void> Function() onReviewQueueRequested) async {
-    _onReviewQueueRequested = onReviewQueueRequested;
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'destinationAvailable') await _consume();
     });
@@ -33,12 +31,7 @@ class MethodChannelReviewNavigationSource implements ReviewNavigationSource {
     if (_handling) return;
     _handling = true;
     try {
-      final destination = await _channel.invokeMethod<String>(
-        'consumePendingDestination',
-      );
-      if (destination == 'reviewQueue') {
-        await _onReviewQueueRequested?.call();
-      }
+      await _channel.invokeMethod<String>('consumePendingDestination');
     } finally {
       _handling = false;
     }
@@ -46,7 +39,6 @@ class MethodChannelReviewNavigationSource implements ReviewNavigationSource {
 
   @override
   Future<void> dispose() async {
-    _onReviewQueueRequested = null;
     _channel.setMethodCallHandler(null);
   }
 }

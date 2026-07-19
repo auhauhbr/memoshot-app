@@ -5,6 +5,34 @@ import '../../processing/domain/processing_job.dart';
 import '../domain/media_item.dart';
 import 'media_item_thumbnail.dart';
 
+class ScreenshotGridLayout {
+  const ScreenshotGridLayout._();
+
+  static const spacing = 8.0;
+
+  static int columnCount({
+    required double availableWidth,
+    required double textScaleFactor,
+  }) {
+    if (availableWidth < 340 || textScaleFactor >= 1.3) return 2;
+    if (availableWidth >= 480) return 4;
+    return 3;
+  }
+
+  static SliverGridDelegate delegate({
+    required double availableWidth,
+    required double textScaleFactor,
+  }) => SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: columnCount(
+      availableWidth: availableWidth,
+      textScaleFactor: textScaleFactor,
+    ),
+    crossAxisSpacing: spacing,
+    mainAxisSpacing: spacing,
+    childAspectRatio: 1,
+  );
+}
+
 class ScreenshotGrid extends StatelessWidget {
   const ScreenshotGrid({
     required this.mediaItems,
@@ -25,8 +53,7 @@ class ScreenshotGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -38,7 +65,7 @@ class ScreenshotGrid extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Salvo neste dispositivo.',
-                  style: theme.textTheme.bodySmall?.copyWith(
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: colors.onSurfaceVariant,
                   ),
                 ),
@@ -47,35 +74,31 @@ class ScreenshotGrid extends StatelessWidget {
           ),
           const SizedBox(height: 8),
         ],
-        GridView.builder(
-          key: const Key('persisted-screenshot-grid'),
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: mediaItems.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: snippets.isEmpty ? 0.82 : 0.62,
-          ),
-          itemBuilder: (context, index) {
-            final item = mediaItems[index];
-            return _ScreenshotTile(
-              item: item,
-              state: ocrStates[item.id] ?? OcrItemState.notScheduled,
-              snippet: snippets[item.id],
+        LayoutBuilder(
+          builder: (context, constraints) => GridView.builder(
+            key: const Key('persisted-screenshot-grid'),
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: mediaItems.length,
+            gridDelegate: ScreenshotGridLayout.delegate(
+              availableWidth: constraints.maxWidth,
+              textScaleFactor: MediaQuery.textScalerOf(context).scale(1),
+            ),
+            itemBuilder: (context, index) => _ScreenshotTile(
+              item: mediaItems[index],
+              state:
+                  ocrStates[mediaItems[index].id] ?? OcrItemState.notScheduled,
+              snippet: snippets[mediaItems[index].id],
               onTap: onItemTap,
               thumbnailGateway: thumbnailGateway,
-            );
-          },
+            ),
+          ),
         ),
       ],
     );
   }
 }
 
-/// Grade em sliver para bibliotecas incrementais. Somente células montadas
-/// solicitam miniaturas.
 class ScreenshotSliverGrid extends StatelessWidget {
   const ScreenshotSliverGrid({
     required this.mediaItems,
@@ -94,24 +117,24 @@ class ScreenshotSliverGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SliverGrid(
-      key: const Key('persisted-screenshot-grid'),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: snippets.isEmpty ? 0.82 : 0.58,
+    return SliverLayoutBuilder(
+      builder: (context, constraints) => SliverGrid(
+        key: const Key('persisted-screenshot-grid'),
+        gridDelegate: ScreenshotGridLayout.delegate(
+          availableWidth: constraints.crossAxisExtent,
+          textScaleFactor: MediaQuery.textScalerOf(context).scale(1),
+        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final item = mediaItems[index];
+          return _ScreenshotTile(
+            item: item,
+            state: ocrStates[item.id] ?? OcrItemState.notScheduled,
+            snippet: snippets[item.id],
+            onTap: onItemTap,
+            thumbnailGateway: thumbnailGateway,
+          );
+        }, childCount: mediaItems.length),
       ),
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final item = mediaItems[index];
-        return _ScreenshotTile(
-          item: item,
-          state: ocrStates[item.id] ?? OcrItemState.notScheduled,
-          snippet: snippets[item.id],
-          onTap: onItemTap,
-          thumbnailGateway: thumbnailGateway,
-        );
-      }, childCount: mediaItems.length),
     );
   }
 }
@@ -133,13 +156,13 @@ class _ScreenshotTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
+    final colors = Theme.of(context).colorScheme;
     return Semantics(
       button: true,
-      label: 'Abrir print',
+      image: true,
+      label: 'Miniatura do print. Toque para abrir.',
       child: Material(
-        color: colors.surface,
+        color: colors.surfaceContainerLow,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
           side: BorderSide(color: colors.outlineVariant),
@@ -148,113 +171,58 @@ class _ScreenshotTile extends StatelessWidget {
         child: InkWell(
           key: ValueKey('screenshot-tile-${item.id}'),
           onTap: () => onTap(item),
-          child: Column(
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    MediaItemThumbnail(
-                      mediaItem: item,
-                      key: ValueKey(item.id),
-                      fit: BoxFit.cover,
-                      gateway: thumbnailGateway,
-                    ),
-                    Positioned(
-                      top: 5,
-                      right: 5,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: colors.surface.withValues(alpha: 0.88),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Icon(
-                          Icons.open_in_full,
-                          size: 14,
-                          color: colors.secondary,
-                        ),
-                      ),
-                    ),
-                  ],
+              ColoredBox(
+                color: colors.surfaceContainerLow,
+                child: MediaItemThumbnail(
+                  mediaItem: item,
+                  key: ValueKey(item.id),
+                  fit: BoxFit.contain,
+                  cacheWidth: compactThumbnailDecodeSize,
+                  cacheHeight: compactThumbnailDecodeSize,
+                  gateway: thumbnailGateway,
                 ),
               ),
               if (snippet case final value?)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(5, 4, 5, 2),
-                  child: Text(
-                    value,
-                    key: ValueKey('search-snippet-${item.id}'),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colors.onSurfaceVariant,
-                      height: 1.2,
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(6, 12, 6, 5),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          colors.scrim.withValues(alpha: 0.72),
+                        ],
+                      ),
+                    ),
+                    child: Text(
+                      value,
+                      key: ValueKey('search-snippet-${item.id}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelSmall?.copyWith(color: colors.surface),
                     ),
                   ),
                 ),
-              _OcrStatusLabel(state: state),
+              if (state == OcrItemState.processing)
+                const Positioned(
+                  top: 6,
+                  right: 6,
+                  child: SizedBox.square(
+                    dimension: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _OcrStatusLabel extends StatelessWidget {
-  const _OcrStatusLabel({required this.state});
-
-  final OcrItemState state;
-
-  @override
-  Widget build(BuildContext context) {
-    if (state == OcrItemState.notScheduled) {
-      return const SizedBox(height: 24);
-    }
-    final colors = Theme.of(context).colorScheme;
-    final (label, icon) = switch (state) {
-      OcrItemState.pending => ('Aguardando', Icons.schedule_outlined),
-      OcrItemState.processing => ('Processando', null),
-      OcrItemState.completedWithText => (
-        'Texto extraído',
-        Icons.check_circle_outline,
-      ),
-      OcrItemState.completedWithoutText => (
-        'Sem texto',
-        Icons.check_circle_outline,
-      ),
-      OcrItemState.failed => ('Falha', Icons.error_outline),
-      OcrItemState.notScheduled => ('', null),
-    };
-    return SizedBox(
-      height: 24,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (state == OcrItemState.processing)
-              const SizedBox.square(
-                dimension: 11,
-                child: CircularProgressIndicator(strokeWidth: 1.5),
-              )
-            else
-              Icon(icon, size: 13, color: colors.secondary),
-            const SizedBox(width: 3),
-            Flexible(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: state == OcrItemState.failed
-                      ? colors.error
-                      : colors.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

@@ -592,7 +592,7 @@ class _CategoriesSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Categorias',
+            'Organização',
             style: theme.textTheme.titleSmall?.copyWith(
               color: colors.primary,
               fontWeight: FontWeight.w700,
@@ -637,7 +637,7 @@ class _CategoriesSection extends StatelessWidget {
             key: const Key('edit-categories-button'),
             onPressed: isLoading ? null : onEdit,
             icon: const Icon(Icons.edit_outlined, size: 18),
-            label: const Text('Editar categorias'),
+            label: const Text('Alterar organização'),
           ),
         ],
       ),

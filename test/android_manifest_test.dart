@@ -56,7 +56,7 @@ void main() {
       contains('android.permission.READ_MEDIA_VISUAL_USER_SELECTED'),
     );
     expect(manifest, contains('android.permission.READ_EXTERNAL_STORAGE'));
-    expect(manifest, contains('android.permission.POST_NOTIFICATIONS'));
+    expect(manifest, isNot(contains('android.permission.POST_NOTIFICATIONS')));
     expect(manifest, contains('android:maxSdkVersion="32"'));
     for (final permission in [
       'WRITE_EXTERNAL_STORAGE',

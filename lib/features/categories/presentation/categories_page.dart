@@ -7,6 +7,7 @@ import '../../ocr/data/ocr_repository.dart';
 import '../../processing/data/ocr_queue_processor.dart';
 import '../../tags/data/tag_repository.dart';
 import '../data/category_repository.dart';
+import '../data/recent_folder_repository.dart';
 import '../domain/category.dart';
 import 'category_detail_page.dart';
 import 'category_tree.dart';
@@ -19,6 +20,7 @@ class CategoriesPage extends StatefulWidget {
     required this.ocrRepository,
     required this.ocrQueue,
     required this.tagRepository,
+    this.recentFolderRepository,
     super.key,
   });
 
@@ -27,6 +29,7 @@ class CategoriesPage extends StatefulWidget {
   final OcrRepository ocrRepository;
   final OcrQueue ocrQueue;
   final TagRepository tagRepository;
+  final RecentFolderRepository? recentFolderRepository;
 
   @override
   State<CategoriesPage> createState() => _CategoriesPageState();
@@ -90,6 +93,12 @@ class _CategoriesPageState extends State<CategoriesPage> {
   });
 
   Future<void> _open(CategorySummary summary) async {
+    try {
+      await widget.recentFolderRepository?.recordAccess(summary.category.id);
+    } catch (_) {
+      // O gerenciamento continua disponível sem o histórico recente.
+    }
+    if (!mounted) return;
     await Navigator.of(context).push<bool>(
       buildCategoryDetailRoute(
         summary: summary,
@@ -98,6 +107,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
         ocrRepository: widget.ocrRepository,
         ocrQueue: widget.ocrQueue,
         tagRepository: widget.tagRepository,
+        recentFolderRepository: widget.recentFolderRepository,
       ),
     );
     if (mounted) await _load();
@@ -128,6 +138,11 @@ class _CategoriesPageState extends State<CategoriesPage> {
           summary,
         ) &&
         mounted) {
+      try {
+        await widget.recentFolderRepository?.remove(summary.category.id);
+      } catch (_) {
+        // O histórico não invalida a exclusão concluída.
+      }
       await _load();
     }
   });

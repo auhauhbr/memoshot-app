@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../core/media/screenshot_picker.dart';
 import '../core/media_store/media_store_content.dart';
-import '../core/navigation/review_navigation_source.dart';
 import '../core/automatic_import/automatic_screenshot_source.dart';
 import '../core/automatic_import/method_channel_automatic_screenshot_source.dart';
 import '../core/sharing/incoming_share_source.dart';
 import '../core/theme/app_theme.dart';
 import '../features/categories/data/category_repository.dart';
+import '../features/categories/data/recent_folder_repository.dart';
 import '../features/classification/data/classification_suggestion_repository.dart';
-import '../features/classification/application/review_decision.dart';
 import '../features/classification/application/classification_queue_processor.dart';
 import '../features/automatic_import/data/automatic_import_settings_repository.dart';
 import '../features/home/presentation/home_page.dart';
@@ -19,7 +18,6 @@ import '../features/onboarding/data/onboarding_repository.dart';
 import '../features/onboarding/presentation/onboarding_gate.dart';
 import '../features/processing/data/ocr_queue_processor.dart';
 import '../features/tags/data/tag_repository.dart';
-import '../features/review_notifications/application/review_notification_coordinator.dart';
 import '../features/existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
 import '../features/existing_screenshots/application/historical_archive_preparation_coordinator.dart';
 
@@ -32,15 +30,13 @@ class MemoShotApp extends StatelessWidget {
     this.ocrQueue,
     this.classificationQueue,
     this.categoryRepository,
+    this.recentFolderRepository,
     this.classificationSuggestionRepository,
-    this.reviewDecisionProcessor,
     this.tagRepository,
     this.incomingShareSource,
     this.automaticScreenshotSource,
     this.automaticImportSettingsRepository,
     this.onboardingRepository,
-    this.reviewNotificationCoordinator,
-    this.reviewNavigationSource,
     this.existingScreenshotInventoryCoordinator,
     this.historicalArchivePreparationCoordinator,
     this.mediaStoreContentGateway,
@@ -52,15 +48,13 @@ class MemoShotApp extends StatelessWidget {
   final OcrQueue? ocrQueue;
   final ClassificationQueue? classificationQueue;
   final CategoryRepository? categoryRepository;
+  final RecentFolderRepository? recentFolderRepository;
   final ClassificationSuggestionRepository? classificationSuggestionRepository;
-  final ReviewDecisionProcessor? reviewDecisionProcessor;
   final TagRepository? tagRepository;
   final IncomingShareSource? incomingShareSource;
   final AutomaticScreenshotSource? automaticScreenshotSource;
   final AutomaticImportSettingsRepository? automaticImportSettingsRepository;
   final OnboardingRepository? onboardingRepository;
-  final ReviewNotificationCoordinator? reviewNotificationCoordinator;
-  final ReviewNavigationSource? reviewNavigationSource;
   final ExistingScreenshotInventoryCoordinator?
   existingScreenshotInventoryCoordinator;
   final HistoricalArchivePreparationCoordinator?
@@ -88,15 +82,13 @@ class MemoShotApp extends StatelessWidget {
           ocrQueue: ocrQueue,
           classificationQueue: classificationQueue,
           categoryRepository: categoryRepository,
+          recentFolderRepository: recentFolderRepository,
           classificationSuggestionRepository:
               classificationSuggestionRepository,
-          reviewDecisionProcessor: reviewDecisionProcessor,
           tagRepository: tagRepository,
           incomingShareSource: incomingShareSource,
           automaticScreenshotSource: automaticSource,
           automaticImportSettingsRepository: automaticImportSettingsRepository,
-          reviewNotificationCoordinator: reviewNotificationCoordinator,
-          reviewNavigationSource: reviewNavigationSource,
           existingScreenshotInventoryCoordinator:
               existingScreenshotInventoryCoordinator,
           historicalArchivePreparationCoordinator:

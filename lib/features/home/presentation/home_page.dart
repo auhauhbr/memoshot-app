@@ -11,23 +11,19 @@ import '../../../core/media/screenshot_picker.dart';
 import '../../../core/media/screenshot_storage.dart';
 import '../../../core/media_store/existing_screenshot_scanner.dart';
 import '../../../core/media_store/media_store_content.dart';
-import '../../../core/navigation/review_navigation_source.dart';
-import '../../../core/notifications/method_channel_review_notification_gateway.dart';
 import '../../../core/ocr/ml_kit_text_recognition_service.dart';
 import '../../../core/sharing/incoming_share_source.dart';
 import '../../../core/sharing/receive_sharing_intent_source.dart';
 import '../../../core/text/text_normalizer.dart';
 import '../../categories/data/category_repository.dart';
 import '../../categories/data/category_store.dart';
+import '../../categories/data/recent_folder_repository.dart';
 import '../../categories/domain/category.dart';
 import '../../categories/presentation/categories_page.dart';
 import '../../categories/presentation/category_detail_page.dart';
 import '../../classification/application/classification_composition.dart';
 import '../../classification/application/classification_queue_processor.dart';
-import '../../classification/application/review_queue.dart';
-import '../../classification/application/review_decision.dart';
 import '../../classification/data/classification_suggestion_repository.dart';
-import '../../classification/presentation/review_queue_page.dart';
 import '../../existing_screenshots/application/existing_screenshot_inventory_coordinator.dart';
 import '../../existing_screenshots/application/historical_archive_preparation_coordinator.dart';
 import '../../existing_screenshots/application/historical_media_import_processor.dart';
@@ -49,8 +45,6 @@ import '../../processing/data/ocr_job_scheduler.dart';
 import '../../processing/data/ocr_queue_processor.dart';
 import '../../processing/data/processing_job_store.dart';
 import '../../processing/domain/processing_job.dart';
-import '../../review_notifications/application/review_notification_coordinator.dart';
-import '../../review_notifications/domain/review_notification.dart';
 import '../../sharing/shared_image_import_coordinator.dart';
 import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
 import '../../automatic_import/data/automatic_import_settings_repository.dart';
@@ -70,14 +64,12 @@ class HomePage extends StatefulWidget {
     this.ocrQueue,
     this.classificationQueue,
     this.categoryRepository,
+    this.recentFolderRepository,
     this.classificationSuggestionRepository,
-    this.reviewDecisionProcessor,
     this.tagRepository,
     this.incomingShareSource,
     this.automaticScreenshotSource,
     this.automaticImportSettingsRepository,
-    this.reviewNotificationCoordinator,
-    this.reviewNavigationSource,
     this.existingScreenshotInventoryCoordinator,
     this.historicalArchivePreparationCoordinator,
     this.mediaStoreContentGateway,
@@ -89,14 +81,12 @@ class HomePage extends StatefulWidget {
   final OcrQueue? ocrQueue;
   final ClassificationQueue? classificationQueue;
   final CategoryRepository? categoryRepository;
+  final RecentFolderRepository? recentFolderRepository;
   final ClassificationSuggestionRepository? classificationSuggestionRepository;
-  final ReviewDecisionProcessor? reviewDecisionProcessor;
   final TagRepository? tagRepository;
   final IncomingShareSource? incomingShareSource;
   final AutomaticScreenshotSource? automaticScreenshotSource;
   final AutomaticImportSettingsRepository? automaticImportSettingsRepository;
-  final ReviewNotificationCoordinator? reviewNotificationCoordinator;
-  final ReviewNavigationSource? reviewNavigationSource;
   final ExistingScreenshotInventoryCoordinator?
   existingScreenshotInventoryCoordinator;
   final HistoricalArchivePreparationCoordinator?
@@ -114,9 +104,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final OcrQueue _ocrQueue;
   ClassificationQueue? _classificationQueue;
   late final CategoryRepository _categoryRepository;
+  late final RecentFolderRepository _recentFolderRepository;
   late final ClassificationSuggestionRepository _classificationRepository;
-  late final ReviewQueueLoader _reviewQueueLoader;
-  late final ReviewDecisionProcessor _reviewDecisionProcessor;
   late final TagRepository _tagRepository;
   late final bool _ownsMediaRepository;
   ContextoDatabase? _ownedAuxiliaryDatabase;
@@ -127,8 +116,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final SharedImageImportCoordinator _sharedImportCoordinator;
   late final AutomaticScreenshotImportCoordinator _automaticImportCoordinator;
   late final AutomaticImportSettingsRepository _automaticSettingsRepository;
-  late final ReviewNotificationCoordinator _reviewNotificationCoordinator;
-  late final ReviewNavigationSource _reviewNavigationSource;
   late final ExistingScreenshotInventoryCoordinator
   _existingScreenshotInventoryCoordinator;
   HistoricalArchivePreparationCoordinator?
@@ -158,11 +145,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<CategorySummary> _categories = const [];
   bool _areCategoriesLoading = true;
   String? _categoriesErrorMessage;
-  int? _pendingReviewCount;
-  int _reviewCountGeneration = 0;
-  ReviewNotificationState? _reviewNotificationState;
-  bool _isChangingReviewNotifications = false;
-  bool _reviewQueueOpen = false;
+  List<RecentFolder> _recentFolders = const [];
+  int _recentFoldersGeneration = 0;
   AutomaticImportUiState _automaticImportState =
       AutomaticImportUiState.disabled;
 
@@ -182,7 +166,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             widget.ocrQueue == null ||
             widget.categoryRepository == null ||
             widget.classificationSuggestionRepository == null ||
-            widget.reviewDecisionProcessor == null ||
             widget.tagRepository == null ||
             widget.automaticImportSettingsRepository == null
         ? ContextoDatabase()
@@ -197,9 +180,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _categoryRepository =
         widget.categoryRepository ??
         LocalCategoryRepository(store: DriftCategoryStore(database!));
-    _reviewDecisionProcessor =
-        widget.reviewDecisionProcessor ??
-        createLocalReviewDecisionProcessor(database!);
+    _recentFolderRepository =
+        widget.recentFolderRepository ??
+        LocalRecentFolderRepository(
+          store: const MethodChannelRecentFolderIdStore(),
+          categoryRepository: _categoryRepository,
+        );
     _mediaRepository =
         widget.mediaRepository ??
         LocalMediaItemRepository(
@@ -207,10 +193,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           storage: PrivateScreenshotStorage(),
           ocrJobScheduler: LocalOcrJobScheduler(jobStore!),
         );
-    _reviewQueueLoader = ReviewQueueLoader(
-      suggestionRepository: _classificationRepository,
-      mediaRepository: _mediaRepository,
-    );
     _ocrRepository =
         widget.ocrRepository ??
         LocalOcrRepository(
@@ -245,14 +227,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _automaticSettingsRepository =
         widget.automaticImportSettingsRepository ??
         DriftAutomaticImportSettingsRepository(database!);
-    _reviewNotificationCoordinator =
-        widget.reviewNotificationCoordinator ??
-        ReviewNotificationCoordinator(
-          snapshotRepository: _classificationRepository,
-          gateway: const MethodChannelReviewNotificationGateway(),
-        );
-    _reviewNavigationSource =
-        widget.reviewNavigationSource ?? MethodChannelReviewNavigationSource();
     if (widget.existingScreenshotInventoryCoordinator case final injected?) {
       _existingScreenshotInventoryCoordinator = injected;
     } else {
@@ -325,7 +299,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_sharedImportCoordinator.start());
       unawaited(_automaticImportCoordinator.initialize());
-      unawaited(_startReviewNavigation());
     });
   }
 
@@ -333,9 +306,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_automaticImportCoordinator.resume());
-      unawaited(_reloadPendingReviewCount());
       unawaited(_classificationQueue?.recoverAndStart());
-      unawaited(_refreshReviewNotificationState(synchronize: true));
+      unawaited(_reloadRecentFolders());
       unawaited(_historicalArchivePreparationCoordinator?.onAppResumed());
     }
   }
@@ -356,7 +328,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _queueSubscription?.cancel();
     await _classificationQueueSubscription?.cancel();
     await _historicalQueueSubscription?.cancel();
-    await _reviewNavigationSource.dispose();
     await _ocrQueue.close();
     await _classificationQueue?.close();
     await _historicalMediaImportProcessor?.close();
@@ -377,7 +348,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     await _reloadItemsIgnoringErrors();
     _ocrQueue.signal();
-    await _reloadPendingReviewCount();
     if (_searchActive) await _searchNow();
     if (!mounted) return;
     if (result.importedItems.isEmpty) {
@@ -413,7 +383,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     await _reloadItemsIgnoringErrors();
     _ocrQueue.signal();
-    await _reloadPendingReviewCount();
     if (_searchActive) await _searchNow();
     if (!mounted) return;
     final message = _sharedImportMessage(result);
@@ -480,9 +449,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     try {
       await _reloadItems();
       await _reloadCategories();
+      unawaited(_reloadRecentFolders());
       await _reloadTagCountIgnoringErrors();
-      await _reloadPendingReviewCount();
-      await _refreshReviewNotificationState(synchronize: true);
       unawaited(_ocrQueue.recoverAndStart());
       unawaited(_classificationQueue?.recoverAndStart());
       final lost = await _screenshotPicker.retrieveLostScreenshots();
@@ -540,7 +508,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _refreshOcrState(item.id);
     }
     _ocrQueue.signal();
-    await _reloadPendingReviewCount();
     if (!mounted) {
       return;
     }
@@ -717,89 +684,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
     if (state == OcrItemState.completedWithText ||
         state == OcrItemState.completedWithoutText) {
-      await Future.wait([
-        _reloadPendingReviewCount(),
-        _reloadCategories(),
-        _reloadTagCountIgnoringErrors(),
-      ]);
+      await Future.wait([_reloadCategories(), _reloadTagCountIgnoringErrors()]);
     }
   }
 
   Future<void> _handleClassificationQueueChange(int mediaItemId) async {
-    await Future.wait([
-      _reloadPendingReviewCount(),
-      _reloadCategories(),
-      _reloadTagCountIgnoringErrors(),
-    ]);
+    await Future.wait([_reloadCategories(), _reloadTagCountIgnoringErrors()]);
     if (_selectedTag != null) await _reloadItemsIgnoringErrors();
     if (_searchActive) await _searchNow();
-    await _reviewNotificationCoordinator.synchronize();
-  }
-
-  Future<void> _reloadPendingReviewCount() async {
-    final generation = ++_reviewCountGeneration;
-    try {
-      final count = await _classificationRepository.countPendingReview();
-      if (!mounted || generation != _reviewCountGeneration) return;
-      setState(() => _pendingReviewCount = count);
-    } catch (_) {
-      if (!mounted || generation != _reviewCountGeneration) return;
-      setState(() => _pendingReviewCount = null);
-    }
-  }
-
-  Future<void> _startReviewNavigation() async {
-    try {
-      await _reviewNavigationSource.start(_openReviewQueue);
-    } catch (_) {
-      // A navegação normal permanece disponível sem a bridge nativa.
-    }
-  }
-
-  Future<void> _refreshReviewNotificationState({
-    bool synchronize = false,
-  }) async {
-    if (synchronize) await _reviewNotificationCoordinator.synchronize();
-    try {
-      final state = await _reviewNotificationCoordinator.loadState();
-      if (mounted) setState(() => _reviewNotificationState = state);
-    } catch (_) {
-      // Uma falha de notificação não bloqueia a Home.
-    }
-  }
-
-  Future<void> _enableReviewNotifications() async {
-    if (_isChangingReviewNotifications) return;
-    setState(() => _isChangingReviewNotifications = true);
-    try {
-      final state = await _reviewNotificationCoordinator.enable();
-      if (!mounted) return;
-      setState(() => _reviewNotificationState = state);
-      if (!state.enabled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Permissão não concedida.')),
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Não foi possível ativar as notificações.'),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isChangingReviewNotifications = false);
-    }
-  }
-
-  Future<void> _dismissReviewNotificationPrompt() async {
-    try {
-      await _reviewNotificationCoordinator.dismissPrompt();
-      await _refreshReviewNotificationState();
-    } catch (_) {
-      // O convite pode voltar em uma próxima atualização segura.
-    }
   }
 
   void _onSearchChanged(String value) {
@@ -1028,6 +920,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _reloadRecentFolders() async {
+    final generation = ++_recentFoldersGeneration;
+    try {
+      final folders = await _recentFolderRepository.load();
+      if (!mounted || generation != _recentFoldersGeneration) return;
+      setState(() => _recentFolders = folders);
+    } catch (_) {
+      if (!mounted || generation != _recentFoldersGeneration) return;
+      setState(() => _recentFolders = const []);
+    }
+  }
+
+  Future<void> _recordFolderAccess(int categoryId) async {
+    try {
+      await _recentFolderRepository.recordAccess(categoryId);
+    } catch (_) {
+      // Preferências recentes não bloqueiam a navegação principal.
+    }
+  }
+
   Future<bool> _reloadTagCount() async {
     final tags = await _tagRepository.loadTagSummaries();
     final selected = _selectedTag;
@@ -1067,15 +979,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ocrRepository: _ocrRepository,
           ocrQueue: _ocrQueue,
           tagRepository: _tagRepository,
+          recentFolderRepository: _recentFolderRepository,
         ),
       ),
     );
     await _reloadCategories();
-    await _reloadPendingReviewCount();
-    await _reviewNotificationCoordinator.synchronize();
+    await _reloadRecentFolders();
   }
 
   Future<void> _openCategory(CategorySummary summary) async {
+    await _recordFolderAccess(summary.category.id);
+    if (!mounted) return;
     await Navigator.of(context).push<void>(
       buildCategoryDetailRoute(
         summary: summary,
@@ -1084,13 +998,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ocrRepository: _ocrRepository,
         ocrQueue: _ocrQueue,
         tagRepository: _tagRepository,
+        recentFolderRepository: _recentFolderRepository,
       ),
     );
     await _reloadCategories();
-    await _reloadItemsIgnoringErrors();
-    await _reloadPendingReviewCount();
-    await _reviewNotificationCoordinator.synchronize();
-    if (_searchActive) await _searchNow();
+    await _reloadRecentFolders();
   }
 
   Future<void> _openTags() async {
@@ -1111,7 +1023,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         builder: (_) => SettingsPage(
           coordinator: _automaticImportCoordinator,
           settingsRepository: _automaticSettingsRepository,
-          reviewNotificationCoordinator: _reviewNotificationCoordinator,
           existingScreenshotInventoryCoordinator:
               _existingScreenshotInventoryCoordinator,
           historicalArchivePreparationCoordinator:
@@ -1123,9 +1034,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _automaticImportCoordinator.resume();
     await _reloadItemsIgnoringErrors();
     await _reloadCategories();
+    await _reloadRecentFolders();
     await _reloadTagCountIgnoringErrors();
-    await _reloadPendingReviewCount();
-    await _refreshReviewNotificationState(synchronize: true);
     if (_searchActive) await _searchNow();
   }
 
@@ -1147,8 +1057,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     await _reloadCategories();
     await _reloadTagCountIgnoringErrors();
-    await _reloadPendingReviewCount();
-    await _reviewNotificationCoordinator.synchronize();
     if (_selectedTag != null) {
       await _reloadItemsIgnoringErrors();
     }
@@ -1166,37 +1074,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         await _searchNow();
       }
     }
-  }
-
-  Future<void> _openReviewQueue() async {
-    if (_reviewQueueOpen || !mounted) return;
-    _reviewQueueOpen = true;
-    try {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => ReviewQueuePage(
-            loader: _reviewQueueLoader,
-            decisionProcessor: _reviewDecisionProcessor,
-            mediaRepository: _mediaRepository,
-            ocrRepository: _ocrRepository,
-            ocrQueue: _ocrQueue,
-            categoryRepository: _categoryRepository,
-            tagRepository: _tagRepository,
-            onQueueChanged: _reviewNotificationCoordinator.synchronize,
-          ),
-        ),
-      );
-    } finally {
-      _reviewQueueOpen = false;
-    }
-    if (!mounted) return;
-    await Future.wait([
-      _reloadPendingReviewCount(),
-      _reloadCategories(),
-      _reloadTagCountIgnoringErrors(),
-    ]);
-    if (_selectedTag != null) await _reloadItemsIgnoringErrors();
-    await _reviewNotificationCoordinator.synchronize();
   }
 
   @override
@@ -1291,21 +1168,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           ),
                         ],
                         const SizedBox(height: 20),
-                        if ((_pendingReviewCount ?? 0) > 0) ...[
-                          _ReviewSummary(
-                            count: _pendingReviewCount!,
-                            onReview: _openReviewQueue,
+                        if (_recentFolders.isNotEmpty) ...[
+                          const _SectionTitle(
+                            'Pastas recentes',
+                            key: Key('recent-folders-title'),
                           ),
-                          if (_reviewNotificationState != null &&
-                              !_reviewNotificationState!.enabled &&
-                              !_reviewNotificationState!.promptHandled) ...[
-                            const SizedBox(height: 8),
-                            _ReviewNotificationInvite(
-                              isLoading: _isChangingReviewNotifications,
-                              onEnable: _enableReviewNotifications,
-                              onDismiss: _dismissReviewNotificationPrompt,
+                          const SizedBox(height: 8),
+                          _RecentFoldersSection(
+                            folders: _recentFolders,
+                            onFolder: (folder) => _openCategory(
+                              CategorySummary(
+                                category: folder.category,
+                                mediaCount: 0,
+                              ),
                             ),
-                          ],
+                          ),
                           const SizedBox(height: 20),
                         ],
                         _SectionHeader(
@@ -1328,7 +1205,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         Row(
                           children: [
                             const Expanded(
-                              child: _SectionTitle('Todos os prints'),
+                              child: _SectionTitle(
+                                'Todos os prints',
+                                key: Key('all-prints-title'),
+                              ),
                             ),
                             Text(
                               '${_searchActive ? _searchResults.length : _mediaItems.length} '
@@ -1500,85 +1380,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 }
 
-class _ReviewSummary extends StatelessWidget {
-  const _ReviewSummary({required this.count, required this.onReview});
-
-  final int count;
-  final VoidCallback onReview;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      container: true,
-      label:
-          'Para revisar. $count ${count == 1 ? 'print precisa' : 'prints precisam'} de confirmação.',
-      child: Container(
-        key: const Key('pending-review-summary'),
-        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.45),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.rate_review_outlined, color: theme.colorScheme.primary),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Para revisar',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$count ${count == 1 ? 'print precisa' : 'prints precisam'} de confirmação',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            TextButton(
-              key: const Key('open-review-queue'),
-              onPressed: onReview,
-              child: const Text('Revisar'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ReviewNotificationInvite extends StatelessWidget {
-  const _ReviewNotificationInvite({
-    required this.isLoading,
-    required this.onEnable,
-    required this.onDismiss,
-  });
-
-  final bool isLoading;
-  final VoidCallback onEnable;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return _CompactMessage(
-      key: const Key('review-notification-invite'),
-      icon: Icons.notifications_none_outlined,
-      message: 'Receba um aviso quando novos prints precisarem de revisão.',
-      actionLabel: 'Ativar',
-      onAction: isLoading ? null : onEnable,
-      secondaryActionLabel: 'Agora não',
-      onSecondaryAction: isLoading ? null : onDismiss,
-    );
-  }
-}
-
 class _AppHeader extends StatelessWidget {
   const _AppHeader({required this.onOpenTags, required this.onOpenSettings});
 
@@ -1661,6 +1462,7 @@ class _SearchField extends StatelessWidget {
       textField: true,
       label: 'Pesquisar screenshots pelo texto reconhecido',
       child: TextField(
+        key: const Key('home-search-field'),
         controller: controller,
         enabled: true,
         onChanged: onChanged,
@@ -1688,7 +1490,7 @@ class _SearchField extends StatelessWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
+  const _SectionTitle(this.text, {super.key});
 
   final String text;
 
@@ -1723,7 +1525,7 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: _SectionTitle(title)),
+        Expanded(child: _SectionTitle(title, key: const Key('folders-title'))),
         IconButton(
           key: actionKey,
           onPressed: onAction,
@@ -1782,7 +1584,6 @@ class _FoldersSection extends StatelessWidget {
                 key: const Key('all-folder'),
                 name: 'Todos',
                 count: null,
-                icon: Icons.photo_library_outlined,
                 onTap: onAll,
               ),
               for (final summary in categories) ...[
@@ -1791,7 +1592,6 @@ class _FoldersSection extends StatelessWidget {
                   key: Key('folder-${summary.category.id}'),
                   name: summary.category.name,
                   count: summary.mediaCount,
-                  icon: Icons.folder_outlined,
                   onTap: () => onCategory(summary),
                 ),
               ],
@@ -1818,67 +1618,98 @@ class _FoldersSection extends StatelessWidget {
   }
 }
 
+class _RecentFoldersSection extends StatelessWidget {
+  const _RecentFoldersSection({required this.folders, required this.onFolder});
+
+  final List<RecentFolder> folders;
+  final ValueChanged<RecentFolder> onFolder;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: ListView.separated(
+        key: const Key('recent-folders-list'),
+        scrollDirection: Axis.horizontal,
+        itemCount: folders.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final folder = folders[index];
+          return Tooltip(
+            message: folder.fullPath,
+            child: _FolderTile(
+              key: Key('recent-folder-${folder.category.id}'),
+              name: folder.category.name,
+              count: null,
+              semanticLabel: 'Abrir pasta ${folder.fullPath}',
+              onTap: () => onFolder(folder),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _FolderTile extends StatelessWidget {
   const _FolderTile({
     super.key,
     required this.name,
     required this.count,
-    required this.icon,
     required this.onTap,
+    this.semanticLabel,
   });
 
   final String name;
   final int? count;
-  final IconData icon;
   final VoidCallback onTap;
+  final String? semanticLabel;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Semantics(
       button: true,
-      label: count == null
-          ? 'Pasta $name'
-          : 'Pasta $name, $count ${count == 1 ? 'print' : 'prints'}',
+      label:
+          semanticLabel ??
+          (count == null
+              ? 'Pasta $name'
+              : 'Pasta $name, $count ${count == 1 ? 'print' : 'prints'}'),
       child: SizedBox(
-        width: 126,
-        height: 72,
+        width: 112,
+        height: 52,
         child: Card(
           margin: EdgeInsets.zero,
+          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          clipBehavior: Clip.hardEdge,
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(8),
+            customBorder: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.zero,
+            ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(icon, color: theme.colorScheme.secondary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (count != null)
-                          Text(
-                            '$count ${count == 1 ? 'print' : 'prints'}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                      ],
+                  Text(
+                    name,
+                    maxLines: count == null ? 2 : 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
+                  if (count != null)
+                    Text(
+                      '$count ${count == 1 ? 'print' : 'prints'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1951,16 +1782,12 @@ class _CompactMessage extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
-    this.secondaryActionLabel,
-    this.onSecondaryAction,
   });
 
   final IconData icon;
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
-  final String? secondaryActionLabel;
-  final VoidCallback? onSecondaryAction;
 
   @override
   Widget build(BuildContext context) {
@@ -1976,11 +1803,6 @@ class _CompactMessage extends StatelessWidget {
           Icon(icon, size: 20, color: colors.secondary),
           const SizedBox(width: 8),
           Expanded(child: Text(message)),
-          if (secondaryActionLabel != null)
-            TextButton(
-              onPressed: onSecondaryAction,
-              child: Text(secondaryActionLabel!),
-            ),
           if (actionLabel != null)
             TextButton(onPressed: onAction, child: Text(actionLabel!)),
         ],

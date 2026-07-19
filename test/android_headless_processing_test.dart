@@ -143,8 +143,8 @@ void main() {
     expect(inboxBridge, isNot(contains('startActivity')));
   });
 
-  test('adiciona somente permissão de notificação sem serviço', () {
-    expect(manifest, contains('POST_NOTIFICATIONS'));
+  test('processamento headless não publica revisão nem adiciona serviço', () {
+    expect(manifest, isNot(contains('POST_NOTIFICATIONS')));
     expect(manifest, isNot(contains('FOREGROUND_SERVICE')));
     expect(manifest, isNot(contains('<service')));
     expect(worker, contains('ReviewNotificationBridge'));

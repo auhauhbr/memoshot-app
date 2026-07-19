@@ -1,14 +1,14 @@
 package br.com.jeffersont.memoshot
 
 import android.content.Intent
+import android.app.NotificationManager
+import android.content.Context
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity : FlutterActivity() {
     private var screenshotBridge: ScreenshotMediaStoreBridge? = null
     private var preferencesBridge: AppPreferencesBridge? = null
-    private var reviewNotificationBridge: ReviewNotificationBridge? = null
-    private var reviewNavigationBridge: ReviewNavigationBridge? = null
     private var existingScreenshotScannerBridge: ExistingScreenshotScannerBridge? = null
     private var mediaStoreContentBridge: MediaStoreContentBridge? = null
 
@@ -23,15 +23,8 @@ class MainActivity : FlutterActivity() {
             context = this,
             messenger = flutterEngine.dartExecutor.binaryMessenger,
         )
-        reviewNotificationBridge = ReviewNotificationBridge(
-            context = this,
-            messenger = flutterEngine.dartExecutor.binaryMessenger,
-            activity = this,
-        )
-        reviewNavigationBridge = ReviewNavigationBridge(
-            messenger = flutterEngine.dartExecutor.binaryMessenger,
-            initialIntent = intent,
-        )
+        cancelLegacyReviewNotification()
+        consumeLegacyReviewIntent(intent)
         existingScreenshotScannerBridge = ExistingScreenshotScannerBridge(
             context = applicationContext,
             messenger = flutterEngine.dartExecutor.binaryMessenger,
@@ -49,14 +42,13 @@ class MainActivity : FlutterActivity() {
 
     override fun onPause() {
         FlutterEngineRuntimeState.pauseActivity()
-        reviewNotificationBridge?.publishDeferredIfNeeded()
         super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        reviewNavigationBridge?.handleIntent(intent)
+        consumeLegacyReviewIntent(intent)
     }
 
     override fun onRequestPermissionsResult(
@@ -65,7 +57,6 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray,
     ) {
         if (screenshotBridge?.onRequestPermissionsResult(requestCode) == true) return
-        if (reviewNotificationBridge?.onRequestPermissionsResult(requestCode) == true) return
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
     }
 
@@ -74,10 +65,6 @@ class MainActivity : FlutterActivity() {
         screenshotBridge = null
         preferencesBridge?.dispose()
         preferencesBridge = null
-        reviewNotificationBridge?.dispose()
-        reviewNotificationBridge = null
-        reviewNavigationBridge?.dispose()
-        reviewNavigationBridge = null
         existingScreenshotScannerBridge?.dispose()
         existingScreenshotScannerBridge = null
         mediaStoreContentBridge?.dispose()
@@ -89,5 +76,20 @@ class MainActivity : FlutterActivity() {
             processingScheduler.enqueueHistoricalPreparation()
         }
         super.onDestroy()
+    }
+
+    private fun cancelLegacyReviewNotification() {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(ReviewNotificationPolicy.NOTIFICATION_ID)
+        ReviewNotificationState(applicationContext).apply {
+            setEnabled(false)
+            clearQueueMarkers()
+        }
+    }
+
+    private fun consumeLegacyReviewIntent(intent: Intent?) {
+        if (intent?.action != ReviewNotificationBridge.ACTION_OPEN_REVIEW_QUEUE) return
+        intent.removeExtra(ReviewNotificationBridge.EXTRA_DESTINATION)
+        intent.action = null
     }
 }

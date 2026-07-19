@@ -11,7 +11,7 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  test('destino frio é consumido uma vez', () async {
+  test('destino frio antigo é consumido sem abrir revisão', () async {
     String? pending = 'reviewQueue';
     var opens = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -26,11 +26,11 @@ void main() {
     await source.start(() async => opens++);
     await source.start(() async => opens++);
 
-    expect(opens, 1);
+    expect(opens, 0);
     await source.dispose();
   });
 
-  test('destino com app aberto é entregue sem duplicar abertura', () async {
+  test('destino antigo com app aberto é consumido sem abrir revisão', () async {
     String? pending;
     var opens = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -53,7 +53,7 @@ void main() {
         .handlePlatformMessage(reviewNavigationChannelName, data, (_) {});
     await Future<void>.delayed(Duration.zero);
 
-    expect(opens, 1);
+    expect(opens, 0);
     await source.dispose();
   });
 

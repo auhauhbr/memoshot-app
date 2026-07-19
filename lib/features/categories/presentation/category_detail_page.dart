@@ -13,6 +13,7 @@ import '../../processing/data/ocr_queue_processor.dart';
 import '../../processing/domain/processing_job.dart';
 import '../../tags/data/tag_repository.dart';
 import '../data/category_repository.dart';
+import '../data/recent_folder_repository.dart';
 import '../domain/category.dart';
 import 'folder_management_dialogs.dart';
 
@@ -25,6 +26,7 @@ Route<bool> buildCategoryDetailRoute({
   required OcrRepository ocrRepository,
   required OcrQueue ocrQueue,
   required TagRepository tagRepository,
+  RecentFolderRepository? recentFolderRepository,
 }) {
   return MaterialPageRoute<bool>(
     settings: RouteSettings(
@@ -38,6 +40,7 @@ Route<bool> buildCategoryDetailRoute({
       ocrRepository: ocrRepository,
       ocrQueue: ocrQueue,
       tagRepository: tagRepository,
+      recentFolderRepository: recentFolderRepository,
     ),
   );
 }
@@ -50,6 +53,7 @@ class CategoryDetailPage extends StatefulWidget {
     required this.ocrRepository,
     required this.ocrQueue,
     required this.tagRepository,
+    this.recentFolderRepository,
     super.key,
   });
 
@@ -59,6 +63,7 @@ class CategoryDetailPage extends StatefulWidget {
   final OcrRepository ocrRepository;
   final OcrQueue ocrQueue;
   final TagRepository tagRepository;
+  final RecentFolderRepository? recentFolderRepository;
 
   @override
   State<CategoryDetailPage> createState() => _CategoryDetailPageState();
@@ -296,6 +301,8 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
   }
 
   Future<void> _openChild(CategorySummary summary) async {
+    await _recordAccess(summary.category.id);
+    if (!mounted) return;
     await Navigator.of(context).push<bool>(
       buildCategoryDetailRoute(
         summary: summary,
@@ -304,6 +311,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         ocrRepository: widget.ocrRepository,
         ocrQueue: widget.ocrQueue,
         tagRepository: widget.tagRepository,
+        recentFolderRepository: widget.recentFolderRepository,
       ),
     );
     if (mounted) await _load();
@@ -352,15 +360,32 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       widget.categoryRepository,
       CategorySummary(category: _category, mediaCount: _itemCount),
     );
-    if (deleted && mounted) Navigator.pop(context, true);
+    if (deleted) {
+      try {
+        await widget.recentFolderRepository?.remove(_category.id);
+      } catch (_) {
+        // O histórico nunca bloqueia a exclusão já concluída da pasta.
+      }
+      if (mounted) Navigator.pop(context, true);
+    }
   });
 
-  void _openAncestor(Category category) {
+  Future<void> _openAncestor(Category category) async {
+    await _recordAccess(category.id);
+    if (!mounted) return;
     Navigator.of(context).popUntil(
       (route) =>
           route.settings.name == categoryDetailRouteName &&
           route.settings.arguments == category.id,
     );
+  }
+
+  Future<void> _recordAccess(int categoryId) async {
+    try {
+      await widget.recentFolderRepository?.recordAccess(categoryId);
+    } catch (_) {
+      // Falhas nas preferências não impedem a navegação entre pastas.
+    }
   }
 
   void _openFoldersRoot() {
@@ -434,7 +459,8 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                           _CategoryBreadcrumb(
                             path: _path!,
                             onFolders: _openFoldersRoot,
-                            onAncestor: _openAncestor,
+                            onAncestor: (category) =>
+                                unawaited(_openAncestor(category)),
                           ),
                           const SizedBox(height: 20),
                           Text(
