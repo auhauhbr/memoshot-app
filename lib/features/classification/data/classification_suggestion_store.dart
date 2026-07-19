@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../../../core/database/contexto_database.dart' as database;
 import '../domain/stored_classification_suggestion.dart';
+import '../../review_notifications/domain/review_notification.dart';
 import 'classification_suggestion_codec.dart';
 
 abstract interface class ClassificationSuggestionStore {
@@ -21,6 +22,8 @@ abstract interface class ClassificationSuggestionStore {
   Future<List<StoredClassificationSuggestion>> loadPendingReview();
 
   Future<int> countPendingReview();
+
+  Future<ReviewNotificationSnapshot> loadReviewNotificationSnapshot();
 
   Future<StoredClassificationSuggestion> updateStatus({
     required int mediaItemId,
@@ -164,6 +167,36 @@ class DriftClassificationSuggestionStore
         ),
       );
     return (await query.getSingle()).read(count) ?? 0;
+  }
+
+  @override
+  Future<ReviewNotificationSnapshot> loadReviewNotificationSnapshot() async {
+    final table = _database.classificationSuggestions;
+    final pendingStatus = ClassificationSuggestionStatus.pendingReview.name;
+    return _database.transaction(() async {
+      final countExpression = table.mediaItemId.count();
+      final countQuery = _database.selectOnly(table)
+        ..addColumns([countExpression])
+        ..where(table.status.equals(pendingStatus));
+      final pendingCount =
+          (await countQuery.getSingle()).read(countExpression) ?? 0;
+      if (pendingCount == 0) return const ReviewNotificationSnapshot.empty();
+
+      final latestQuery = _database.selectOnly(table)
+        ..addColumns([table.createdAt, table.mediaItemId])
+        ..where(table.status.equals(pendingStatus))
+        ..orderBy([
+          OrderingTerm.desc(table.createdAt),
+          OrderingTerm.desc(table.mediaItemId),
+        ])
+        ..limit(1);
+      final latest = await latestQuery.getSingle();
+      return ReviewNotificationSnapshot(
+        pendingCount: pendingCount,
+        latestPendingCreatedAt: latest.read(table.createdAt),
+        latestPendingMediaItemId: latest.read(table.mediaItemId),
+      );
+    });
   }
 
   @override

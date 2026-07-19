@@ -29,6 +29,10 @@ void main() {
     expect(entrypoint, contains('BackgroundProcessingComposition.create()'));
     expect(entrypoint, contains("invokeMethod<void>('ready')"));
     expect(entrypoint, contains("terminalMethod = 'retryableFailure'"));
+    expect(
+      entrypoint,
+      contains('composition.notificationCoordinator.synchronize()'),
+    );
     expect(entrypoint, isNot(contains('runApp(')));
     expect(entrypoint, isNot(contains('MaterialApp')));
     expect(entrypoint, isNot(contains('HomePage')));
@@ -42,6 +46,7 @@ void main() {
     expect(composition, contains('createLocalClassificationJobScheduler'));
     expect(composition, contains('DriftAutomaticImportSettingsRepository'));
     expect(composition, contains('MethodChannelAutomaticScreenshotSource'));
+    expect(composition, contains('MethodChannelReviewNotificationGateway'));
     expect(composition, contains('await _ocrQueue.close()'));
     expect(composition, contains('await _classificationQueue.close()'));
     expect(composition, contains('await _database.close()'));

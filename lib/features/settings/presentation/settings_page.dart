@@ -5,16 +5,20 @@ import 'package:flutter/material.dart';
 import '../../../core/automatic_import/automatic_screenshot_source.dart';
 import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
 import '../../automatic_import/data/automatic_import_settings_repository.dart';
+import '../../review_notifications/application/review_notification_coordinator.dart';
+import '../../review_notifications/domain/review_notification.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
     required this.coordinator,
     required this.settingsRepository,
+    required this.reviewNotificationCoordinator,
   });
 
   final AutomaticScreenshotImportCoordinator coordinator;
   final AutomaticImportSettingsRepository settingsRepository;
+  final ReviewNotificationCoordinator reviewNotificationCoordinator;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -27,6 +31,8 @@ class _SettingsPageState extends State<SettingsPage>
   bool _isChanging = false;
   bool _isRefreshing = false;
   MediaPermissionStatus _permission = MediaPermissionStatus.unsupported;
+  ReviewNotificationState _reviewNotificationState =
+      const ReviewNotificationState.disabled();
   int _generation = 0;
 
   @override
@@ -59,10 +65,13 @@ class _SettingsPageState extends State<SettingsPage>
       if (reconcile) await widget.coordinator.resume();
       final settings = await widget.settingsRepository.load();
       final permission = await widget.coordinator.permissionStatus();
+      final reviewNotificationState = await widget.reviewNotificationCoordinator
+          .loadState();
       if (!mounted || generation != _generation) return;
       setState(() {
         _enabled = settings.enabled;
         _permission = permission;
+        _reviewNotificationState = reviewNotificationState;
         _isLoading = false;
       });
     } catch (_) {
@@ -151,6 +160,47 @@ class _SettingsPageState extends State<SettingsPage>
     }
   }
 
+  Future<void> _toggleReviewNotifications(bool value) async {
+    if (_isChanging) return;
+    final generation = ++_generation;
+    setState(() => _isChanging = true);
+    try {
+      if (value) {
+        final state = await widget.reviewNotificationCoordinator.enable();
+        if (!mounted || generation != _generation) return;
+        setState(() => _reviewNotificationState = state);
+        if (!state.enabled) {
+          _showMessage(
+            state.permission == ReviewNotificationPermission.blocked
+                ? 'As notificações estão bloqueadas nas configurações do Android.'
+                : 'Permissão não concedida.',
+          );
+        }
+      } else {
+        await widget.reviewNotificationCoordinator.disable();
+        final state = await widget.reviewNotificationCoordinator.loadState();
+        if (!mounted || generation != _generation) return;
+        setState(() => _reviewNotificationState = state);
+      }
+    } catch (_) {
+      if (mounted && generation == _generation) {
+        _showMessage('Não foi possível atualizar as notificações.');
+      }
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _isChanging = false);
+      }
+    }
+  }
+
+  Future<void> _openNotificationSettings() async {
+    try {
+      await widget.reviewNotificationCoordinator.openAndroidSettings();
+    } catch (_) {
+      _showMessage('Não foi possível abrir as configurações do Android.');
+    }
+  }
+
   void _showPermissionMessage(MediaPermissionStatus permission) {
     _showMessage(
       permission == MediaPermissionStatus.permanentlyDenied
@@ -181,6 +231,19 @@ class _SettingsPageState extends State<SettingsPage>
     MediaPermissionStatus.unsupported => 'Tentar novamente',
     MediaPermissionStatus.fullAccess => null,
   };
+
+  String get _reviewNotificationLabel {
+    final permissionLabel = switch (_reviewNotificationState.permission) {
+      ReviewNotificationPermission.blocked =>
+        'Bloqueadas nas configurações do Android',
+      ReviewNotificationPermission.denied
+          when _reviewNotificationState.promptHandled =>
+        'Permissão não concedida',
+      _ => null,
+    };
+    if (permissionLabel != null) return permissionLabel;
+    return _reviewNotificationState.enabled ? 'Ativadas' : 'Desativadas';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -226,6 +289,49 @@ class _SettingsPageState extends State<SettingsPage>
                               ? null
                               : _handlePermissionAction,
                           child: Text(_permissionAction!),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const _SectionTitle('Notificações'),
+            Card(
+              child: Column(
+                children: [
+                  Semantics(
+                    label:
+                        'Notificações de revisão. Avise quando um print precisar da sua confirmação.',
+                    child: SwitchListTile(
+                      key: const Key('review-notifications-switch'),
+                      title: const Text('Notificações de revisão'),
+                      subtitle: const Text(
+                        'Avise quando um print precisar da sua confirmação.',
+                      ),
+                      value: _reviewNotificationState.enabled,
+                      onChanged: _isLoading || _isChanging
+                          ? null
+                          : _toggleReviewNotifications,
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.notifications_outlined),
+                    title: const Text('Estado'),
+                    subtitle: Text(_reviewNotificationLabel),
+                  ),
+                  if (_reviewNotificationState.permission ==
+                      ReviewNotificationPermission.blocked)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: OutlinedButton(
+                          key: const Key('open-notification-settings'),
+                          onPressed: _isLoading || _isChanging
+                              ? null
+                              : _openNotificationSettings,
+                          child: const Text('Abrir configurações do Android'),
                         ),
                       ),
                     ),

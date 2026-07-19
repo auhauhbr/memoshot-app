@@ -21,6 +21,7 @@ Future<void> runMemoShotBackgroundEntrypoint() async {
     await channel.invokeMethod<void>('ready');
     composition = BackgroundProcessingComposition.create();
     final summary = await composition.runner.run();
+    await composition.notificationCoordinator.synchronize();
     payload = summary.toChannelPayload();
   } catch (_) {
     terminalMethod = 'retryableFailure';

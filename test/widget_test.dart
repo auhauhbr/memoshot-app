@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:memoshot/app/memoshot_app.dart';
 import 'package:memoshot/core/automatic_import/automatic_screenshot_source.dart';
 import 'package:memoshot/core/media/screenshot_picker.dart';
+import 'package:memoshot/core/navigation/review_navigation_source.dart';
 import 'package:memoshot/core/sharing/incoming_share_source.dart';
 import 'package:memoshot/core/theme/app_theme.dart';
 import 'package:memoshot/core/text/search_snippet_builder.dart';
@@ -16,6 +17,9 @@ import 'package:memoshot/features/classification/data/classification_suggestion_
 import 'package:memoshot/features/classification/application/classification_queue_processor.dart';
 import 'package:memoshot/features/classification/application/review_decision.dart';
 import 'package:memoshot/features/classification/domain/stored_classification_suggestion.dart';
+import 'package:memoshot/features/classification/presentation/review_queue_page.dart';
+import 'package:memoshot/features/review_notifications/domain/review_notification.dart';
+import 'package:memoshot/features/review_notifications/application/review_notification_coordinator.dart';
 import 'package:memoshot/features/automatic_import/data/automatic_import_settings_repository.dart';
 import 'package:memoshot/features/automatic_import/domain/automatic_import_settings.dart';
 import 'package:memoshot/features/library/data/media_item_repository.dart';
@@ -3348,6 +3352,7 @@ void main() {
     expect(find.text('Configurações'), findsOneWidget);
     expect(find.text('Captura e organização automática'), findsOneWidget);
     expect(find.text('Privacidade'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Sobre o MemoShot'), 250);
     expect(find.text('Sobre o MemoShot'), findsOneWidget);
     expect(find.text('Capturou, organizou.'), findsOneWidget);
     expect(
@@ -3892,6 +3897,216 @@ void main() {
     final grid = tester.widget<ScreenshotGrid>(find.byType(ScreenshotGrid));
     expect(grid.mediaItems.map((item) => item.id), [2, 3, 1]);
   });
+
+  testWidgets('Home mostra convite contextual e Agora não não pede permissão', (
+    tester,
+  ) async {
+    final suggestions = FakeClassificationSuggestionRepository(
+      pending: [createSuggestion(1)],
+      counts: const [1],
+    );
+    final gateway = FakeReviewNotificationGateway(
+      const ReviewNotificationState.disabled(),
+    );
+    final coordinator = ReviewNotificationCoordinator(
+      snapshotRepository: suggestions,
+      gateway: gateway,
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        classificationRepository: suggestions,
+        reviewNotificationCoordinator: coordinator,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('review-notification-invite')), findsOneWidget);
+    await tester.tap(find.text('Agora não'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.requestCount, 0);
+    expect(gateway.dismissCount, 1);
+    expect(find.byKey(const Key('review-notification-invite')), findsNothing);
+    expect(find.byKey(const Key('open-review-queue')), findsOneWidget);
+  });
+
+  testWidgets('Home ativa notificações somente após toque explícito', (
+    tester,
+  ) async {
+    final suggestions = FakeClassificationSuggestionRepository(
+      pending: [createSuggestion(1)],
+      counts: const [1],
+    );
+    final gateway = FakeReviewNotificationGateway(
+      const ReviewNotificationState.disabled(),
+      requestState: const ReviewNotificationState(
+        enabled: true,
+        promptHandled: true,
+        permission: ReviewNotificationPermission.granted,
+      ),
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        classificationRepository: suggestions,
+        reviewNotificationCoordinator: ReviewNotificationCoordinator(
+          snapshotRepository: suggestions,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(gateway.requestCount, 0);
+    await tester.tap(find.text('Ativar'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.requestCount, 1);
+    expect(gateway.snapshots.single.pendingCount, 1);
+    expect(find.byKey(const Key('review-notification-invite')), findsNothing);
+  });
+
+  testWidgets('Configurações ativa, desativa e orienta bloqueio', (
+    tester,
+  ) async {
+    final suggestions = FakeClassificationSuggestionRepository();
+    final gateway = FakeReviewNotificationGateway(
+      const ReviewNotificationState(
+        enabled: false,
+        promptHandled: true,
+        permission: ReviewNotificationPermission.blocked,
+      ),
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        classificationRepository: suggestions,
+        reviewNotificationCoordinator: ReviewNotificationCoordinator(
+          snapshotRepository: suggestions,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Notificações'), findsOneWidget);
+    expect(find.text('Notificações de revisão'), findsOneWidget);
+    expect(
+      find.text('Bloqueadas nas configurações do Android'),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(
+      find.byKey(const Key('open-notification-settings')),
+    );
+    await tester.tap(find.byKey(const Key('open-notification-settings')));
+    await tester.pump();
+    expect(gateway.settingsCount, 1);
+  });
+
+  testWidgets('Configurações só ativa após permissão e desativar cancela', (
+    tester,
+  ) async {
+    final suggestions = FakeClassificationSuggestionRepository();
+    final gateway = FakeReviewNotificationGateway(
+      const ReviewNotificationState.disabled(),
+      requestState: const ReviewNotificationState(
+        enabled: true,
+        promptHandled: true,
+        permission: ReviewNotificationPermission.granted,
+      ),
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        classificationRepository: suggestions,
+        reviewNotificationCoordinator: ReviewNotificationCoordinator(
+          snapshotRepository: suggestions,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('review-notifications-switch')),
+    );
+
+    await tester.tap(find.byKey(const Key('review-notifications-switch')));
+    await tester.pumpAndSettle();
+    expect(gateway.requestCount, 1);
+    expect(find.text('Ativadas'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('review-notifications-switch')));
+    await tester.pumpAndSettle();
+    expect(gateway.cancelCount, greaterThan(0));
+    expect(find.text('Desativadas'), findsOneWidget);
+  });
+
+  testWidgets('permissão negada mantém switch de notificações desligado', (
+    tester,
+  ) async {
+    final suggestions = FakeClassificationSuggestionRepository();
+    final gateway = FakeReviewNotificationGateway(
+      const ReviewNotificationState.disabled(),
+      requestState: const ReviewNotificationState(
+        enabled: false,
+        promptHandled: true,
+        permission: ReviewNotificationPermission.denied,
+      ),
+    );
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        classificationRepository: suggestions,
+        reviewNotificationCoordinator: ReviewNotificationCoordinator(
+          snapshotRepository: suggestions,
+          gateway: gateway,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-settings')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const Key('review-notifications-switch')),
+    );
+    await tester.tap(find.byKey(const Key('review-notifications-switch')));
+    await tester.pumpAndSettle();
+
+    final switchTile = tester.widget<SwitchListTile>(
+      find.byKey(const Key('review-notifications-switch')),
+    );
+    expect(switchTile.value, isFalse);
+    expect(find.text('Permissão não concedida'), findsWidgets);
+  });
+
+  testWidgets('destino da notificação espera onboarding e abre Para revisar', (
+    tester,
+  ) async {
+    final navigation = FakeReviewNavigationSource(requestOnStart: true);
+    await tester.pumpWidget(
+      buildTestApp(
+        FakeScreenshotPicker(),
+        onboardingRepository: FakeOnboardingRepository(completed: false),
+        reviewNavigationSource: navigation,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Capturou, organizou.'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('onboarding-next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('onboarding-next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('onboarding-not-now')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ReviewQueuePage), findsOneWidget);
+    expect(find.text('Tudo organizado'), findsOneWidget);
+  });
 }
 
 Widget buildTestApp(
@@ -3907,6 +4122,8 @@ Widget buildTestApp(
   FakeAutomaticScreenshotSource? automaticScreenshotSource,
   FakeAutomaticImportSettingsRepository? automaticSettingsRepository,
   OnboardingRepository? onboardingRepository,
+  ReviewNotificationCoordinator? reviewNotificationCoordinator,
+  ReviewNavigationSource? reviewNavigationSource,
 }) {
   final resolvedOcrRepository = ocrRepository ?? FakeOcrRepository();
   final resolvedMediaRepository = repository ?? FakeMediaItemRepository();
@@ -3934,6 +4151,18 @@ Widget buildTestApp(
         automaticSettingsRepository ?? FakeAutomaticImportSettingsRepository(),
     onboardingRepository:
         onboardingRepository ?? FakeOnboardingRepository(completed: true),
+    reviewNotificationCoordinator:
+        reviewNotificationCoordinator ??
+        ReviewNotificationCoordinator(
+          snapshotRepository:
+              classificationRepository ??
+              FakeClassificationSuggestionRepository(),
+          gateway: FakeReviewNotificationGateway(
+            const ReviewNotificationState.disabled(),
+          ),
+        ),
+    reviewNavigationSource:
+        reviewNavigationSource ?? FakeReviewNavigationSource(),
   );
 }
 
@@ -3942,6 +4171,78 @@ class FakeReviewDecisionProcessor implements ReviewDecisionProcessor {
   Future<StoredClassificationSuggestion> resolve(ReviewDecision decision) {
     throw UnsupportedError('Não usado neste teste.');
   }
+}
+
+class FakeReviewNavigationSource implements ReviewNavigationSource {
+  FakeReviewNavigationSource({this.requestOnStart = false});
+
+  final bool requestOnStart;
+  Future<void> Function()? callback;
+
+  @override
+  Future<void> start(Future<void> Function() onReviewQueueRequested) async {
+    callback = onReviewQueueRequested;
+    if (requestOnStart) await callback?.call();
+  }
+
+  @override
+  Future<void> dispose() async => callback = null;
+}
+
+class FakeReviewNotificationGateway implements ReviewNotificationGateway {
+  FakeReviewNotificationGateway(
+    this.state, {
+    ReviewNotificationState? requestState,
+  }) : requestState = requestState ?? state;
+
+  ReviewNotificationState state;
+  final ReviewNotificationState requestState;
+  int requestCount = 0;
+  int dismissCount = 0;
+  int settingsCount = 0;
+  int cancelCount = 0;
+  final List<ReviewNotificationSnapshot> snapshots = [];
+
+  @override
+  Future<ReviewNotificationState> loadState() async => state;
+
+  @override
+  Future<ReviewNotificationState> requestPermissionAndEnable() async {
+    requestCount++;
+    state = requestState;
+    return state;
+  }
+
+  @override
+  Future<void> disable() async {
+    state = ReviewNotificationState(
+      enabled: false,
+      promptHandled: state.promptHandled,
+      permission: state.permission,
+    );
+    cancelCount++;
+  }
+
+  @override
+  Future<void> dismissPrompt() async {
+    dismissCount++;
+    state = ReviewNotificationState(
+      enabled: state.enabled,
+      promptHandled: true,
+      permission: state.permission,
+    );
+  }
+
+  @override
+  Future<void> openAndroidSettings() async => settingsCount++;
+
+  @override
+  Future<void> synchronize(ReviewNotificationSnapshot snapshot) async {
+    snapshots.add(snapshot);
+  }
+
+  @override
+  Future<void> cancel() async => cancelCount++;
 }
 
 class FakeClassificationSuggestionRepository
@@ -3967,6 +4268,19 @@ class FakeClassificationSuggestionRepository
     if (_counts.isEmpty) return 0;
     final index = (countCallCount - 1).clamp(0, _counts.length - 1);
     return _counts[index];
+  }
+
+  @override
+  Future<ReviewNotificationSnapshot> loadReviewNotificationSnapshot() async {
+    if (_pending.isEmpty) return const ReviewNotificationSnapshot.empty();
+    final latest = _pending.reduce(
+      (left, right) => left.createdAt.isAfter(right.createdAt) ? left : right,
+    );
+    return ReviewNotificationSnapshot(
+      pendingCount: _pending.length,
+      latestPendingCreatedAt: latest.createdAt,
+      latestPendingMediaItemId: latest.mediaItemId,
+    );
   }
 
   @override
@@ -4019,6 +4333,23 @@ class FakeClassificationSuggestionRepository
   @override
   Future<StoredClassificationSuggestion> markAutoApplied(int mediaItemId) =>
       throw UnsupportedError('Fora do escopo do teste.');
+}
+
+StoredClassificationSuggestion createSuggestion(int mediaItemId) {
+  final at = DateTime.utc(2026, 7, 19);
+  return StoredClassificationSuggestion(
+    mediaItemId: mediaItemId,
+    suggestedCategoryName: 'Carreira',
+    confidence: 0.6,
+    hasSuggestion: true,
+    suggestedTags: const [],
+    evidence: const [],
+    status: ClassificationSuggestionStatus.pendingReview,
+    reviewReason: ClassificationReviewReason.manualReview,
+    engineVersion: 1,
+    createdAt: at,
+    updatedAt: at,
+  );
 }
 
 Widget buildCategoryDetailTestApp({

@@ -8,6 +8,8 @@ import '../../../core/database/contexto_database.dart' show ContextoDatabase;
 import '../../../core/media/image_picker_screenshot_picker.dart';
 import '../../../core/media/screenshot_picker.dart';
 import '../../../core/media/screenshot_storage.dart';
+import '../../../core/navigation/review_navigation_source.dart';
+import '../../../core/notifications/method_channel_review_notification_gateway.dart';
 import '../../../core/ocr/ml_kit_text_recognition_service.dart';
 import '../../../core/sharing/incoming_share_source.dart';
 import '../../../core/sharing/receive_sharing_intent_source.dart';
@@ -36,6 +38,8 @@ import '../../processing/data/ocr_job_scheduler.dart';
 import '../../processing/data/ocr_queue_processor.dart';
 import '../../processing/data/processing_job_store.dart';
 import '../../processing/domain/processing_job.dart';
+import '../../review_notifications/application/review_notification_coordinator.dart';
+import '../../review_notifications/domain/review_notification.dart';
 import '../../sharing/shared_image_import_coordinator.dart';
 import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
 import '../../automatic_import/data/automatic_import_settings_repository.dart';
@@ -61,6 +65,8 @@ class HomePage extends StatefulWidget {
     this.incomingShareSource,
     this.automaticScreenshotSource,
     this.automaticImportSettingsRepository,
+    this.reviewNotificationCoordinator,
+    this.reviewNavigationSource,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -75,6 +81,8 @@ class HomePage extends StatefulWidget {
   final IncomingShareSource? incomingShareSource;
   final AutomaticScreenshotSource? automaticScreenshotSource;
   final AutomaticImportSettingsRepository? automaticImportSettingsRepository;
+  final ReviewNotificationCoordinator? reviewNotificationCoordinator;
+  final ReviewNavigationSource? reviewNavigationSource;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -98,6 +106,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final SharedImageImportCoordinator _sharedImportCoordinator;
   late final AutomaticScreenshotImportCoordinator _automaticImportCoordinator;
   late final AutomaticImportSettingsRepository _automaticSettingsRepository;
+  late final ReviewNotificationCoordinator _reviewNotificationCoordinator;
+  late final ReviewNavigationSource _reviewNavigationSource;
   final TextEditingController _searchController = TextEditingController();
   final TextNormalizer _textNormalizer = const TextNormalizer();
   Timer? _searchDebounce;
@@ -119,6 +129,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String? _categoriesErrorMessage;
   int? _pendingReviewCount;
   int _reviewCountGeneration = 0;
+  ReviewNotificationState? _reviewNotificationState;
+  bool _isChangingReviewNotifications = false;
+  bool _reviewQueueOpen = false;
   AutomaticImportUiState _automaticImportState =
       AutomaticImportUiState.disabled;
 
@@ -198,6 +211,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _automaticSettingsRepository =
         widget.automaticImportSettingsRepository ??
         DriftAutomaticImportSettingsRepository(database!);
+    _reviewNotificationCoordinator =
+        widget.reviewNotificationCoordinator ??
+        ReviewNotificationCoordinator(
+          snapshotRepository: _classificationRepository,
+          gateway: const MethodChannelReviewNotificationGateway(),
+        );
+    _reviewNavigationSource =
+        widget.reviewNavigationSource ?? MethodChannelReviewNavigationSource();
     if (!_ownsMediaRepository) {
       _ownedAuxiliaryDatabase = database;
     }
@@ -225,6 +246,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_sharedImportCoordinator.start());
       unawaited(_automaticImportCoordinator.initialize());
+      unawaited(_startReviewNavigation());
     });
   }
 
@@ -234,6 +256,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       unawaited(_automaticImportCoordinator.resume());
       unawaited(_reloadPendingReviewCount());
       unawaited(_classificationQueue?.recoverAndStart());
+      unawaited(_refreshReviewNotificationState(synchronize: true));
     }
   }
 
@@ -251,6 +274,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _sharedImportCoordinator.dispose();
     await _queueSubscription?.cancel();
     await _classificationQueueSubscription?.cancel();
+    await _reviewNavigationSource.dispose();
     await _ocrQueue.close();
     await _classificationQueue?.close();
     if (_ownsMediaRepository) {
@@ -367,6 +391,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       await _reloadCategories();
       await _reloadTagCountIgnoringErrors();
       await _reloadPendingReviewCount();
+      await _refreshReviewNotificationState(synchronize: true);
       unawaited(_ocrQueue.recoverAndStart());
       unawaited(_classificationQueue?.recoverAndStart());
       final lost = await _screenshotPicker.retrieveLostScreenshots();
@@ -509,6 +534,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     ]);
     if (_selectedTag != null) await _reloadItemsIgnoringErrors();
     if (_searchActive) await _searchNow();
+    await _reviewNotificationCoordinator.synchronize();
   }
 
   Future<void> _reloadPendingReviewCount() async {
@@ -520,6 +546,60 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } catch (_) {
       if (!mounted || generation != _reviewCountGeneration) return;
       setState(() => _pendingReviewCount = null);
+    }
+  }
+
+  Future<void> _startReviewNavigation() async {
+    try {
+      await _reviewNavigationSource.start(_openReviewQueue);
+    } catch (_) {
+      // A navegação normal permanece disponível sem a bridge nativa.
+    }
+  }
+
+  Future<void> _refreshReviewNotificationState({
+    bool synchronize = false,
+  }) async {
+    if (synchronize) await _reviewNotificationCoordinator.synchronize();
+    try {
+      final state = await _reviewNotificationCoordinator.loadState();
+      if (mounted) setState(() => _reviewNotificationState = state);
+    } catch (_) {
+      // Uma falha de notificação não bloqueia a Home.
+    }
+  }
+
+  Future<void> _enableReviewNotifications() async {
+    if (_isChangingReviewNotifications) return;
+    setState(() => _isChangingReviewNotifications = true);
+    try {
+      final state = await _reviewNotificationCoordinator.enable();
+      if (!mounted) return;
+      setState(() => _reviewNotificationState = state);
+      if (!state.enabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Permissão não concedida.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível ativar as notificações.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isChangingReviewNotifications = false);
+    }
+  }
+
+  Future<void> _dismissReviewNotificationPrompt() async {
+    try {
+      await _reviewNotificationCoordinator.dismissPrompt();
+      await _refreshReviewNotificationState();
+    } catch (_) {
+      // O convite pode voltar em uma próxima atualização segura.
     }
   }
 
@@ -758,6 +838,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ),
     );
     await _reloadCategories();
+    await _reloadPendingReviewCount();
+    await _reviewNotificationCoordinator.synchronize();
   }
 
   Future<void> _openCategory(CategorySummary summary) async {
@@ -773,6 +855,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
     await _reloadCategories();
     await _reloadItemsIgnoringErrors();
+    await _reloadPendingReviewCount();
+    await _reviewNotificationCoordinator.synchronize();
     if (_searchActive) await _searchNow();
   }
 
@@ -794,6 +878,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         builder: (_) => SettingsPage(
           coordinator: _automaticImportCoordinator,
           settingsRepository: _automaticSettingsRepository,
+          reviewNotificationCoordinator: _reviewNotificationCoordinator,
         ),
       ),
     );
@@ -803,6 +888,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _reloadCategories();
     await _reloadTagCountIgnoringErrors();
     await _reloadPendingReviewCount();
+    await _refreshReviewNotificationState(synchronize: true);
     if (_searchActive) await _searchNow();
   }
 
@@ -822,6 +908,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await _reloadCategories();
     await _reloadTagCountIgnoringErrors();
     await _reloadPendingReviewCount();
+    await _reviewNotificationCoordinator.synchronize();
     if (_selectedTag != null) {
       await _reloadItemsIgnoringErrors();
     }
@@ -842,19 +929,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> _openReviewQueue() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(
-        builder: (_) => ReviewQueuePage(
-          loader: _reviewQueueLoader,
-          decisionProcessor: _reviewDecisionProcessor,
-          mediaRepository: _mediaRepository,
-          ocrRepository: _ocrRepository,
-          ocrQueue: _ocrQueue,
-          categoryRepository: _categoryRepository,
-          tagRepository: _tagRepository,
+    if (_reviewQueueOpen || !mounted) return;
+    _reviewQueueOpen = true;
+    try {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) => ReviewQueuePage(
+            loader: _reviewQueueLoader,
+            decisionProcessor: _reviewDecisionProcessor,
+            mediaRepository: _mediaRepository,
+            ocrRepository: _ocrRepository,
+            ocrQueue: _ocrQueue,
+            categoryRepository: _categoryRepository,
+            tagRepository: _tagRepository,
+            onQueueChanged: _reviewNotificationCoordinator.synchronize,
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      _reviewQueueOpen = false;
+    }
     if (!mounted) return;
     await Future.wait([
       _reloadPendingReviewCount(),
@@ -862,6 +956,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _reloadTagCountIgnoringErrors(),
     ]);
     if (_selectedTag != null) await _reloadItemsIgnoringErrors();
+    await _reviewNotificationCoordinator.synchronize();
   }
 
   @override
@@ -950,6 +1045,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       count: _pendingReviewCount!,
                       onReview: _openReviewQueue,
                     ),
+                    if (_reviewNotificationState != null &&
+                        !_reviewNotificationState!.enabled &&
+                        !_reviewNotificationState!.promptHandled) ...[
+                      const SizedBox(height: 8),
+                      _ReviewNotificationInvite(
+                        isLoading: _isChangingReviewNotifications,
+                        onEnable: _enableReviewNotifications,
+                        onDismiss: _dismissReviewNotificationPrompt,
+                      ),
+                    ],
                     const SizedBox(height: 20),
                   ],
                   _SectionHeader(
@@ -1103,6 +1208,31 @@ class _ReviewSummary extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ReviewNotificationInvite extends StatelessWidget {
+  const _ReviewNotificationInvite({
+    required this.isLoading,
+    required this.onEnable,
+    required this.onDismiss,
+  });
+
+  final bool isLoading;
+  final VoidCallback onEnable;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CompactMessage(
+      key: const Key('review-notification-invite'),
+      icon: Icons.notifications_none_outlined,
+      message: 'Receba um aviso quando novos prints precisarem de revisão.',
+      actionLabel: 'Ativar',
+      onAction: isLoading ? null : onEnable,
+      secondaryActionLabel: 'Agora não',
+      onSecondaryAction: isLoading ? null : onDismiss,
     );
   }
 }
@@ -1475,12 +1605,16 @@ class _CompactMessage extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
   });
 
   final IconData icon;
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
 
   @override
   Widget build(BuildContext context) {
@@ -1496,6 +1630,11 @@ class _CompactMessage extends StatelessWidget {
           Icon(icon, size: 20, color: colors.secondary),
           const SizedBox(width: 8),
           Expanded(child: Text(message)),
+          if (secondaryActionLabel != null)
+            TextButton(
+              onPressed: onSecondaryAction,
+              child: Text(secondaryActionLabel!),
+            ),
           if (actionLabel != null)
             TextButton(onPressed: onAction, child: Text(actionLabel!)),
         ],

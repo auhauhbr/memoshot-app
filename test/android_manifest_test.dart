@@ -45,7 +45,7 @@ void main() {
     expect(manifest, isNot(contains('android.intent.action.VIEW')));
   });
 
-  test('manifest adiciona somente permissões de imagens por versão', () {
+  test('manifest adiciona imagens e notificação sem permissões proibidas', () {
     final manifest = File(
       'android/app/src/main/AndroidManifest.xml',
     ).readAsStringSync();
@@ -56,6 +56,7 @@ void main() {
       contains('android.permission.READ_MEDIA_VISUAL_USER_SELECTED'),
     );
     expect(manifest, contains('android.permission.READ_EXTERNAL_STORAGE'));
+    expect(manifest, contains('android.permission.POST_NOTIFICATIONS'));
     expect(manifest, contains('android:maxSdkVersion="32"'));
     for (final permission in [
       'WRITE_EXTERNAL_STORAGE',
@@ -63,7 +64,9 @@ void main() {
       'READ_MEDIA_VIDEO',
       'READ_MEDIA_AUDIO',
       'ACCESS_MEDIA_LOCATION',
-      'POST_NOTIFICATIONS',
+      'INTERNET',
+      'FOREGROUND_SERVICE',
+      'RECEIVE_BOOT_COMPLETED',
     ]) {
       expect(manifest, isNot(contains(permission)));
     }

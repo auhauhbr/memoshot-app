@@ -300,6 +300,32 @@ void main() {
     directory.deleteSync(recursive: true);
     database = ContextoDatabase.forTesting(NativeDatabase.memory());
   });
+
+  test(
+    'snapshot conta somente pendências sem carregar payload privado',
+    () async {
+      final secondId = await _insertMedia(database, name: 'second.png');
+      final thirdId = await _insertMedia(database, name: 'third.png');
+      await repository.saveSuggestion(_suggestion(mediaItemId, now));
+      final latestAt = now.add(const Duration(minutes: 2));
+      await repository.saveSuggestion(_suggestion(secondId, latestAt));
+      await repository.saveSuggestion(
+        _suggestion(thirdId, now.add(const Duration(minutes: 1))),
+      );
+      now = now.add(const Duration(minutes: 3));
+      await repository.markAccepted(thirdId);
+
+      final snapshot = await repository.loadReviewNotificationSnapshot();
+
+      expect(snapshot.pendingCount, 2);
+      expect(
+        snapshot.latestPendingCreatedAt?.isAtSameMomentAs(latestAt),
+        isTrue,
+      );
+      expect(snapshot.latestPendingMediaItemId, secondId);
+      expect(snapshot.marker, '${latestAt.microsecondsSinceEpoch}:$secondId');
+    },
+  );
 }
 
 Future<int> _insertMedia(

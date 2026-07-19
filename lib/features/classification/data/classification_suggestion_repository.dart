@@ -1,7 +1,10 @@
 import '../domain/stored_classification_suggestion.dart';
+import '../../review_notifications/application/review_notification_coordinator.dart';
+import '../../review_notifications/domain/review_notification.dart';
 import 'classification_suggestion_store.dart';
 
-abstract interface class ClassificationSuggestionRepository {
+abstract interface class ClassificationSuggestionRepository
+    implements ReviewNotificationSnapshotRepository {
   Future<StoredClassificationSuggestion> saveSuggestion(
     StoredClassificationSuggestion suggestion,
   );
@@ -22,6 +25,9 @@ abstract interface class ClassificationSuggestionRepository {
   Future<List<StoredClassificationSuggestion>> loadPendingReview();
 
   Future<int> countPendingReview();
+
+  @override
+  Future<ReviewNotificationSnapshot> loadReviewNotificationSnapshot();
 
   Future<StoredClassificationSuggestion> updateStatus(
     int mediaItemId,
@@ -87,6 +93,10 @@ class LocalClassificationSuggestionRepository
 
   @override
   Future<int> countPendingReview() => _store.countPendingReview();
+
+  @override
+  Future<ReviewNotificationSnapshot> loadReviewNotificationSnapshot() =>
+      _store.loadReviewNotificationSnapshot();
 
   @override
   Future<StoredClassificationSuggestion> updateStatus(

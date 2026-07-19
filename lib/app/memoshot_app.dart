@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/media/screenshot_picker.dart';
+import '../core/navigation/review_navigation_source.dart';
 import '../core/automatic_import/automatic_screenshot_source.dart';
 import '../core/automatic_import/method_channel_automatic_screenshot_source.dart';
 import '../core/sharing/incoming_share_source.dart';
@@ -17,6 +18,7 @@ import '../features/onboarding/data/onboarding_repository.dart';
 import '../features/onboarding/presentation/onboarding_gate.dart';
 import '../features/processing/data/ocr_queue_processor.dart';
 import '../features/tags/data/tag_repository.dart';
+import '../features/review_notifications/application/review_notification_coordinator.dart';
 
 class MemoShotApp extends StatelessWidget {
   const MemoShotApp({
@@ -34,6 +36,8 @@ class MemoShotApp extends StatelessWidget {
     this.automaticScreenshotSource,
     this.automaticImportSettingsRepository,
     this.onboardingRepository,
+    this.reviewNotificationCoordinator,
+    this.reviewNavigationSource,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -49,6 +53,8 @@ class MemoShotApp extends StatelessWidget {
   final AutomaticScreenshotSource? automaticScreenshotSource;
   final AutomaticImportSettingsRepository? automaticImportSettingsRepository;
   final OnboardingRepository? onboardingRepository;
+  final ReviewNotificationCoordinator? reviewNotificationCoordinator;
+  final ReviewNavigationSource? reviewNavigationSource;
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +84,8 @@ class MemoShotApp extends StatelessWidget {
           incomingShareSource: incomingShareSource,
           automaticScreenshotSource: automaticSource,
           automaticImportSettingsRepository: automaticImportSettingsRepository,
+          reviewNotificationCoordinator: reviewNotificationCoordinator,
+          reviewNavigationSource: reviewNavigationSource,
         ),
       ),
     );

@@ -21,6 +21,7 @@ class ReviewQueuePage extends StatefulWidget {
     required this.ocrQueue,
     required this.categoryRepository,
     required this.tagRepository,
+    this.onQueueChanged,
     super.key,
   });
 
@@ -31,6 +32,7 @@ class ReviewQueuePage extends StatefulWidget {
   final OcrQueue ocrQueue;
   final CategoryRepository categoryRepository;
   final TagRepository tagRepository;
+  final Future<void> Function()? onQueueChanged;
 
   @override
   ReviewQueuePageState createState() => ReviewQueuePageState();
@@ -107,6 +109,7 @@ class ReviewQueuePageState extends State<ReviewQueuePage> {
           ),
         );
       }
+      await widget.onQueueChanged?.call();
     }
     await reload(showLoading: false);
   }

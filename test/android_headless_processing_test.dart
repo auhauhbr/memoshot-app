@@ -133,11 +133,12 @@ void main() {
     expect(inboxBridge, isNot(contains('startActivity')));
   });
 
-  test('não adiciona notificações, serviço ou componente exportado', () {
-    expect(manifest, isNot(contains('POST_NOTIFICATIONS')));
+  test('adiciona somente permissão de notificação sem serviço', () {
+    expect(manifest, contains('POST_NOTIFICATIONS'));
     expect(manifest, isNot(contains('FOREGROUND_SERVICE')));
     expect(manifest, isNot(contains('<service')));
-    expect(worker, isNot(contains('Notification')));
+    expect(worker, contains('ReviewNotificationBridge'));
+    expect(worker, isNot(contains('requestPermissions')));
     expect(worker, isNot(contains('Foreground')));
   });
 

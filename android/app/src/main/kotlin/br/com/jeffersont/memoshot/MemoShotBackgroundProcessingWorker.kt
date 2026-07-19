@@ -63,6 +63,10 @@ internal class MemoShotBackgroundProcessingWorker(
                 applicationContext,
                 engine.dartExecutor.binaryMessenger,
             )
+            val notificationBridge = ReviewNotificationBridge(
+                applicationContext,
+                engine.dartExecutor.binaryMessenger,
+            )
             val terminal = CompletableDeferred<HeadlessTerminalMessage>()
             val channel = MethodChannel(
                 engine.dartExecutor.binaryMessenger,
@@ -92,7 +96,13 @@ internal class MemoShotBackgroundProcessingWorker(
                     DART_ENTRYPOINT,
                 ),
             )
-            HeadlessEngineSession(engine, inboxBridge, channel, terminal)
+            HeadlessEngineSession(
+                engine,
+                inboxBridge,
+                notificationBridge,
+                channel,
+                terminal,
+            )
         }
 
     private fun mapResult(message: HeadlessTerminalMessage): Result {
@@ -129,12 +139,14 @@ internal class MemoShotBackgroundProcessingWorker(
     private class HeadlessEngineSession(
         private val engine: FlutterEngine,
         private val inboxBridge: BackgroundScreenshotInboxBridge,
+        private val notificationBridge: ReviewNotificationBridge,
         private val channel: MethodChannel,
         val terminal: CompletableDeferred<HeadlessTerminalMessage>,
     ) {
         fun dispose() {
             channel.setMethodCallHandler(null)
             inboxBridge.dispose()
+            notificationBridge.dispose()
             engine.destroy()
         }
     }

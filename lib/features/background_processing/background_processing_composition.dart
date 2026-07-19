@@ -2,6 +2,7 @@ import '../../core/automatic_import/method_channel_automatic_screenshot_source.d
 import '../../core/database/contexto_database.dart';
 import '../../core/media/screenshot_storage.dart';
 import '../../core/ocr/ml_kit_text_recognition_service.dart';
+import '../../core/notifications/method_channel_review_notification_gateway.dart';
 import '../automatic_import/data/automatic_import_settings_repository.dart';
 import '../categories/data/category_repository.dart';
 import '../categories/data/category_store.dart';
@@ -14,6 +15,7 @@ import '../ocr/data/ocr_result_store.dart';
 import '../processing/data/ocr_job_scheduler.dart';
 import '../processing/data/ocr_queue_processor.dart';
 import '../processing/data/processing_job_store.dart';
+import '../review_notifications/application/review_notification_coordinator.dart';
 import 'background_processing_runner.dart';
 
 class BackgroundProcessingComposition {
@@ -22,12 +24,14 @@ class BackgroundProcessingComposition {
     required this._database,
     required this._ocrQueue,
     required this._classificationQueue,
+    required this.notificationCoordinator,
   });
 
   final ContextoDatabase _database;
   final LocalOcrQueueProcessor _ocrQueue;
   final LocalClassificationQueueProcessor _classificationQueue;
   final BackgroundProcessingRunner runner;
+  final ReviewNotificationCoordinator notificationCoordinator;
 
   static BackgroundProcessingComposition create() {
     final database = ContextoDatabase();
@@ -72,11 +76,16 @@ class BackgroundProcessingComposition {
       ocrQueue: ocrQueue,
       classificationQueue: classificationQueue,
     );
+    final notificationCoordinator = ReviewNotificationCoordinator(
+      snapshotRepository: classificationRepository,
+      gateway: const MethodChannelReviewNotificationGateway(),
+    );
     return BackgroundProcessingComposition._(
       database: database,
       ocrQueue: ocrQueue,
       classificationQueue: classificationQueue,
       runner: runner,
+      notificationCoordinator: notificationCoordinator,
     );
   }
 
