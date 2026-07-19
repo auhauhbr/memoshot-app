@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/media_store/media_store_content.dart';
 import '../../../core/text/text_normalizer.dart';
 import '../../categories/data/category_repository.dart';
 import '../../categories/domain/category.dart';
@@ -28,6 +29,7 @@ class ReviewSuggestionPage extends StatefulWidget {
     required this.ocrQueue,
     required this.categoryRepository,
     required this.tagRepository,
+    this.thumbnailGateway = const MethodChannelMediaStoreContentGateway(),
     super.key,
   });
 
@@ -38,6 +40,7 @@ class ReviewSuggestionPage extends StatefulWidget {
   final OcrQueue ocrQueue;
   final CategoryRepository categoryRepository;
   final TagRepository tagRepository;
+  final MediaStoreContentGateway thumbnailGateway;
 
   @override
   State<ReviewSuggestionPage> createState() => _ReviewSuggestionPageState();
@@ -286,6 +289,9 @@ class _ReviewSuggestionPageState extends State<ReviewSuggestionPage> {
                             key: const Key('review-suggestion-image'),
                             fit: BoxFit.contain,
                             showMessage: true,
+                            gateway: widget.thumbnailGateway,
+                            cacheWidth: regularThumbnailDecodeSize,
+                            cacheHeight: regularThumbnailDecodeSize,
                           ),
                         ),
                         const SizedBox(height: 12),

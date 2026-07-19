@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
+import '../../../core/media_store/media_store_content.dart';
 import '../../categories/data/category_repository.dart';
 import '../../library/data/media_item_repository.dart';
 import '../../library/presentation/media_item_thumbnail.dart';
@@ -11,6 +13,8 @@ import '../../tags/data/tag_repository.dart';
 import '../application/review_queue.dart';
 import '../application/review_decision.dart';
 import 'review_suggestion_page.dart';
+
+const reviewQueueThumbnailCacheExtent = 600.0;
 
 class ReviewQueuePage extends StatefulWidget {
   const ReviewQueuePage({
@@ -22,6 +26,7 @@ class ReviewQueuePage extends StatefulWidget {
     required this.categoryRepository,
     required this.tagRepository,
     this.onQueueChanged,
+    this.thumbnailGateway = const MethodChannelMediaStoreContentGateway(),
     super.key,
   });
 
@@ -33,6 +38,7 @@ class ReviewQueuePage extends StatefulWidget {
   final CategoryRepository categoryRepository;
   final TagRepository tagRepository;
   final Future<void> Function()? onQueueChanged;
+  final MediaStoreContentGateway thumbnailGateway;
 
   @override
   ReviewQueuePageState createState() => ReviewQueuePageState();
@@ -87,6 +93,7 @@ class ReviewQueuePageState extends State<ReviewQueuePage> {
           ocrQueue: widget.ocrQueue,
           categoryRepository: widget.categoryRepository,
           tagRepository: widget.tagRepository,
+          thumbnailGateway: widget.thumbnailGateway,
         ),
       ),
     );
@@ -144,12 +151,17 @@ class ReviewQueuePageState extends State<ReviewQueuePage> {
               )
             : ListView.separated(
                 key: const PageStorageKey('review-queue-list'),
+                scrollCacheExtent: const ScrollCacheExtent.pixels(
+                  reviewQueueThumbnailCacheExtent,
+                ),
                 padding: const EdgeInsets.all(16),
                 itemCount: _items.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 12),
                 itemBuilder: (context, index) => _ReviewQueueCard(
+                  key: ValueKey('review-card-${_items[index].mediaItem.id}'),
                   item: _items[index],
                   onTap: () => _openSuggestion(_items[index]),
+                  thumbnailGateway: widget.thumbnailGateway,
                 ),
               ),
       ),
@@ -158,12 +170,18 @@ class ReviewQueuePageState extends State<ReviewQueuePage> {
 }
 
 class _ReviewQueueCard extends StatelessWidget {
-  const _ReviewQueueCard({required this.item, required this.onTap});
+  const _ReviewQueueCard({
+    required this.item,
+    required this.onTap,
+    required this.thumbnailGateway,
+    super.key,
+  });
 
   static const visibleTagLimit = 3;
 
   final ReviewQueueItem item;
   final VoidCallback onTap;
+  final MediaStoreContentGateway thumbnailGateway;
 
   @override
   Widget build(BuildContext context) {
@@ -191,7 +209,11 @@ class _ReviewQueueCard extends StatelessWidget {
                     height: 88,
                     child: MediaItemThumbnail(
                       mediaItem: item.mediaItem,
+                      key: ValueKey('review-thumbnail-${item.mediaItem.id}'),
                       fit: BoxFit.cover,
+                      gateway: thumbnailGateway,
+                      cacheWidth: compactThumbnailDecodeSize,
+                      cacheHeight: compactThumbnailDecodeSize,
                     ),
                   ),
                 ),

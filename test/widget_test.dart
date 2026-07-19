@@ -4168,10 +4168,7 @@ void main() {
       await tester.pumpAndSettle();
       await openFirstScreenshot(tester);
 
-      expect(
-        find.text('Esta imagem não está mais disponível no dispositivo.'),
-        findsOneWidget,
-      );
+      expect(find.text('Imagem indisponível.'), findsOneWidget);
       expect(find.textContaining('content://'), findsNothing);
       expect(find.textContaining('external_primary:1'), findsNothing);
       await tapRemoveFromMemoShot(tester);

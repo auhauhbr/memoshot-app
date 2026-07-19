@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memoshot/core/theme/app_theme.dart';
+import 'package:memoshot/core/media_store/media_store_content.dart';
 import 'package:memoshot/features/categories/data/category_repository.dart';
 import 'package:memoshot/features/categories/domain/category.dart';
 import 'package:memoshot/features/classification/application/review_queue.dart';
@@ -104,6 +106,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('privado'), findsNothing);
+    await tester.ensureVisible(find.text('Tentar novamente'));
     await tester.tap(find.text('Tentar novamente'));
     await tester.pumpAndSettle();
     expect(find.text('Tudo organizado'), findsOneWidget);
@@ -381,6 +384,130 @@ void main() {
     expect(find.text('Tudo organizado'), findsOneWidget);
     expect(find.text('Sugestão rejeitada.'), findsOneWidget);
   });
+
+  testWidgets('cards e miniaturas usam identidade estável por mídia', (
+    tester,
+  ) async {
+    final gateway = _ThumbnailGateway();
+    final suggestions = _SuggestionRepository(
+      pending: [_suggestion(1), _suggestion(2)],
+    );
+    await tester.pumpWidget(
+      _app(
+        suggestions,
+        _MediaRepository([_referenceMedia(1), _referenceMedia(2)]),
+        thumbnailGateway: gateway,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('review-card-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('review-card-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('review-thumbnail-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('review-thumbnail-2')), findsOneWidget);
+  });
+
+  testWidgets('fila grande antecipa área limitada sem carregar tudo', (
+    tester,
+  ) async {
+    final gateway = _ThumbnailGateway(keepPending: true);
+    final suggestions = [for (var id = 1; id <= 100; id++) _suggestion(id)];
+    final media = [for (var id = 1; id <= 100; id++) _referenceMedia(id)];
+    await tester.pumpWidget(
+      _app(
+        _SuggestionRepository(pending: suggestions),
+        _MediaRepository(media),
+        thumbnailGateway: gateway,
+      ),
+    );
+    await tester.pump();
+
+    final initiallyRequested = gateway.requestedIds.length;
+    expect(initiallyRequested, greaterThan(0));
+    expect(initiallyRequested, lessThan(100));
+    expect(find.byKey(const Key('media-thumbnail-loading')), findsWidgets);
+    expect(reviewQueueThumbnailCacheExtent, 600);
+
+    await tester.fling(find.byType(ListView), const Offset(0, -1800), 5000);
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(gateway.requestedIds.length, greaterThan(initiallyRequested));
+    expect(gateway.requestedIds.length, lessThan(100));
+    expect(find.byKey(const Key('media-thumbnail-loading')), findsWidgets);
+  });
+
+  testWidgets('remoção do primeiro card não transfere estado ao seguinte', (
+    tester,
+  ) async {
+    final gateway = _ThumbnailGateway();
+    final suggestions = _SuggestionRepository(
+      pending: [_suggestion(1), _suggestion(2)],
+    );
+    final decisions = _DecisionProcessor(suggestions);
+    await tester.pumpWidget(
+      _app(
+        suggestions,
+        _MediaRepository([_referenceMedia(1), _referenceMedia(2)]),
+        decisionProcessor: decisions,
+        thumbnailGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('review-item-1')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('reject-suggestion')));
+    await tester.tap(find.byKey(const Key('reject-suggestion')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('confirm-review-rejection')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('review-card-1')), findsNothing);
+    expect(find.byKey(const ValueKey('review-thumbnail-1')), findsNothing);
+    expect(find.byKey(const ValueKey('review-card-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('review-thumbnail-2')), findsOneWidget);
+  });
+
+  testWidgets('imagem da sugestão mantém Future e permite retry real', (
+    tester,
+  ) async {
+    final gateway = _ThumbnailGateway(
+      responses: {
+        1: [
+          _availableThumbnail(),
+          const ReferencedMediaThumbnail(
+            availability: ReferencedMediaAvailability.temporaryFailure,
+          ),
+          _availableThumbnail(),
+        ],
+      },
+    );
+    await tester.pumpWidget(
+      _app(
+        _SuggestionRepository(pending: [_suggestion(1)]),
+        _MediaRepository([_referenceMedia(1)]),
+        thumbnailGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('review-item-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Não foi possível carregar'), findsOneWidget);
+    expect(gateway.requestedIds.where((id) => id == 1), hasLength(2));
+    await tester.ensureVisible(find.text('Ajustar'));
+    await tester.tap(find.text('Ajustar'));
+    await tester.pump();
+    expect(gateway.requestedIds.where((id) => id == 1), hasLength(2));
+
+    await tester.ensureVisible(find.text('Tentar novamente'));
+    await tester.tap(find.text('Tentar novamente'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('referenced-thumbnail-image-1')),
+      findsOneWidget,
+    );
+    expect(gateway.requestedIds.where((id) => id == 1), hasLength(3));
+  });
 }
 
 Widget _app(
@@ -390,6 +517,7 @@ Widget _app(
   ReviewDecisionProcessor? decisionProcessor,
   CategoryRepository? categoryRepository,
   TagRepository? tagRepository,
+  MediaStoreContentGateway? thumbnailGateway,
 }) {
   final ocr = _OcrRepository();
   return MaterialApp(
@@ -406,6 +534,7 @@ Widget _app(
       ocrQueue: _OcrQueue(),
       categoryRepository: categoryRepository ?? _CategoryRepository(),
       tagRepository: tagRepository ?? _TagRepository(),
+      thumbnailGateway: thumbnailGateway ?? _ThumbnailGateway(),
     ),
   );
 }
@@ -601,6 +730,57 @@ MediaItem _media(int id, String path, {DateTime? capturedAt}) {
   );
 }
 
+MediaItem _referenceMedia(int id) => MediaItem(
+  id: id,
+  location: MediaStoreReferenceLocation(
+    sourceKey: 'external_primary:$id',
+    mediaStoreId: id,
+    volumeName: 'external_primary',
+    contentUri: 'content://media/external_primary/images/media/$id',
+  ),
+  importedAt: DateTime(2026, 7, 18),
+  capturedAt: DateTime(2026, 7, 18),
+  sourceMode: 'mediaStoreReference',
+  status: 'ready',
+);
+
+ReferencedMediaThumbnail _availableThumbnail() => ReferencedMediaThumbnail(
+  availability: ReferencedMediaAvailability.available,
+  bytes: base64Decode(_minimalPng),
+);
+
+class _ThumbnailGateway implements MediaStoreContentGateway {
+  _ThumbnailGateway({
+    this.keepPending = false,
+    Map<int, List<ReferencedMediaThumbnail>> responses = const {},
+  }) : _responses = {
+         for (final entry in responses.entries) entry.key: [...entry.value],
+       };
+
+  final bool keepPending;
+  final Map<int, List<ReferencedMediaThumbnail>> _responses;
+  final List<int> requestedIds = [];
+
+  @override
+  Future<ReferencedMediaAvailability> checkAvailability(
+    MediaStoreReferenceLocation location,
+  ) async => ReferencedMediaAvailability.available;
+
+  @override
+  Future<ReferencedMediaThumbnail> loadThumbnail(
+    MediaStoreReferenceLocation location,
+  ) {
+    requestedIds.add(location.mediaStoreId);
+    if (keepPending) return Completer<ReferencedMediaThumbnail>().future;
+    final responses = _responses[location.mediaStoreId];
+    return Future.value(
+      responses == null || responses.isEmpty
+          ? _availableThumbnail()
+          : responses.removeAt(0),
+    );
+  }
+}
+
 File _image(Directory directory, String name) {
   return File('${directory.path}/$name')..writeAsBytesSync(const <int>[
     0x89,
@@ -613,3 +793,6 @@ File _image(Directory directory, String name) {
     0x0A,
   ]);
 }
+
+const _minimalPng =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
