@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 
+import '../../../core/ocr/media_ocr_input.dart';
 import '../../../core/ocr/text_recognition_service.dart';
 import '../../classification/application/classification_queue_processor.dart';
 import '../../library/domain/media_item.dart';
@@ -46,6 +46,7 @@ class LocalOcrQueueProcessor implements OcrQueue, HeadlessOcrQueue {
     required ProcessingJobStore jobStore,
     required OcrResultStore resultStore,
     required TextRecognitionService recognitionService,
+    required MediaOcrInputResolver inputResolver,
     ClassificationJobScheduler? classificationJobScheduler,
     ClassificationQueue? classificationQueue,
     DateTime Function() now = DateTime.now,
@@ -54,6 +55,7 @@ class LocalOcrQueueProcessor implements OcrQueue, HeadlessOcrQueue {
          jobStore,
          resultStore,
          recognitionService,
+         inputResolver,
          classificationJobScheduler,
          classificationQueue,
          now,
@@ -64,6 +66,7 @@ class LocalOcrQueueProcessor implements OcrQueue, HeadlessOcrQueue {
     this._jobStore,
     this._resultStore,
     this._recognitionService,
+    this._inputResolver,
     this._classificationJobScheduler,
     this._classificationQueue,
     this._now,
@@ -73,6 +76,7 @@ class LocalOcrQueueProcessor implements OcrQueue, HeadlessOcrQueue {
   final ProcessingJobStore _jobStore;
   final OcrResultStore _resultStore;
   final TextRecognitionService _recognitionService;
+  final MediaOcrInputResolver _inputResolver;
   final ClassificationJobScheduler? _classificationJobScheduler;
   final ClassificationQueue? _classificationQueue;
   final DateTime Function() _now;
@@ -191,6 +195,7 @@ class LocalOcrQueueProcessor implements OcrQueue, HeadlessOcrQueue {
   }
 
   Future<void> _process(ProcessingJob job) async {
+    OcrInputLease? lease;
     try {
       final existing = await _resultStore.findByMediaItemId(job.mediaItemId);
       if (existing != null && job.errorCode != 'manual_retry') {
@@ -205,14 +210,8 @@ class LocalOcrQueueProcessor implements OcrQueue, HeadlessOcrQueue {
       if (mediaItem == null) {
         return;
       }
-      final privatePath = mediaItem.privatePath;
-      if (privatePath == null || !await File(privatePath).exists()) {
-        await _jobStore.markFailed(job.id, 'file_unavailable');
-        _notify(job.mediaItemId);
-        return;
-      }
-
-      final output = await _recognitionService.recognize(privatePath);
+      lease = await _inputResolver.resolve(mediaItem);
+      final output = await _recognitionService.recognize(lease.localPath);
       if (!await _jobStore.mediaItemExists(job.mediaItemId)) {
         return;
       }
@@ -233,13 +232,25 @@ class LocalOcrQueueProcessor implements OcrQueue, HeadlessOcrQueue {
       }
       await _jobStore.markCompleted(job.id);
       _notify(job.mediaItemId);
+    } on MediaOcrInputException catch (error) {
+      await _markFailed(job, error.code);
     } catch (_) {
+      await _markFailed(job, 'ocr_failed');
+    } finally {
       try {
-        await _jobStore.markFailed(job.id, 'ocr_failed');
-        _notify(job.mediaItemId);
+        await lease?.release();
       } catch (_) {
-        // O item pode ter sido removido durante o processamento.
+        // A falha de liberação não substitui o resultado principal do OCR.
       }
+    }
+  }
+
+  Future<void> _markFailed(ProcessingJob job, String code) async {
+    try {
+      await _jobStore.markFailed(job.id, code);
+      _notify(job.mediaItemId);
+    } catch (_) {
+      // O item pode ter sido removido durante o processamento.
     }
   }
 
@@ -275,6 +286,7 @@ class LocalOcrQueueProcessor implements OcrQueue, HeadlessOcrQueue {
   Future<void> close() async {
     _closed = true;
     await _draining;
+    await _inputResolver.close();
     await _changes.close();
   }
 }

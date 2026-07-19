@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:memoshot/core/database/contexto_database.dart'
     show ContextoDatabase;
 import 'package:memoshot/core/ocr/text_recognition_service.dart';
+import 'package:memoshot/core/ocr/media_ocr_input.dart';
 import 'package:memoshot/features/classification/application/classification_processor.dart';
 import 'package:memoshot/features/classification/application/classification_queue_processor.dart';
 import 'package:memoshot/features/classification/application/automatic_classification.dart';
@@ -228,6 +229,7 @@ void main() {
       jobStore: jobStore,
       resultStore: resultStore,
       recognitionService: recognition,
+      inputResolver: _privateInputResolver(),
       classificationJobScheduler: classificationScheduler,
     );
     addTearDown(queue.close);
@@ -264,6 +266,7 @@ void main() {
         jobStore: jobStore,
         resultStore: resultStore,
         recognitionService: recognition,
+        inputResolver: _privateInputResolver(),
         classificationJobScheduler: failingScheduler,
       );
 
@@ -281,6 +284,7 @@ void main() {
         jobStore: jobStore,
         resultStore: resultStore,
         recognitionService: recognition,
+        inputResolver: _privateInputResolver(),
         classificationJobScheduler: classificationScheduler,
         processingExpiration: Duration.zero,
       );
@@ -470,6 +474,122 @@ void main() {
     expect(service.callCount, 0);
     expect((await jobStore.findOcrJob(item.id))?.errorCode, 'file_unavailable');
   });
+
+  test(
+    'referência MediaStore usa temporário, persiste OCR e agenda classificação',
+    () async {
+      final temporary = File('${temporaryDirectory.path}/ocr-temporary.png')
+        ..writeAsBytesSync([9, 8, 7]);
+      final item = await createReferencedMediaItem(mediaStore, 70);
+      await scheduler.schedule(item.id);
+      final bridge = _QueueMediaStoreOcrBridge(temporary.path);
+      final recognition = FakeRecognitionService(texts: ['Texto referenciado']);
+      final classificationJobs = DriftClassificationJobStore(database);
+      final queue = LocalOcrQueueProcessor(
+        jobStore: jobStore,
+        resultStore: resultStore,
+        recognitionService: recognition,
+        inputResolver: LocalMediaOcrInputResolver(bridge),
+        classificationJobScheduler: LocalClassificationJobScheduler(
+          store: classificationJobs,
+          engineVersion: currentClassificationEngineVersion,
+          now: () => DateTime.utc(2026, 7, 19),
+        ),
+      );
+      addTearDown(queue.close);
+
+      queue.signal();
+      await waitForState(queue, item.id, OcrItemState.completedWithText);
+
+      final stored = await jobStore.findMediaItem(item.id);
+      expect(recognition.paths, [temporary.path]);
+      expect(bridge.releasedTokens, ['token-1']);
+      expect(
+        (await resultStore.findByMediaItemId(item.id))?.fullText,
+        'Texto referenciado',
+      );
+      expect(
+        (await jobStore.findOcrJob(item.id))?.status,
+        ProcessingJobStatus.completed,
+      );
+      expect(await classificationJobs.findByMediaItemId(item.id), isNotNull);
+      expect(stored?.privatePath, isNull);
+      expect(stored?.mediaHash, isNull);
+      expect(stored?.sourceKey, 'external_primary:70');
+    },
+  );
+
+  test('falha do ML Kit ainda libera temporário referenciado', () async {
+    final item = await createReferencedMediaItem(mediaStore, 71);
+    await scheduler.schedule(item.id);
+    final bridge = _QueueMediaStoreOcrBridge(
+      '${temporaryDirectory.path}/ml-kit-failure.png',
+    );
+    final queue = LocalOcrQueueProcessor(
+      jobStore: jobStore,
+      resultStore: resultStore,
+      recognitionService: FakeRecognitionService(error: StateError('falha')),
+      inputResolver: LocalMediaOcrInputResolver(bridge),
+    );
+    addTearDown(queue.close);
+
+    queue.signal();
+    await waitForState(queue, item.id, OcrItemState.failed);
+
+    expect(bridge.releasedTokens, ['token-1']);
+    expect((await jobStore.findOcrJob(item.id))?.errorCode, 'ocr_failed');
+  });
+
+  test('falha ao persistir OCR ainda libera temporário referenciado', () async {
+    final item = await createReferencedMediaItem(mediaStore, 72);
+    await scheduler.schedule(item.id);
+    final bridge = _QueueMediaStoreOcrBridge(
+      '${temporaryDirectory.path}/persistence-failure.png',
+    );
+    final queue = LocalOcrQueueProcessor(
+      jobStore: jobStore,
+      resultStore: _FailingSaveOcrResultStore(resultStore),
+      recognitionService: FakeRecognitionService(texts: ['não persiste']),
+      inputResolver: LocalMediaOcrInputResolver(bridge),
+    );
+    addTearDown(queue.close);
+
+    queue.signal();
+    await waitForState(queue, item.id, OcrItemState.failed);
+
+    expect(bridge.releasedTokens, ['token-1']);
+    expect((await jobStore.findOcrJob(item.id))?.errorCode, 'ocr_failed');
+    expect(await resultStore.findByMediaItemId(item.id), isNull);
+  });
+
+  for (final code in <String>[
+    MediaOcrInputFailureCode.referencedSourceUnavailable,
+    MediaOcrInputFailureCode.referencedSourcePermissionDenied,
+    MediaOcrInputFailureCode.referencedSourceTooLarge,
+    MediaOcrInputFailureCode.referencedSourceInvalid,
+    MediaOcrInputFailureCode.unsupportedReferencedMimeType,
+    MediaOcrInputFailureCode.referencedSourceTemporaryFailure,
+    MediaOcrInputFailureCode.temporaryFileFailure,
+  ]) {
+    test('falha controlada do resolver persiste somente $code', () async {
+      final marker = 80 + code.length;
+      final item = await createReferencedMediaItem(mediaStore, marker);
+      await scheduler.schedule(item.id);
+      final queue = LocalOcrQueueProcessor(
+        jobStore: jobStore,
+        resultStore: resultStore,
+        recognitionService: FakeRecognitionService(texts: ['não executa']),
+        inputResolver: _FailingMediaOcrInputResolver(code),
+      );
+      addTearDown(queue.close);
+
+      queue.signal();
+      await waitForState(queue, item.id, OcrItemState.failed);
+
+      expect((await jobStore.findOcrJob(item.id))?.errorCode, code);
+      expect(await resultStore.findByMediaItemId(item.id), isNull);
+    });
+  }
 
   test('nova tentativa substitui resultado anterior', () async {
     final item = await createMediaItem(mediaStore, temporaryDirectory, 11);
@@ -663,10 +783,23 @@ LocalOcrQueueProcessor createQueue(
     jobStore: jobStore,
     resultStore: resultStore,
     recognitionService: service,
+    inputResolver: _privateInputResolver(),
     classificationJobScheduler: bridge,
     classificationQueue: bridge,
     processingExpiration: processingExpiration,
   );
+}
+
+MediaOcrInputResolver _privateInputResolver() =>
+    LocalMediaOcrInputResolver(_UnexpectedMediaStoreOcrBridge());
+
+class _UnexpectedMediaStoreOcrBridge implements MediaStoreOcrInputBridge {
+  @override
+  Future<ReferencedOcrInput> prepare(MediaStoreReferenceLocation location) =>
+      throw StateError('Referência inesperada neste teste.');
+
+  @override
+  Future<void> release(String token) async {}
 }
 
 Future<void> waitForState(
@@ -706,9 +839,11 @@ class FakeRecognitionService implements TextRecognitionService {
   int callCount = 0;
   int concurrentCalls = 0;
   int maxConcurrentCalls = 0;
+  final List<String> paths = [];
 
   @override
   Future<TextRecognitionOutput> recognize(String imagePath) async {
+    paths.add(imagePath);
     final index = callCount++;
     concurrentCalls++;
     if (concurrentCalls > maxConcurrentCalls) {
@@ -727,6 +862,52 @@ class FakeRecognitionService implements TextRecognitionService {
       concurrentCalls--;
     }
   }
+}
+
+class _QueueMediaStoreOcrBridge implements MediaStoreOcrInputBridge {
+  _QueueMediaStoreOcrBridge(this.path);
+
+  final String path;
+  int prepareCount = 0;
+  final List<String> releasedTokens = [];
+
+  @override
+  Future<ReferencedOcrInput> prepare(
+    MediaStoreReferenceLocation location,
+  ) async {
+    prepareCount++;
+    return ReferencedOcrInput(localPath: path, token: 'token-$prepareCount');
+  }
+
+  @override
+  Future<void> release(String token) async => releasedTokens.add(token);
+}
+
+class _FailingMediaOcrInputResolver implements MediaOcrInputResolver {
+  _FailingMediaOcrInputResolver(this.code);
+
+  final String code;
+
+  @override
+  Future<OcrInputLease> resolve(MediaItem mediaItem) =>
+      Future<OcrInputLease>.error(MediaOcrInputException(code));
+
+  @override
+  Future<void> close() async {}
+}
+
+class _FailingSaveOcrResultStore implements OcrResultStore {
+  _FailingSaveOcrResultStore(this.delegate);
+
+  final OcrResultStore delegate;
+
+  @override
+  Future<OcrResult?> findByMediaItemId(int mediaItemId) =>
+      delegate.findByMediaItemId(mediaItemId);
+
+  @override
+  Future<void> save(OcrResult result) =>
+      Future<void>.error(StateError('falha de persistência'));
 }
 
 class FakeClassificationProcessor implements ClassificationProcessor {
@@ -858,4 +1039,25 @@ Future<MediaItem> createMediaItem(
     status: 'ready',
     importOrigin: origin,
   );
+}
+
+Future<MediaItem> createReferencedMediaItem(
+  DriftMediaItemStore store,
+  int marker,
+) async {
+  final location = MediaStoreReferenceLocation(
+    sourceKey: 'external_primary:$marker',
+    mediaStoreId: marker,
+    volumeName: 'external_primary',
+    contentUri: 'content://media/external_primary/images/media/$marker',
+  );
+  final id = await store.insertMediaStoreReference(
+    location: location,
+    mimeType: 'image/png',
+    importedAt: DateTime(2026, 1, 1),
+    capturedAt: DateTime(2025, 12, 31),
+    sourceMode: 'mediaStoreReference',
+    status: 'ready',
+  );
+  return (await store.findById(id))!;
 }

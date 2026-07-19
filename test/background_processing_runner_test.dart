@@ -8,6 +8,7 @@ import 'package:memoshot/core/database/contexto_database.dart'
     show ContextoDatabase;
 import 'package:memoshot/core/media/screenshot_storage.dart';
 import 'package:memoshot/core/ocr/text_recognition_service.dart';
+import 'package:memoshot/core/ocr/media_ocr_input.dart';
 import 'package:memoshot/features/automatic_import/data/automatic_import_settings_repository.dart';
 import 'package:memoshot/features/automatic_import/domain/automatic_import_settings.dart';
 import 'package:memoshot/features/background_processing/background_processing_runner.dart';
@@ -331,6 +332,9 @@ void main() {
         jobStore: processingStore,
         resultStore: ocrStore,
         recognitionService: recognition,
+        inputResolver: LocalMediaOcrInputResolver(
+          _UnexpectedBackgroundMediaStoreOcrBridge(),
+        ),
         classificationJobScheduler: createLocalClassificationJobScheduler(
           database,
         ),
@@ -364,6 +368,60 @@ void main() {
       expect(source.entries, isEmpty);
     },
   );
+
+  test('runner headless processa referência e libera temporário', () async {
+    final database = ContextoDatabase.forTesting(NativeDatabase.memory());
+    final processingStore = DriftProcessingJobStore(database);
+    final ocrStore = DriftOcrResultStore(database);
+    final settings = DriftAutomaticImportSettingsRepository(database);
+    await settings.enable(baselineMediaId: 0);
+    final mediaStore = DriftMediaItemStore(database);
+    final mediaRepository = LocalMediaItemRepository(
+      store: mediaStore,
+      storage: PrivateScreenshotStorage(
+        documentsDirectory: () async => temporaryDirectory,
+      ),
+    );
+    final location = MediaStoreReferenceLocation(
+      sourceKey: 'external_primary:501',
+      mediaStoreId: 501,
+      volumeName: 'external_primary',
+      contentUri: 'content://media/external_primary/images/media/501',
+    );
+    final item = await mediaRepository.createMediaStoreReference(
+      location: location,
+      mimeType: 'image/png',
+      capturedAt: DateTime.utc(2026, 7, 18),
+    );
+    await LocalOcrJobScheduler(processingStore).schedule(item.id);
+    final temporary = File('${temporaryDirectory.path}/headless-reference.png')
+      ..writeAsBytesSync([1, 2, 3]);
+    final bridge = _HeadlessReferencedOcrBridge(temporary.path);
+    final ocrQueue = LocalOcrQueueProcessor(
+      jobStore: processingStore,
+      resultStore: ocrStore,
+      recognitionService: _StrongRecognitionService(),
+      inputResolver: LocalMediaOcrInputResolver(bridge),
+    );
+    addTearDown(() async {
+      await ocrQueue.close();
+      await database.close();
+    });
+
+    final summary = await BackgroundProcessingRunner(
+      settingsRepository: settings,
+      inboxSource: _FakeSource(),
+      mediaRepository: mediaRepository,
+      ocrQueue: ocrQueue,
+      classificationQueue: _FakeClassificationQueue(),
+    ).run();
+
+    expect(summary.ocrProcessedCount, 1);
+    expect(await ocrStore.findByMediaItemId(item.id), isNotNull);
+    expect(bridge.releasedTokens, ['headless-token']);
+    expect((await mediaStore.findById(item.id))?.privatePath, isNull);
+    expect((await mediaStore.findById(item.id))?.mediaHash, isNull);
+  });
 }
 
 BackgroundProcessingRunner _runner({
@@ -684,4 +742,29 @@ class _StrongRecognitionService implements TextRecognitionService {
       engineVersion: '1',
     );
   }
+}
+
+class _HeadlessReferencedOcrBridge implements MediaStoreOcrInputBridge {
+  _HeadlessReferencedOcrBridge(this.path);
+
+  final String path;
+  final List<String> releasedTokens = [];
+
+  @override
+  Future<ReferencedOcrInput> prepare(
+    MediaStoreReferenceLocation location,
+  ) async => ReferencedOcrInput(localPath: path, token: 'headless-token');
+
+  @override
+  Future<void> release(String token) async => releasedTokens.add(token);
+}
+
+class _UnexpectedBackgroundMediaStoreOcrBridge
+    implements MediaStoreOcrInputBridge {
+  @override
+  Future<ReferencedOcrInput> prepare(MediaStoreReferenceLocation location) =>
+      throw StateError('Referência inesperada neste teste.');
+
+  @override
+  Future<void> release(String token) async {}
 }

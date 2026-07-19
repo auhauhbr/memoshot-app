@@ -2,6 +2,7 @@ import '../../core/automatic_import/method_channel_automatic_screenshot_source.d
 import '../../core/database/contexto_database.dart';
 import '../../core/media/screenshot_storage.dart';
 import '../../core/ocr/ml_kit_text_recognition_service.dart';
+import '../../core/ocr/media_ocr_input.dart';
 import '../../core/notifications/method_channel_review_notification_gateway.dart';
 import '../automatic_import/data/automatic_import_settings_repository.dart';
 import '../categories/data/category_repository.dart';
@@ -77,6 +78,7 @@ class BackgroundProcessingComposition {
       jobStore: processingStore,
       resultStore: ocrResultStore,
       recognitionService: const MlKitTextRecognitionService(),
+      inputResolver: createMediaOcrInputResolver(),
       classificationJobScheduler: createLocalClassificationJobScheduler(
         database,
       ),

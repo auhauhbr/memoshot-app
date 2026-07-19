@@ -11,6 +11,7 @@ class MainActivity : FlutterActivity() {
     private var preferencesBridge: AppPreferencesBridge? = null
     private var existingScreenshotScannerBridge: ExistingScreenshotScannerBridge? = null
     private var mediaStoreContentBridge: MediaStoreContentBridge? = null
+    private var mediaStoreOcrInputBridge: MediaStoreOcrInputBridge? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -30,6 +31,10 @@ class MainActivity : FlutterActivity() {
             messenger = flutterEngine.dartExecutor.binaryMessenger,
         )
         mediaStoreContentBridge = MediaStoreContentBridge(
+            context = applicationContext,
+            messenger = flutterEngine.dartExecutor.binaryMessenger,
+        )
+        mediaStoreOcrInputBridge = MediaStoreOcrInputBridge(
             context = applicationContext,
             messenger = flutterEngine.dartExecutor.binaryMessenger,
         )
@@ -69,6 +74,8 @@ class MainActivity : FlutterActivity() {
         existingScreenshotScannerBridge = null
         mediaStoreContentBridge?.dispose()
         mediaStoreContentBridge = null
+        mediaStoreOcrInputBridge?.dispose()
+        mediaStoreOcrInputBridge = null
         FlutterEngineRuntimeState.detachUiEngine()
         val processingScheduler = BackgroundProcessingScheduler(applicationContext)
         processingScheduler.enqueueIfEnabled()

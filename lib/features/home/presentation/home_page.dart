@@ -12,6 +12,7 @@ import '../../../core/media/screenshot_storage.dart';
 import '../../../core/media_store/existing_screenshot_scanner.dart';
 import '../../../core/media_store/media_store_content.dart';
 import '../../../core/ocr/ml_kit_text_recognition_service.dart';
+import '../../../core/ocr/media_ocr_input.dart';
 import '../../../core/sharing/incoming_share_source.dart';
 import '../../../core/sharing/receive_sharing_intent_source.dart';
 import '../../../core/text/text_normalizer.dart';
@@ -73,6 +74,7 @@ class HomePage extends StatefulWidget {
     this.existingScreenshotInventoryCoordinator,
     this.historicalArchivePreparationCoordinator,
     this.mediaStoreContentGateway,
+    this.mediaOcrInputResolver,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -92,6 +94,7 @@ class HomePage extends StatefulWidget {
   final HistoricalArchivePreparationCoordinator?
   historicalArchivePreparationCoordinator;
   final MediaStoreContentGateway? mediaStoreContentGateway;
+  final MediaOcrInputResolver? mediaOcrInputResolver;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -216,6 +219,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           jobStore: jobStore!,
           resultStore: resultStore!,
           recognitionService: const MlKitTextRecognitionService(),
+          inputResolver:
+              widget.mediaOcrInputResolver ??
+              (throw StateError('Resolver de entrada OCR não configurado.')),
           classificationJobScheduler: createLocalClassificationJobScheduler(
             database!,
           ),
