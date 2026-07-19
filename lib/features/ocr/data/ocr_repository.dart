@@ -29,11 +29,12 @@ class LocalOcrRepository implements OcrRepository {
 
   @override
   Future<OcrResult> process(MediaItem mediaItem) async {
-    if (!await File(mediaItem.privatePath).exists()) {
+    final privatePath = mediaItem.privatePath;
+    if (privatePath == null || !await File(privatePath).exists()) {
       throw const FileSystemException('Imagem privada indisponível.');
     }
 
-    final output = await _recognitionService.recognize(mediaItem.privatePath);
+    final output = await _recognitionService.recognize(privatePath);
     final result = OcrResult(
       mediaItemId: mediaItem.id,
       fullText: output.fullText,

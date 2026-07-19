@@ -38,8 +38,8 @@ void main() {
         .into(database.mediaItems)
         .insert(
           MediaItemsCompanion.insert(
-            privatePath: '/tmp/review.png',
-            internalName: 'review.png',
+            privatePath: Value('/tmp/review.png'),
+            internalName: Value('review.png'),
             importedAt: createdAt,
             sourceMode: 'photoPicker',
             status: 'ready',

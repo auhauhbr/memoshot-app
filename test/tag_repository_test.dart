@@ -189,7 +189,7 @@ void main() {
       (await (database.select(
             database.mediaItems,
           )..where((item) => item.id.equals(firstMediaId))).getSingle())
-          .privatePath,
+          .privatePath!,
     );
 
     await repository.removeFromMedia(tagId: tag.id, mediaItemId: firstMediaId);
@@ -258,8 +258,8 @@ Future<int> _insertMedia(
       .into(database.mediaItems)
       .insert(
         MediaItemsCompanion.insert(
-          privatePath: file.path,
-          internalName: name,
+          privatePath: Value(file.path),
+          internalName: Value(name),
           importedAt: DateTime(2026, 1, day),
           sourceMode: 'photoPicker',
           status: 'ready',

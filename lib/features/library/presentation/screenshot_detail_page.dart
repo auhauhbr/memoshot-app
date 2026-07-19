@@ -3,11 +3,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/media_store/media_store_content.dart';
 import '../../categories/data/category_repository.dart';
 import '../../categories/domain/category.dart';
 import '../../categories/presentation/category_selection_page.dart';
 import '../data/media_item_repository.dart';
 import '../domain/media_item.dart';
+import 'media_item_thumbnail.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../../ocr/domain/ocr_result.dart';
 import '../../processing/data/ocr_queue_processor.dart';
@@ -24,6 +26,7 @@ class ScreenshotDetailPage extends StatefulWidget {
     required this.ocrQueue,
     required this.categoryRepository,
     required this.tagRepository,
+    this.thumbnailGateway = const MethodChannelMediaStoreContentGateway(),
     super.key,
   });
 
@@ -33,6 +36,7 @@ class ScreenshotDetailPage extends StatefulWidget {
   final OcrQueue ocrQueue;
   final CategoryRepository categoryRepository;
   final TagRepository tagRepository;
+  final MediaStoreContentGateway thumbnailGateway;
 
   @override
   State<ScreenshotDetailPage> createState() => _ScreenshotDetailPageState();
@@ -58,7 +62,8 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
   @override
   void initState() {
     super.initState();
-    _fileExists = File(widget.mediaItem.privatePath).existsSync();
+    final privatePath = widget.mediaItem.privatePath;
+    _fileExists = privatePath != null && File(privatePath).existsSync();
     _queueSubscription = widget.ocrQueue.changes.listen((mediaItemId) {
       if (mediaItemId == widget.mediaItem.id) {
         _refreshOcrState();
@@ -278,9 +283,12 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remover do MemoShot?'),
-        content: const Text(
-          'A cópia salva pelo MemoShot será removida. '
-          'O arquivo original da galeria será preservado.',
+        content: Text(
+          widget.mediaItem.isMediaStoreReference
+              ? 'O item será removido somente do MemoShot. '
+                    'A imagem original continuará na galeria.'
+              : 'A cópia salva pelo MemoShot será removida. '
+                    'O arquivo original da galeria será preservado.',
         ),
         actions: [
           TextButton(
@@ -347,13 +355,13 @@ class _ScreenshotDetailPageState extends State<ScreenshotDetailPage> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     clipBehavior: Clip.antiAlias,
-                    child: _fileExists
-                        ? Image.file(
-                            File(widget.mediaItem.privatePath),
+                    child: widget.mediaItem.isMediaStoreReference || _fileExists
+                        ? MediaItemThumbnail(
                             key: const Key('detail-screenshot-image'),
+                            mediaItem: widget.mediaItem,
                             fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const _MissingImageState(),
+                            gateway: widget.thumbnailGateway,
+                            showMessage: true,
                           )
                         : const _MissingImageState(),
                   ),

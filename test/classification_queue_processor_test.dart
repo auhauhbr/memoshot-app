@@ -680,8 +680,8 @@ Future<MediaItem> _insertMedia(ContextoDatabase database, int marker) async {
       .into(database.mediaItems)
       .insert(
         MediaItemsCompanion.insert(
-          privatePath: '/privado/imagem-$marker.png',
-          internalName: 'imagem-$marker.png',
+          privatePath: Value('/privado/imagem-$marker.png'),
+          internalName: Value('imagem-$marker.png'),
           mimeType: const Value('image/png'),
           importedAt: DateTime.utc(2026, 1, 1, 0, marker % 60),
           sourceMode: 'photoPicker',

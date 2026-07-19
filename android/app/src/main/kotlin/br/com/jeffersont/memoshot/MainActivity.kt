@@ -10,6 +10,7 @@ class MainActivity : FlutterActivity() {
     private var reviewNotificationBridge: ReviewNotificationBridge? = null
     private var reviewNavigationBridge: ReviewNavigationBridge? = null
     private var existingScreenshotScannerBridge: ExistingScreenshotScannerBridge? = null
+    private var mediaStoreContentBridge: MediaStoreContentBridge? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -32,6 +33,10 @@ class MainActivity : FlutterActivity() {
             initialIntent = intent,
         )
         existingScreenshotScannerBridge = ExistingScreenshotScannerBridge(
+            context = applicationContext,
+            messenger = flutterEngine.dartExecutor.binaryMessenger,
+        )
+        mediaStoreContentBridge = MediaStoreContentBridge(
             context = applicationContext,
             messenger = flutterEngine.dartExecutor.binaryMessenger,
         )
@@ -75,6 +80,8 @@ class MainActivity : FlutterActivity() {
         reviewNavigationBridge = null
         existingScreenshotScannerBridge?.dispose()
         existingScreenshotScannerBridge = null
+        mediaStoreContentBridge?.dispose()
+        mediaStoreContentBridge = null
         FlutterEngineRuntimeState.detachUiEngine()
         BackgroundProcessingScheduler(applicationContext).enqueueIfEnabled()
         super.onDestroy()

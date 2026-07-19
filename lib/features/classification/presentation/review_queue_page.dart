@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
 import '../../categories/data/category_repository.dart';
 import '../../library/data/media_item_repository.dart';
+import '../../library/presentation/media_item_thumbnail.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../../processing/data/ocr_queue_processor.dart';
 import '../../tags/data/tag_repository.dart';
@@ -186,17 +186,12 @@ class _ReviewQueueCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(7),
-                  child: Image.file(
-                    File(item.mediaItem.privatePath),
+                  child: SizedBox(
                     width: 88,
                     height: 88,
-                    fit: BoxFit.cover,
-                    semanticLabel: 'Miniatura do print para revisão',
-                    errorBuilder: (_, _, _) => Container(
-                      width: 88,
-                      height: 88,
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      child: const Icon(Icons.broken_image_outlined),
+                    child: MediaItemThumbnail(
+                      mediaItem: item.mediaItem,
+                      fit: BoxFit.cover,
                     ),
                   ),
                 ),

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -9,6 +8,7 @@ import '../../categories/domain/category.dart';
 import '../../categories/presentation/category_tree.dart';
 import '../../categories/presentation/folder_management_dialogs.dart';
 import '../../library/data/media_item_repository.dart';
+import '../../library/presentation/media_item_thumbnail.dart';
 import '../../library/presentation/screenshot_detail_page.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../../processing/data/ocr_queue_processor.dart';
@@ -281,17 +281,11 @@ class _ReviewSuggestionPageState extends State<ReviewSuggestionPage> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           clipBehavior: Clip.antiAlias,
-                          child: Image.file(
-                            File(widget.item.mediaItem.privatePath),
+                          child: MediaItemThumbnail(
+                            mediaItem: widget.item.mediaItem,
                             key: const Key('review-suggestion-image'),
                             fit: BoxFit.contain,
-                            semanticLabel: 'Print em revisão',
-                            errorBuilder: (_, _, _) => const Center(
-                              child: Icon(
-                                Icons.broken_image_outlined,
-                                size: 38,
-                              ),
-                            ),
+                            showMessage: true,
                           ),
                         ),
                         const SizedBox(height: 12),

@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memoshot/core/database/contexto_database.dart';
@@ -311,8 +312,8 @@ void main() {
           .into(database.mediaItems)
           .insert(
             MediaItemsCompanion.insert(
-              privatePath: '/tmp/automatic.png',
-              internalName: 'automatic.png',
+              privatePath: Value('/tmp/automatic.png'),
+              internalName: Value('automatic.png'),
               importedAt: createdAt,
               sourceMode: 'photoPicker',
               status: 'ready',
@@ -547,8 +548,8 @@ void main() {
           .into(database.mediaItems)
           .insert(
             MediaItemsCompanion.insert(
-              privatePath: '/tmp/automatic-2.png',
-              internalName: 'automatic-2.png',
+              privatePath: Value('/tmp/automatic-2.png'),
+              internalName: Value('automatic-2.png'),
               importedAt: createdAt,
               sourceMode: 'photoPicker',
               status: 'ready',

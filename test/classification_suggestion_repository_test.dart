@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memoshot/core/database/contexto_database.dart';
@@ -336,8 +337,8 @@ Future<int> _insertMedia(
       .into(database.mediaItems)
       .insert(
         MediaItemsCompanion.insert(
-          privatePath: '/tmp/$name',
-          internalName: name,
+          privatePath: Value('/tmp/$name'),
+          internalName: Value(name),
           importedAt: DateTime.utc(2026),
           sourceMode: 'picker',
           status: 'ready',

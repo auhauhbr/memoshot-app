@@ -2,7 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:memoshot/core/database/contexto_database.dart'
-    show ContextoDatabase;
+    show
+        ClassificationSuggestionsCompanion,
+        ContextoDatabase,
+        MediaTagsCompanion,
+        OcrResultsCompanion,
+        TagsCompanion;
 import 'package:memoshot/core/media/file_hash_calculator.dart';
 import 'package:memoshot/core/media/screenshot_storage.dart';
 import 'package:memoshot/features/library/data/media_item_repository.dart';
@@ -14,6 +19,7 @@ import 'package:memoshot/features/ocr/domain/ocr_result.dart';
 import 'package:memoshot/features/processing/data/ocr_job_scheduler.dart';
 import 'package:memoshot/features/processing/data/processing_job_store.dart';
 import 'package:drift/native.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -59,7 +65,7 @@ void main() {
     expect(loaded.single.importOrigin, ImportOrigin.picker);
     expect(loaded.single.status, 'ready');
     expect(loaded.single.mimeType, 'image/png');
-    expect(File(loaded.single.privatePath).existsSync(), isTrue);
+    expect(File(loaded.single.privatePath!).existsSync(), isTrue);
   });
 
   test('imagem compartilhada persiste origem shared e cria job OCR', () async {
@@ -316,7 +322,7 @@ void main() {
 
     expect(result.importedItems, hasLength(1));
     expect(await store.readItems(), hasLength(1));
-    expect(File(result.importedItems.single.privatePath).existsSync(), isTrue);
+    expect(File(result.importedItems.single.privatePath!).existsSync(), isTrue);
     expect(original.existsSync(), isTrue);
   });
 
@@ -415,7 +421,7 @@ void main() {
     expect(original.readAsBytesSync(), originalBytes);
     expect(imported.importedItems.single.privatePath, isNot(original.path));
     expect(
-      File(imported.importedItems.single.privatePath).readAsBytesSync(),
+      File(imported.importedItems.single.privatePath!).readAsBytesSync(),
       originalBytes,
     );
   });
@@ -426,7 +432,7 @@ void main() {
       SelectedScreenshot(path: original.path),
     ]);
     final item = imported.importedItems.single;
-    final privateCopy = File(item.privatePath);
+    final privateCopy = File(item.privatePath!);
     final ocrStore = DriftOcrResultStore(database);
     await ocrStore.save(
       OcrResult(
@@ -487,7 +493,7 @@ void main() {
     await expectLater(failingRepository.removeItem(item), throwsStateError);
 
     expect(await store.readItems(), hasLength(1));
-    expect(File(item.privatePath).existsSync(), isTrue);
+    expect(File(item.privatePath!).existsSync(), isTrue);
     expect(original.existsSync(), isTrue);
   });
 
@@ -614,9 +620,172 @@ void main() {
       expect(newerCopy.existsSync(), isFalse);
     },
   );
+
+  test('salva e carrega arquivo privado e referência MediaStore', () async {
+    final original = createTestImage(temporaryDirectory, 'privada.png');
+    final privateItem = (await repository.importScreenshots([
+      SelectedScreenshot(path: original.path),
+    ])).importedItems.single;
+    final reference = await repository.createMediaStoreReference(
+      location: mediaStoreLocation('external_primary', 42),
+      mimeType: 'image/png',
+      capturedAt: DateTime.utc(2025),
+      importedAt: DateTime.utc(2026),
+    );
+
+    final loaded = await repository.loadAvailableItems();
+    expect(loaded.map((item) => item.id), [privateItem.id, reference.id]);
+    expect(loaded.first.isPrivateFile, isTrue);
+    expect(loaded.last.isMediaStoreReference, isTrue);
+    expect(loaded.last.mediaHash, isNull);
+    expect(loaded.last.privatePath, isNull);
+    expect(
+      (await repository.loadBySourceKey('external_primary:42'))?.id,
+      reference.id,
+    );
+  });
+
+  test(
+    'sourceKey é idempotente e o mesmo ID existe em volumes distintos',
+    () async {
+      final first = await repository.createMediaStoreReference(
+        location: mediaStoreLocation('external_primary', 7),
+        mimeType: 'image/png',
+        capturedAt: DateTime.utc(2026, 1, 2),
+      );
+      final repeated = await repository.createMediaStoreReference(
+        location: mediaStoreLocation('external_primary', 7),
+        mimeType: 'image/jpeg',
+        capturedAt: DateTime.utc(2026, 1, 3),
+      );
+      final otherVolume = await repository.createMediaStoreReference(
+        location: mediaStoreLocation('0123-4567', 7),
+        mimeType: 'image/png',
+        capturedAt: DateTime.utc(2026, 1, 1),
+      );
+
+      expect(repeated.id, first.id);
+      expect(otherVolume.id, isNot(first.id));
+      expect(await database.select(database.mediaItems).get(), hasLength(2));
+      expect(
+        (await repository.loadAvailableItems()).map((item) => item.sourceKey),
+        ['external_primary:7', '0123-4567:7'],
+      );
+    },
+  );
+
+  test('referência persiste ao reabrir e remoção não apaga original', () async {
+    final databaseFile = File('${temporaryDirectory.path}/reference.sqlite');
+    var persistentDatabase = ContextoDatabase.forTesting(
+      NativeDatabase(databaseFile),
+    );
+    final recordingStorage = RecordingStorage();
+    var persistentRepository = LocalMediaItemRepository(
+      store: DriftMediaItemStore(persistentDatabase),
+      storage: recordingStorage,
+    );
+    final item = await persistentRepository.createMediaStoreReference(
+      location: mediaStoreLocation('external', 99),
+      mimeType: 'image/png',
+      capturedAt: DateTime.utc(2024),
+    );
+    final createdAt = DateTime.utc(2026);
+    await persistentDatabase
+        .into(persistentDatabase.ocrResults)
+        .insert(
+          OcrResultsCompanion.insert(
+            mediaItemId: Value(item.id),
+            fullText: 'OCR anterior preservado até a remoção',
+            engine: 'Teste',
+            engineVersion: '1',
+            processedAt: createdAt,
+          ),
+        );
+    final tagId = await persistentDatabase
+        .into(persistentDatabase.tags)
+        .insert(
+          TagsCompanion.insert(
+            name: 'Referência',
+            normalizedName: 'referencia-remocao',
+            createdAt: createdAt,
+            updatedAt: createdAt,
+          ),
+        );
+    await persistentDatabase
+        .into(persistentDatabase.mediaTags)
+        .insert(
+          MediaTagsCompanion.insert(
+            mediaItemId: item.id,
+            tagId: tagId,
+            createdAt: createdAt,
+          ),
+        );
+    await persistentDatabase
+        .into(persistentDatabase.classificationSuggestions)
+        .insert(
+          ClassificationSuggestionsCompanion.insert(
+            mediaItemId: Value(item.id),
+            confidence: 0.5,
+            hasSuggestion: false,
+            suggestedTagsJson: '[]',
+            evidenceJson: '[]',
+            status: 'rejected',
+            engineVersion: 1,
+            createdAt: createdAt,
+            updatedAt: createdAt,
+          ),
+        );
+    await persistentRepository.close();
+
+    persistentDatabase = ContextoDatabase.forTesting(
+      NativeDatabase(databaseFile),
+    );
+    persistentRepository = LocalMediaItemRepository(
+      store: DriftMediaItemStore(persistentDatabase),
+      storage: recordingStorage,
+    );
+    final reopened = await persistentRepository.loadBySourceKey('external:99');
+    expect(reopened?.location, item.location);
+
+    await persistentRepository.removeItem(reopened!);
+    expect(recordingStorage.deletedPaths, isEmpty);
+    expect(await persistentRepository.loadBySourceKey('external:99'), isNull);
+    expect(
+      await persistentDatabase.select(persistentDatabase.ocrResults).get(),
+      isEmpty,
+    );
+    expect(
+      await persistentDatabase.select(persistentDatabase.mediaTags).get(),
+      isEmpty,
+    );
+    expect(
+      await persistentDatabase
+          .select(persistentDatabase.classificationSuggestions)
+          .get(),
+      isEmpty,
+    );
+    expect(
+      await persistentDatabase.select(persistentDatabase.tags).get(),
+      hasLength(1),
+    );
+    await persistentRepository.close();
+  });
 }
 
 class FailingMediaItemStore implements MediaItemStore {
+  @override
+  Future<int> insertMediaStoreReference({
+    required MediaStoreReferenceLocation location,
+    required String? mimeType,
+    required DateTime importedAt,
+    required DateTime? capturedAt,
+    required String sourceMode,
+    required String status,
+    ImportOrigin importOrigin = ImportOrigin.picker,
+  }) {
+    throw StateError('Falha simulada no banco');
+  }
+
   @override
   Future<int> insertItem({
     required String privatePath,
@@ -640,6 +809,9 @@ class FailingMediaItemStore implements MediaItemStore {
 
   @override
   Future<MediaItem?> findByHash(String mediaHash) async => null;
+
+  @override
+  Future<MediaItem?> findBySourceKey(String sourceKey) async => null;
 
   @override
   Future<void> updateHash(int id, String mediaHash) async {}
@@ -690,6 +862,30 @@ class FailingDeleteStorage implements ScreenshotStorage {
   Future<void> deletePrivateCopy(String privatePath) {
     throw StateError('Falha simulada ao excluir cópia');
   }
+}
+
+class RecordingStorage implements ScreenshotStorage {
+  final List<String> deletedPaths = [];
+
+  @override
+  Future<StoredScreenshot> copyToPrivate(String sourcePath) {
+    throw UnsupportedError('Não usado');
+  }
+
+  @override
+  Future<void> deletePrivateCopy(String privatePath) async {
+    deletedPaths.add(privatePath);
+  }
+}
+
+MediaStoreReferenceLocation mediaStoreLocation(String volume, int id) {
+  return MediaStoreReferenceLocation(
+    sourceKey: '$volume:$id',
+    mediaStoreId: id,
+    volumeName: volume,
+    contentUri: 'content://media/$volume/images/media/$id',
+    dateModified: DateTime.utc(2026),
+  );
 }
 
 File createTestImage(Directory directory, String name, [int marker = 0]) {

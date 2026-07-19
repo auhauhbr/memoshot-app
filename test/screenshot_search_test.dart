@@ -191,7 +191,7 @@ void main() {
       importedAt: DateTime(2026),
       text: 'termo ausente',
     );
-    File(missing.privatePath).deleteSync();
+    File(missing.privatePath!).deleteSync();
 
     expect(await repository.searchRecognizedText('termo'), isEmpty);
   });
@@ -353,7 +353,7 @@ void main() {
 
       expect(await repository.loadAvailableItems(tagId: tag.id), isEmpty);
       expect((await repository.loadAvailableItems()).single.id, item.id);
-      expect(File(item.privatePath).existsSync(), isTrue);
+      expect(File(item.privatePath!).existsSync(), isTrue);
     },
   );
 }

@@ -16,11 +16,23 @@ abstract interface class MediaItemStore {
     domain.ImportOrigin importOrigin = domain.ImportOrigin.picker,
   });
 
+  Future<int> insertMediaStoreReference({
+    required domain.MediaStoreReferenceLocation location,
+    required String? mimeType,
+    required DateTime importedAt,
+    required DateTime? capturedAt,
+    required String sourceMode,
+    required String status,
+    domain.ImportOrigin importOrigin = domain.ImportOrigin.picker,
+  });
+
   Future<List<domain.MediaItem>> readItems({int? tagId});
 
   Future<domain.MediaItem?> findById(int id);
 
   Future<domain.MediaItem?> findByHash(String mediaHash);
+
+  Future<domain.MediaItem?> findBySourceKey(String sourceKey);
 
   Future<void> updateHash(int id, String mediaHash);
 
@@ -63,10 +75,44 @@ class DriftMediaItemStore implements MediaItemStore {
         .into(_database.mediaItems)
         .insert(
           MediaItemsCompanion.insert(
-            privatePath: privatePath,
-            internalName: internalName,
+            storageKind: const Value('privateFile'),
+            privatePath: Value(privatePath),
+            internalName: Value(internalName),
             mimeType: Value(mimeType),
             mediaHash: Value(mediaHash),
+            importedAt: importedAt,
+            capturedAt: Value(capturedAt),
+            sourceMode: sourceMode,
+            status: status,
+            importOrigin: Value(importOrigin.databaseValue),
+          ),
+        );
+  }
+
+  @override
+  Future<int> insertMediaStoreReference({
+    required domain.MediaStoreReferenceLocation location,
+    required String? mimeType,
+    required DateTime importedAt,
+    required DateTime? capturedAt,
+    required String sourceMode,
+    required String status,
+    domain.ImportOrigin importOrigin = domain.ImportOrigin.picker,
+  }) {
+    return _database
+        .into(_database.mediaItems)
+        .insert(
+          MediaItemsCompanion.insert(
+            storageKind: const Value('mediaStoreReference'),
+            privatePath: const Value(null),
+            internalName: const Value(null),
+            sourceKey: Value(location.sourceKey),
+            mediaStoreId: Value(location.mediaStoreId),
+            volumeName: Value(location.volumeName),
+            contentUri: Value(location.contentUri),
+            sourceDateModified: Value(location.dateModified),
+            mimeType: Value(mimeType),
+            mediaHash: const Value(null),
             importedAt: importedAt,
             capturedAt: Value(capturedAt),
             sourceMode: sourceMode,
@@ -121,6 +167,14 @@ class DriftMediaItemStore implements MediaItemStore {
     final row = await (_database.select(
       _database.mediaItems,
     )..where((item) => item.id.equals(id))).getSingleOrNull();
+    return row == null ? null : _toDomain(row);
+  }
+
+  @override
+  Future<domain.MediaItem?> findBySourceKey(String sourceKey) async {
+    final row = await (_database.select(
+      _database.mediaItems,
+    )..where((item) => item.sourceKey.equals(sourceKey))).getSingleOrNull();
     return row == null ? null : _toDomain(row);
   }
 
@@ -209,8 +263,7 @@ class DriftMediaItemStore implements MediaItemStore {
   domain.MediaItem _toDomain(MediaItem row) {
     return domain.MediaItem(
       id: row.id,
-      privatePath: row.privatePath,
-      internalName: row.internalName,
+      location: _location(row),
       mimeType: row.mimeType,
       mediaHash: row.mediaHash,
       importedAt: row.importedAt,
@@ -218,6 +271,19 @@ class DriftMediaItemStore implements MediaItemStore {
       sourceMode: row.sourceMode,
       status: row.status,
       importOrigin: domain.ImportOrigin.fromDatabase(row.importOrigin),
+    );
+  }
+
+  domain.MediaItemLocation _location(MediaItem row) {
+    return domain.mediaItemLocationFromStorage(
+      storageKind: row.storageKind,
+      privatePath: row.privatePath,
+      internalName: row.internalName,
+      sourceKey: row.sourceKey,
+      mediaStoreId: row.mediaStoreId,
+      volumeName: row.volumeName,
+      contentUri: row.contentUri,
+      sourceDateModified: row.sourceDateModified,
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/media/screenshot_picker.dart';
+import '../core/media_store/media_store_content.dart';
 import '../core/navigation/review_navigation_source.dart';
 import '../core/automatic_import/automatic_screenshot_source.dart';
 import '../core/automatic_import/method_channel_automatic_screenshot_source.dart';
@@ -40,6 +41,7 @@ class MemoShotApp extends StatelessWidget {
     this.reviewNotificationCoordinator,
     this.reviewNavigationSource,
     this.existingScreenshotInventoryCoordinator,
+    this.mediaStoreContentGateway,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -59,6 +61,7 @@ class MemoShotApp extends StatelessWidget {
   final ReviewNavigationSource? reviewNavigationSource;
   final ExistingScreenshotInventoryCoordinator?
   existingScreenshotInventoryCoordinator;
+  final MediaStoreContentGateway? mediaStoreContentGateway;
 
   @override
   Widget build(BuildContext context) {
@@ -92,6 +95,7 @@ class MemoShotApp extends StatelessWidget {
           reviewNavigationSource: reviewNavigationSource,
           existingScreenshotInventoryCoordinator:
               existingScreenshotInventoryCoordinator,
+          mediaStoreContentGateway: mediaStoreContentGateway,
         ),
       ),
     );

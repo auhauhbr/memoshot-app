@@ -6,6 +6,7 @@ import 'package:memoshot/app/memoshot_app.dart';
 import 'package:memoshot/core/automatic_import/automatic_screenshot_source.dart';
 import 'package:memoshot/core/media/screenshot_picker.dart';
 import 'package:memoshot/core/media_store/existing_screenshot_scanner.dart';
+import 'package:memoshot/core/media_store/media_store_content.dart';
 import 'package:memoshot/core/navigation/review_navigation_source.dart';
 import 'package:memoshot/core/sharing/incoming_share_source.dart';
 import 'package:memoshot/core/theme/app_theme.dart';
@@ -4139,6 +4140,34 @@ void main() {
     expect(find.byType(ReviewQueuePage), findsOneWidget);
     expect(find.text('Tudo organizado'), findsOneWidget);
   });
+
+  testWidgets(
+    'detalhe referenciado fica seguro quando original está indisponível',
+    (tester) async {
+      final item = createReferencedMediaItem(1);
+      await tester.pumpWidget(
+        buildTestApp(
+          FakeScreenshotPicker(),
+          repository: FakeMediaItemRepository(initialItems: [item]),
+          mediaStoreContentGateway: _UnavailableMediaStoreGateway(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await openFirstScreenshot(tester);
+
+      expect(
+        find.text('Esta imagem não está mais disponível no dispositivo.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('content://'), findsNothing);
+      expect(find.textContaining('external_primary:1'), findsNothing);
+      await tapRemoveFromMemoShot(tester);
+      expect(
+        find.textContaining('A imagem original continuará na galeria.'),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 Widget buildTestApp(
@@ -4158,6 +4187,7 @@ Widget buildTestApp(
   ReviewNavigationSource? reviewNavigationSource,
   ExistingScreenshotInventoryCoordinator?
   existingScreenshotInventoryCoordinator,
+  MediaStoreContentGateway? mediaStoreContentGateway,
 }) {
   final resolvedOcrRepository = ocrRepository ?? FakeOcrRepository();
   final resolvedMediaRepository = repository ?? FakeMediaItemRepository();
@@ -4205,6 +4235,7 @@ Widget buildTestApp(
           scanner: _EmptyExistingScreenshotScanner(),
           repository: _EmptyExistingScreenshotRepository(),
         ),
+    mediaStoreContentGateway: mediaStoreContentGateway,
   );
 }
 
@@ -5137,7 +5168,9 @@ class FakeCategoryRepository implements CategoryRepository {
     return mediaItems
         .where(
           (item) =>
-              mediaIds.contains(item.id) && File(item.privatePath).existsSync(),
+              mediaIds.contains(item.id) &&
+              (item.privatePath == null ||
+                  File(item.privatePath!).existsSync()),
         )
         .toList()
       ..sort(compareMediaItemsRecentFirst);
@@ -5310,7 +5343,10 @@ class FakeMediaItemRepository implements MediaItemRepository {
     this._failFilteredLoad,
     Set<String> rejectedPaths,
   ) : _items = [...initialItems],
-      _sourcePaths = {for (final item in initialItems) item.privatePath},
+      _sourcePaths = initialItems
+          .map((item) => item.privatePath)
+          .whereType<String>()
+          .toSet(),
       _rejectedPaths = {...rejectedPaths},
       _recognizedTexts = {...recognizedTexts};
 
@@ -5390,9 +5426,9 @@ class FakeMediaItemRepository implements MediaItemRepository {
     if (failRemoval) {
       throw StateError('Falha privada simulada');
     }
-    final file = File(item.privatePath);
-    if (file.existsSync()) {
-      file.deleteSync();
+    if (item.privatePath case final path?) {
+      final file = File(path);
+      if (file.existsSync()) file.deleteSync();
     }
     _items.removeWhere((candidate) => candidate.id == item.id);
     _recognizedTexts.remove(item.id);
@@ -5428,7 +5464,7 @@ class FakeMediaItemRepository implements MediaItemRepository {
           (tagId == null ||
               (tagAssociations[item.id]?.contains(tagId) ?? false)) &&
           normalizer.normalize(text).contains(normalizedQuery) &&
-          File(item.privatePath).existsSync()) {
+          (item.privatePath == null || File(item.privatePath!).existsSync())) {
         results.add(
           ScreenshotSearchResult(
             mediaItem: item,
@@ -5608,6 +5644,35 @@ MediaItem createMediaItem(
     sourceMode: 'photoPicker',
     status: 'ready',
     importOrigin: importOrigin,
+  );
+}
+
+MediaItem createReferencedMediaItem(int id) => MediaItem(
+  id: id,
+  location: MediaStoreReferenceLocation(
+    sourceKey: 'external_primary:$id',
+    mediaStoreId: id,
+    volumeName: 'external_primary',
+    contentUri: 'content://media/external_primary/images/media/$id',
+  ),
+  mimeType: 'image/png',
+  importedAt: DateTime(2026),
+  sourceMode: 'mediaStoreReference',
+  status: 'ready',
+  importOrigin: ImportOrigin.picker,
+);
+
+class _UnavailableMediaStoreGateway implements MediaStoreContentGateway {
+  @override
+  Future<ReferencedMediaAvailability> checkAvailability(
+    MediaStoreReferenceLocation location,
+  ) async => ReferencedMediaAvailability.unavailable;
+
+  @override
+  Future<ReferencedMediaThumbnail> loadThumbnail(
+    MediaStoreReferenceLocation location,
+  ) async => const ReferencedMediaThumbnail(
+    availability: ReferencedMediaAvailability.unavailable,
   );
 }
 

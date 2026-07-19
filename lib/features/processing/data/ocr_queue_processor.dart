@@ -205,13 +205,14 @@ class LocalOcrQueueProcessor implements OcrQueue, HeadlessOcrQueue {
       if (mediaItem == null) {
         return;
       }
-      if (!await File(mediaItem.privatePath).exists()) {
+      final privatePath = mediaItem.privatePath;
+      if (privatePath == null || !await File(privatePath).exists()) {
         await _jobStore.markFailed(job.id, 'file_unavailable');
         _notify(job.mediaItemId);
         return;
       }
 
-      final output = await _recognitionService.recognize(mediaItem.privatePath);
+      final output = await _recognitionService.recognize(privatePath);
       if (!await _jobStore.mediaItemExists(job.mediaItemId)) {
         return;
       }

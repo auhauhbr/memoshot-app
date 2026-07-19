@@ -8,9 +8,22 @@ part 'contexto_database.g.dart';
 class MediaItems extends Table {
   IntColumn get id => integer().autoIncrement()();
 
-  TextColumn get privatePath => text()();
+  TextColumn get storageKind =>
+      text().withDefault(const Constant('privateFile'))();
 
-  TextColumn get internalName => text()();
+  TextColumn get privatePath => text().nullable()();
+
+  TextColumn get internalName => text().nullable()();
+
+  TextColumn get sourceKey => text().nullable()();
+
+  IntColumn get mediaStoreId => integer().nullable()();
+
+  TextColumn get volumeName => text().nullable()();
+
+  TextColumn get contentUri => text().nullable()();
+
+  DateTimeColumn get sourceDateModified => dateTime().nullable()();
 
   TextColumn get mimeType => text().nullable()();
 
@@ -25,6 +38,18 @@ class MediaItems extends Table {
   TextColumn get importOrigin => text().withDefault(const Constant('picker'))();
 
   TextColumn get status => text()();
+
+  @override
+  List<String> get customConstraints => const [
+    "CHECK ((storage_kind = 'privateFile' AND private_path IS NOT NULL "
+        'AND internal_name IS NOT NULL AND source_key IS NULL '
+        'AND media_store_id IS NULL AND volume_name IS NULL '
+        'AND content_uri IS NULL AND source_date_modified IS NULL) OR '
+        "(storage_kind = 'mediaStoreReference' AND private_path IS NULL "
+        'AND internal_name IS NULL AND source_key IS NOT NULL '
+        'AND media_store_id > 0 AND volume_name IS NOT NULL '
+        'AND content_uri IS NOT NULL))',
+  ];
 }
 
 class OcrResults extends Table {
@@ -276,13 +301,14 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (migrator) async {
       await migrator.createAll();
       await _createMediaHashIndex();
+      await _createMediaSourceKeyIndex();
       await _createCategoryNameIndexes();
       await _createClassificationJobIndexes();
     },
@@ -341,6 +367,26 @@ class ContextoDatabase extends _$ContextoDatabase {
         await migrator.createTable(existingScreenshotCandidates);
         await migrator.createTable(existingScreenshotInventoryStates);
       }
+      if (from < 15) {
+        await migrator.alterTable(
+          TableMigration(
+            mediaItems,
+            newColumns: [
+              mediaItems.storageKind,
+              mediaItems.sourceKey,
+              mediaItems.mediaStoreId,
+              mediaItems.volumeName,
+              mediaItems.contentUri,
+              mediaItems.sourceDateModified,
+            ],
+            columnTransformer: {
+              mediaItems.storageKind: const Constant('privateFile'),
+            },
+          ),
+        );
+        await _createMediaHashIndex();
+        await _createMediaSourceKeyIndex();
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
@@ -352,6 +398,14 @@ class ContextoDatabase extends _$ContextoDatabase {
     return customStatement(
       'CREATE UNIQUE INDEX IF NOT EXISTS media_items_media_hash_unique '
       'ON media_items (media_hash) WHERE media_hash IS NOT NULL',
+    );
+  }
+
+  Future<void> _createMediaSourceKeyIndex() {
+    return customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS media_items_source_key_unique '
+      'ON media_items (source_key) '
+      "WHERE storage_kind = 'mediaStoreReference'",
     );
   }
 

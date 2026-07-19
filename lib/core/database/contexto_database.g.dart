@@ -22,6 +22,18 @@ class $MediaItemsTable extends MediaItems
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _storageKindMeta = const VerificationMeta(
+    'storageKind',
+  );
+  @override
+  late final GeneratedColumn<String> storageKind = GeneratedColumn<String>(
+    'storage_kind',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('privateFile'),
+  );
   static const VerificationMeta _privatePathMeta = const VerificationMeta(
     'privatePath',
   );
@@ -29,9 +41,9 @@ class $MediaItemsTable extends MediaItems
   late final GeneratedColumn<String> privatePath = GeneratedColumn<String>(
     'private_path',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
   );
   static const VerificationMeta _internalNameMeta = const VerificationMeta(
     'internalName',
@@ -40,10 +52,65 @@ class $MediaItemsTable extends MediaItems
   late final GeneratedColumn<String> internalName = GeneratedColumn<String>(
     'internal_name',
     aliasedName,
-    false,
+    true,
     type: DriftSqlType.string,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
   );
+  static const VerificationMeta _sourceKeyMeta = const VerificationMeta(
+    'sourceKey',
+  );
+  @override
+  late final GeneratedColumn<String> sourceKey = GeneratedColumn<String>(
+    'source_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _mediaStoreIdMeta = const VerificationMeta(
+    'mediaStoreId',
+  );
+  @override
+  late final GeneratedColumn<int> mediaStoreId = GeneratedColumn<int>(
+    'media_store_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _volumeNameMeta = const VerificationMeta(
+    'volumeName',
+  );
+  @override
+  late final GeneratedColumn<String> volumeName = GeneratedColumn<String>(
+    'volume_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _contentUriMeta = const VerificationMeta(
+    'contentUri',
+  );
+  @override
+  late final GeneratedColumn<String> contentUri = GeneratedColumn<String>(
+    'content_uri',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceDateModifiedMeta =
+      const VerificationMeta('sourceDateModified');
+  @override
+  late final GeneratedColumn<DateTime> sourceDateModified =
+      GeneratedColumn<DateTime>(
+        'source_date_modified',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _mimeTypeMeta = const VerificationMeta(
     'mimeType',
   );
@@ -123,8 +190,14 @@ class $MediaItemsTable extends MediaItems
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    storageKind,
     privatePath,
     internalName,
+    sourceKey,
+    mediaStoreId,
+    volumeName,
+    contentUri,
+    sourceDateModified,
     mimeType,
     mediaHash,
     importedAt,
@@ -148,6 +221,15 @@ class $MediaItemsTable extends MediaItems
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
+    if (data.containsKey('storage_kind')) {
+      context.handle(
+        _storageKindMeta,
+        storageKind.isAcceptableOrUnknown(
+          data['storage_kind']!,
+          _storageKindMeta,
+        ),
+      );
+    }
     if (data.containsKey('private_path')) {
       context.handle(
         _privatePathMeta,
@@ -156,8 +238,6 @@ class $MediaItemsTable extends MediaItems
           _privatePathMeta,
         ),
       );
-    } else if (isInserting) {
-      context.missing(_privatePathMeta);
     }
     if (data.containsKey('internal_name')) {
       context.handle(
@@ -167,8 +247,42 @@ class $MediaItemsTable extends MediaItems
           _internalNameMeta,
         ),
       );
-    } else if (isInserting) {
-      context.missing(_internalNameMeta);
+    }
+    if (data.containsKey('source_key')) {
+      context.handle(
+        _sourceKeyMeta,
+        sourceKey.isAcceptableOrUnknown(data['source_key']!, _sourceKeyMeta),
+      );
+    }
+    if (data.containsKey('media_store_id')) {
+      context.handle(
+        _mediaStoreIdMeta,
+        mediaStoreId.isAcceptableOrUnknown(
+          data['media_store_id']!,
+          _mediaStoreIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('volume_name')) {
+      context.handle(
+        _volumeNameMeta,
+        volumeName.isAcceptableOrUnknown(data['volume_name']!, _volumeNameMeta),
+      );
+    }
+    if (data.containsKey('content_uri')) {
+      context.handle(
+        _contentUriMeta,
+        contentUri.isAcceptableOrUnknown(data['content_uri']!, _contentUriMeta),
+      );
+    }
+    if (data.containsKey('source_date_modified')) {
+      context.handle(
+        _sourceDateModifiedMeta,
+        sourceDateModified.isAcceptableOrUnknown(
+          data['source_date_modified']!,
+          _sourceDateModifiedMeta,
+        ),
+      );
     }
     if (data.containsKey('mime_type')) {
       context.handle(
@@ -234,14 +348,38 @@ class $MediaItemsTable extends MediaItems
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      storageKind: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}storage_kind'],
+      )!,
       privatePath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}private_path'],
-      )!,
+      ),
       internalName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}internal_name'],
-      )!,
+      ),
+      sourceKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_key'],
+      ),
+      mediaStoreId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}media_store_id'],
+      ),
+      volumeName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}volume_name'],
+      ),
+      contentUri: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content_uri'],
+      ),
+      sourceDateModified: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}source_date_modified'],
+      ),
       mimeType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}mime_type'],
@@ -281,8 +419,14 @@ class $MediaItemsTable extends MediaItems
 
 class MediaItem extends DataClass implements Insertable<MediaItem> {
   final int id;
-  final String privatePath;
-  final String internalName;
+  final String storageKind;
+  final String? privatePath;
+  final String? internalName;
+  final String? sourceKey;
+  final int? mediaStoreId;
+  final String? volumeName;
+  final String? contentUri;
+  final DateTime? sourceDateModified;
   final String? mimeType;
   final String? mediaHash;
   final DateTime importedAt;
@@ -292,8 +436,14 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
   final String status;
   const MediaItem({
     required this.id,
-    required this.privatePath,
-    required this.internalName,
+    required this.storageKind,
+    this.privatePath,
+    this.internalName,
+    this.sourceKey,
+    this.mediaStoreId,
+    this.volumeName,
+    this.contentUri,
+    this.sourceDateModified,
     this.mimeType,
     this.mediaHash,
     required this.importedAt,
@@ -306,8 +456,28 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
-    map['private_path'] = Variable<String>(privatePath);
-    map['internal_name'] = Variable<String>(internalName);
+    map['storage_kind'] = Variable<String>(storageKind);
+    if (!nullToAbsent || privatePath != null) {
+      map['private_path'] = Variable<String>(privatePath);
+    }
+    if (!nullToAbsent || internalName != null) {
+      map['internal_name'] = Variable<String>(internalName);
+    }
+    if (!nullToAbsent || sourceKey != null) {
+      map['source_key'] = Variable<String>(sourceKey);
+    }
+    if (!nullToAbsent || mediaStoreId != null) {
+      map['media_store_id'] = Variable<int>(mediaStoreId);
+    }
+    if (!nullToAbsent || volumeName != null) {
+      map['volume_name'] = Variable<String>(volumeName);
+    }
+    if (!nullToAbsent || contentUri != null) {
+      map['content_uri'] = Variable<String>(contentUri);
+    }
+    if (!nullToAbsent || sourceDateModified != null) {
+      map['source_date_modified'] = Variable<DateTime>(sourceDateModified);
+    }
     if (!nullToAbsent || mimeType != null) {
       map['mime_type'] = Variable<String>(mimeType);
     }
@@ -327,8 +497,28 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
   MediaItemsCompanion toCompanion(bool nullToAbsent) {
     return MediaItemsCompanion(
       id: Value(id),
-      privatePath: Value(privatePath),
-      internalName: Value(internalName),
+      storageKind: Value(storageKind),
+      privatePath: privatePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(privatePath),
+      internalName: internalName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(internalName),
+      sourceKey: sourceKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceKey),
+      mediaStoreId: mediaStoreId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mediaStoreId),
+      volumeName: volumeName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(volumeName),
+      contentUri: contentUri == null && nullToAbsent
+          ? const Value.absent()
+          : Value(contentUri),
+      sourceDateModified: sourceDateModified == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceDateModified),
       mimeType: mimeType == null && nullToAbsent
           ? const Value.absent()
           : Value(mimeType),
@@ -352,8 +542,16 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return MediaItem(
       id: serializer.fromJson<int>(json['id']),
-      privatePath: serializer.fromJson<String>(json['privatePath']),
-      internalName: serializer.fromJson<String>(json['internalName']),
+      storageKind: serializer.fromJson<String>(json['storageKind']),
+      privatePath: serializer.fromJson<String?>(json['privatePath']),
+      internalName: serializer.fromJson<String?>(json['internalName']),
+      sourceKey: serializer.fromJson<String?>(json['sourceKey']),
+      mediaStoreId: serializer.fromJson<int?>(json['mediaStoreId']),
+      volumeName: serializer.fromJson<String?>(json['volumeName']),
+      contentUri: serializer.fromJson<String?>(json['contentUri']),
+      sourceDateModified: serializer.fromJson<DateTime?>(
+        json['sourceDateModified'],
+      ),
       mimeType: serializer.fromJson<String?>(json['mimeType']),
       mediaHash: serializer.fromJson<String?>(json['mediaHash']),
       importedAt: serializer.fromJson<DateTime>(json['importedAt']),
@@ -368,8 +566,14 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
-      'privatePath': serializer.toJson<String>(privatePath),
-      'internalName': serializer.toJson<String>(internalName),
+      'storageKind': serializer.toJson<String>(storageKind),
+      'privatePath': serializer.toJson<String?>(privatePath),
+      'internalName': serializer.toJson<String?>(internalName),
+      'sourceKey': serializer.toJson<String?>(sourceKey),
+      'mediaStoreId': serializer.toJson<int?>(mediaStoreId),
+      'volumeName': serializer.toJson<String?>(volumeName),
+      'contentUri': serializer.toJson<String?>(contentUri),
+      'sourceDateModified': serializer.toJson<DateTime?>(sourceDateModified),
       'mimeType': serializer.toJson<String?>(mimeType),
       'mediaHash': serializer.toJson<String?>(mediaHash),
       'importedAt': serializer.toJson<DateTime>(importedAt),
@@ -382,8 +586,14 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
 
   MediaItem copyWith({
     int? id,
-    String? privatePath,
-    String? internalName,
+    String? storageKind,
+    Value<String?> privatePath = const Value.absent(),
+    Value<String?> internalName = const Value.absent(),
+    Value<String?> sourceKey = const Value.absent(),
+    Value<int?> mediaStoreId = const Value.absent(),
+    Value<String?> volumeName = const Value.absent(),
+    Value<String?> contentUri = const Value.absent(),
+    Value<DateTime?> sourceDateModified = const Value.absent(),
     Value<String?> mimeType = const Value.absent(),
     Value<String?> mediaHash = const Value.absent(),
     DateTime? importedAt,
@@ -393,8 +603,16 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
     String? status,
   }) => MediaItem(
     id: id ?? this.id,
-    privatePath: privatePath ?? this.privatePath,
-    internalName: internalName ?? this.internalName,
+    storageKind: storageKind ?? this.storageKind,
+    privatePath: privatePath.present ? privatePath.value : this.privatePath,
+    internalName: internalName.present ? internalName.value : this.internalName,
+    sourceKey: sourceKey.present ? sourceKey.value : this.sourceKey,
+    mediaStoreId: mediaStoreId.present ? mediaStoreId.value : this.mediaStoreId,
+    volumeName: volumeName.present ? volumeName.value : this.volumeName,
+    contentUri: contentUri.present ? contentUri.value : this.contentUri,
+    sourceDateModified: sourceDateModified.present
+        ? sourceDateModified.value
+        : this.sourceDateModified,
     mimeType: mimeType.present ? mimeType.value : this.mimeType,
     mediaHash: mediaHash.present ? mediaHash.value : this.mediaHash,
     importedAt: importedAt ?? this.importedAt,
@@ -406,12 +624,28 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
   MediaItem copyWithCompanion(MediaItemsCompanion data) {
     return MediaItem(
       id: data.id.present ? data.id.value : this.id,
+      storageKind: data.storageKind.present
+          ? data.storageKind.value
+          : this.storageKind,
       privatePath: data.privatePath.present
           ? data.privatePath.value
           : this.privatePath,
       internalName: data.internalName.present
           ? data.internalName.value
           : this.internalName,
+      sourceKey: data.sourceKey.present ? data.sourceKey.value : this.sourceKey,
+      mediaStoreId: data.mediaStoreId.present
+          ? data.mediaStoreId.value
+          : this.mediaStoreId,
+      volumeName: data.volumeName.present
+          ? data.volumeName.value
+          : this.volumeName,
+      contentUri: data.contentUri.present
+          ? data.contentUri.value
+          : this.contentUri,
+      sourceDateModified: data.sourceDateModified.present
+          ? data.sourceDateModified.value
+          : this.sourceDateModified,
       mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
       mediaHash: data.mediaHash.present ? data.mediaHash.value : this.mediaHash,
       importedAt: data.importedAt.present
@@ -434,8 +668,14 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
   String toString() {
     return (StringBuffer('MediaItem(')
           ..write('id: $id, ')
+          ..write('storageKind: $storageKind, ')
           ..write('privatePath: $privatePath, ')
           ..write('internalName: $internalName, ')
+          ..write('sourceKey: $sourceKey, ')
+          ..write('mediaStoreId: $mediaStoreId, ')
+          ..write('volumeName: $volumeName, ')
+          ..write('contentUri: $contentUri, ')
+          ..write('sourceDateModified: $sourceDateModified, ')
           ..write('mimeType: $mimeType, ')
           ..write('mediaHash: $mediaHash, ')
           ..write('importedAt: $importedAt, ')
@@ -450,8 +690,14 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
   @override
   int get hashCode => Object.hash(
     id,
+    storageKind,
     privatePath,
     internalName,
+    sourceKey,
+    mediaStoreId,
+    volumeName,
+    contentUri,
+    sourceDateModified,
     mimeType,
     mediaHash,
     importedAt,
@@ -465,8 +711,14 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
       identical(this, other) ||
       (other is MediaItem &&
           other.id == this.id &&
+          other.storageKind == this.storageKind &&
           other.privatePath == this.privatePath &&
           other.internalName == this.internalName &&
+          other.sourceKey == this.sourceKey &&
+          other.mediaStoreId == this.mediaStoreId &&
+          other.volumeName == this.volumeName &&
+          other.contentUri == this.contentUri &&
+          other.sourceDateModified == this.sourceDateModified &&
           other.mimeType == this.mimeType &&
           other.mediaHash == this.mediaHash &&
           other.importedAt == this.importedAt &&
@@ -478,8 +730,14 @@ class MediaItem extends DataClass implements Insertable<MediaItem> {
 
 class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
   final Value<int> id;
-  final Value<String> privatePath;
-  final Value<String> internalName;
+  final Value<String> storageKind;
+  final Value<String?> privatePath;
+  final Value<String?> internalName;
+  final Value<String?> sourceKey;
+  final Value<int?> mediaStoreId;
+  final Value<String?> volumeName;
+  final Value<String?> contentUri;
+  final Value<DateTime?> sourceDateModified;
   final Value<String?> mimeType;
   final Value<String?> mediaHash;
   final Value<DateTime> importedAt;
@@ -489,8 +747,14 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
   final Value<String> status;
   const MediaItemsCompanion({
     this.id = const Value.absent(),
+    this.storageKind = const Value.absent(),
     this.privatePath = const Value.absent(),
     this.internalName = const Value.absent(),
+    this.sourceKey = const Value.absent(),
+    this.mediaStoreId = const Value.absent(),
+    this.volumeName = const Value.absent(),
+    this.contentUri = const Value.absent(),
+    this.sourceDateModified = const Value.absent(),
     this.mimeType = const Value.absent(),
     this.mediaHash = const Value.absent(),
     this.importedAt = const Value.absent(),
@@ -501,8 +765,14 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
   });
   MediaItemsCompanion.insert({
     this.id = const Value.absent(),
-    required String privatePath,
-    required String internalName,
+    this.storageKind = const Value.absent(),
+    this.privatePath = const Value.absent(),
+    this.internalName = const Value.absent(),
+    this.sourceKey = const Value.absent(),
+    this.mediaStoreId = const Value.absent(),
+    this.volumeName = const Value.absent(),
+    this.contentUri = const Value.absent(),
+    this.sourceDateModified = const Value.absent(),
     this.mimeType = const Value.absent(),
     this.mediaHash = const Value.absent(),
     required DateTime importedAt,
@@ -510,15 +780,19 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     required String sourceMode,
     this.importOrigin = const Value.absent(),
     required String status,
-  }) : privatePath = Value(privatePath),
-       internalName = Value(internalName),
-       importedAt = Value(importedAt),
+  }) : importedAt = Value(importedAt),
        sourceMode = Value(sourceMode),
        status = Value(status);
   static Insertable<MediaItem> custom({
     Expression<int>? id,
+    Expression<String>? storageKind,
     Expression<String>? privatePath,
     Expression<String>? internalName,
+    Expression<String>? sourceKey,
+    Expression<int>? mediaStoreId,
+    Expression<String>? volumeName,
+    Expression<String>? contentUri,
+    Expression<DateTime>? sourceDateModified,
     Expression<String>? mimeType,
     Expression<String>? mediaHash,
     Expression<DateTime>? importedAt,
@@ -529,8 +803,15 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (storageKind != null) 'storage_kind': storageKind,
       if (privatePath != null) 'private_path': privatePath,
       if (internalName != null) 'internal_name': internalName,
+      if (sourceKey != null) 'source_key': sourceKey,
+      if (mediaStoreId != null) 'media_store_id': mediaStoreId,
+      if (volumeName != null) 'volume_name': volumeName,
+      if (contentUri != null) 'content_uri': contentUri,
+      if (sourceDateModified != null)
+        'source_date_modified': sourceDateModified,
       if (mimeType != null) 'mime_type': mimeType,
       if (mediaHash != null) 'media_hash': mediaHash,
       if (importedAt != null) 'imported_at': importedAt,
@@ -543,8 +824,14 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
 
   MediaItemsCompanion copyWith({
     Value<int>? id,
-    Value<String>? privatePath,
-    Value<String>? internalName,
+    Value<String>? storageKind,
+    Value<String?>? privatePath,
+    Value<String?>? internalName,
+    Value<String?>? sourceKey,
+    Value<int?>? mediaStoreId,
+    Value<String?>? volumeName,
+    Value<String?>? contentUri,
+    Value<DateTime?>? sourceDateModified,
     Value<String?>? mimeType,
     Value<String?>? mediaHash,
     Value<DateTime>? importedAt,
@@ -555,8 +842,14 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
   }) {
     return MediaItemsCompanion(
       id: id ?? this.id,
+      storageKind: storageKind ?? this.storageKind,
       privatePath: privatePath ?? this.privatePath,
       internalName: internalName ?? this.internalName,
+      sourceKey: sourceKey ?? this.sourceKey,
+      mediaStoreId: mediaStoreId ?? this.mediaStoreId,
+      volumeName: volumeName ?? this.volumeName,
+      contentUri: contentUri ?? this.contentUri,
+      sourceDateModified: sourceDateModified ?? this.sourceDateModified,
       mimeType: mimeType ?? this.mimeType,
       mediaHash: mediaHash ?? this.mediaHash,
       importedAt: importedAt ?? this.importedAt,
@@ -573,11 +866,31 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
     if (id.present) {
       map['id'] = Variable<int>(id.value);
     }
+    if (storageKind.present) {
+      map['storage_kind'] = Variable<String>(storageKind.value);
+    }
     if (privatePath.present) {
       map['private_path'] = Variable<String>(privatePath.value);
     }
     if (internalName.present) {
       map['internal_name'] = Variable<String>(internalName.value);
+    }
+    if (sourceKey.present) {
+      map['source_key'] = Variable<String>(sourceKey.value);
+    }
+    if (mediaStoreId.present) {
+      map['media_store_id'] = Variable<int>(mediaStoreId.value);
+    }
+    if (volumeName.present) {
+      map['volume_name'] = Variable<String>(volumeName.value);
+    }
+    if (contentUri.present) {
+      map['content_uri'] = Variable<String>(contentUri.value);
+    }
+    if (sourceDateModified.present) {
+      map['source_date_modified'] = Variable<DateTime>(
+        sourceDateModified.value,
+      );
     }
     if (mimeType.present) {
       map['mime_type'] = Variable<String>(mimeType.value);
@@ -607,8 +920,14 @@ class MediaItemsCompanion extends UpdateCompanion<MediaItem> {
   String toString() {
     return (StringBuffer('MediaItemsCompanion(')
           ..write('id: $id, ')
+          ..write('storageKind: $storageKind, ')
           ..write('privatePath: $privatePath, ')
           ..write('internalName: $internalName, ')
+          ..write('sourceKey: $sourceKey, ')
+          ..write('mediaStoreId: $mediaStoreId, ')
+          ..write('volumeName: $volumeName, ')
+          ..write('contentUri: $contentUri, ')
+          ..write('sourceDateModified: $sourceDateModified, ')
           ..write('mimeType: $mimeType, ')
           ..write('mediaHash: $mediaHash, ')
           ..write('importedAt: $importedAt, ')
@@ -5839,8 +6158,14 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
 typedef $$MediaItemsTableCreateCompanionBuilder =
     MediaItemsCompanion Function({
       Value<int> id,
-      required String privatePath,
-      required String internalName,
+      Value<String> storageKind,
+      Value<String?> privatePath,
+      Value<String?> internalName,
+      Value<String?> sourceKey,
+      Value<int?> mediaStoreId,
+      Value<String?> volumeName,
+      Value<String?> contentUri,
+      Value<DateTime?> sourceDateModified,
       Value<String?> mimeType,
       Value<String?> mediaHash,
       required DateTime importedAt,
@@ -5852,8 +6177,14 @@ typedef $$MediaItemsTableCreateCompanionBuilder =
 typedef $$MediaItemsTableUpdateCompanionBuilder =
     MediaItemsCompanion Function({
       Value<int> id,
-      Value<String> privatePath,
-      Value<String> internalName,
+      Value<String> storageKind,
+      Value<String?> privatePath,
+      Value<String?> internalName,
+      Value<String?> sourceKey,
+      Value<int?> mediaStoreId,
+      Value<String?> volumeName,
+      Value<String?> contentUri,
+      Value<DateTime?> sourceDateModified,
       Value<String?> mimeType,
       Value<String?> mediaHash,
       Value<DateTime> importedAt,
@@ -6004,6 +6335,11 @@ class $$MediaItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get storageKind => $composableBuilder(
+    column: $table.storageKind,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get privatePath => $composableBuilder(
     column: $table.privatePath,
     builder: (column) => ColumnFilters(column),
@@ -6011,6 +6347,31 @@ class $$MediaItemsTableFilterComposer
 
   ColumnFilters<String> get internalName => $composableBuilder(
     column: $table.internalName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceKey => $composableBuilder(
+    column: $table.sourceKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get mediaStoreId => $composableBuilder(
+    column: $table.mediaStoreId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get volumeName => $composableBuilder(
+    column: $table.volumeName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get contentUri => $composableBuilder(
+    column: $table.contentUri,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get sourceDateModified => $composableBuilder(
+    column: $table.sourceDateModified,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6216,6 +6577,11 @@ class $$MediaItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get storageKind => $composableBuilder(
+    column: $table.storageKind,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get privatePath => $composableBuilder(
     column: $table.privatePath,
     builder: (column) => ColumnOrderings(column),
@@ -6223,6 +6589,31 @@ class $$MediaItemsTableOrderingComposer
 
   ColumnOrderings<String> get internalName => $composableBuilder(
     column: $table.internalName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceKey => $composableBuilder(
+    column: $table.sourceKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get mediaStoreId => $composableBuilder(
+    column: $table.mediaStoreId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get volumeName => $composableBuilder(
+    column: $table.volumeName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get contentUri => $composableBuilder(
+    column: $table.contentUri,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get sourceDateModified => $composableBuilder(
+    column: $table.sourceDateModified,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -6274,6 +6665,11 @@ class $$MediaItemsTableAnnotationComposer
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get storageKind => $composableBuilder(
+    column: $table.storageKind,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get privatePath => $composableBuilder(
     column: $table.privatePath,
     builder: (column) => column,
@@ -6281,6 +6677,29 @@ class $$MediaItemsTableAnnotationComposer
 
   GeneratedColumn<String> get internalName => $composableBuilder(
     column: $table.internalName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceKey =>
+      $composableBuilder(column: $table.sourceKey, builder: (column) => column);
+
+  GeneratedColumn<int> get mediaStoreId => $composableBuilder(
+    column: $table.mediaStoreId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get volumeName => $composableBuilder(
+    column: $table.volumeName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get contentUri => $composableBuilder(
+    column: $table.contentUri,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get sourceDateModified => $composableBuilder(
+    column: $table.sourceDateModified,
     builder: (column) => column,
   );
 
@@ -6503,8 +6922,14 @@ class $$MediaItemsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
-                Value<String> privatePath = const Value.absent(),
-                Value<String> internalName = const Value.absent(),
+                Value<String> storageKind = const Value.absent(),
+                Value<String?> privatePath = const Value.absent(),
+                Value<String?> internalName = const Value.absent(),
+                Value<String?> sourceKey = const Value.absent(),
+                Value<int?> mediaStoreId = const Value.absent(),
+                Value<String?> volumeName = const Value.absent(),
+                Value<String?> contentUri = const Value.absent(),
+                Value<DateTime?> sourceDateModified = const Value.absent(),
                 Value<String?> mimeType = const Value.absent(),
                 Value<String?> mediaHash = const Value.absent(),
                 Value<DateTime> importedAt = const Value.absent(),
@@ -6514,8 +6939,14 @@ class $$MediaItemsTableTableManager
                 Value<String> status = const Value.absent(),
               }) => MediaItemsCompanion(
                 id: id,
+                storageKind: storageKind,
                 privatePath: privatePath,
                 internalName: internalName,
+                sourceKey: sourceKey,
+                mediaStoreId: mediaStoreId,
+                volumeName: volumeName,
+                contentUri: contentUri,
+                sourceDateModified: sourceDateModified,
                 mimeType: mimeType,
                 mediaHash: mediaHash,
                 importedAt: importedAt,
@@ -6527,8 +6958,14 @@ class $$MediaItemsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
-                required String privatePath,
-                required String internalName,
+                Value<String> storageKind = const Value.absent(),
+                Value<String?> privatePath = const Value.absent(),
+                Value<String?> internalName = const Value.absent(),
+                Value<String?> sourceKey = const Value.absent(),
+                Value<int?> mediaStoreId = const Value.absent(),
+                Value<String?> volumeName = const Value.absent(),
+                Value<String?> contentUri = const Value.absent(),
+                Value<DateTime?> sourceDateModified = const Value.absent(),
                 Value<String?> mimeType = const Value.absent(),
                 Value<String?> mediaHash = const Value.absent(),
                 required DateTime importedAt,
@@ -6538,8 +6975,14 @@ class $$MediaItemsTableTableManager
                 required String status,
               }) => MediaItemsCompanion.insert(
                 id: id,
+                storageKind: storageKind,
                 privatePath: privatePath,
                 internalName: internalName,
+                sourceKey: sourceKey,
+                mediaStoreId: mediaStoreId,
+                volumeName: volumeName,
+                contentUri: contentUri,
+                sourceDateModified: sourceDateModified,
                 mimeType: mimeType,
                 mediaHash: mediaHash,
                 importedAt: importedAt,

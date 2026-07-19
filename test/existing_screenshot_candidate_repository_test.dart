@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memoshot/core/database/contexto_database.dart'
@@ -152,8 +153,8 @@ void main() {
         .into(database.mediaItems)
         .insert(
           MediaItemsCompanion.insert(
-            privatePath: '/privado/item.png',
-            internalName: 'item.png',
+            privatePath: Value('/privado/item.png'),
+            internalName: Value('item.png'),
             importedAt: DateTime.utc(2026),
             sourceMode: 'photoPicker',
             status: 'ready',

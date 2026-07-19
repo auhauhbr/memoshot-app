@@ -19,8 +19,8 @@ void main() {
         .into(database.mediaItems)
         .insert(
           MediaItemsCompanion.insert(
-            privatePath: '/tmp/imagem-ficticia.png',
-            internalName: 'imagem.png',
+            privatePath: Value('/tmp/imagem-ficticia.png'),
+            internalName: Value('imagem.png'),
             importedAt: DateTime(2025),
             sourceMode: 'photoPicker',
             status: 'ready',
@@ -252,8 +252,8 @@ void main() {
         .into(database.mediaItems)
         .insert(
           MediaItemsCompanion.insert(
-            privatePath: privateCopy.path,
-            internalName: 'private.png',
+            privatePath: Value(privateCopy.path),
+            internalName: Value('private.png'),
             importedAt: DateTime(2026),
             sourceMode: 'photoPicker',
             status: 'ready',
@@ -283,8 +283,8 @@ void main() {
         .into(database.mediaItems)
         .insert(
           MediaItemsCompanion.insert(
-            privatePath: oldFile.path,
-            internalName: 'old.png',
+            privatePath: Value(oldFile.path),
+            internalName: Value('old.png'),
             importedAt: DateTime(2024),
             capturedAt: Value(DateTime(2027)),
             sourceMode: 'photoPicker',
@@ -295,8 +295,8 @@ void main() {
         .into(database.mediaItems)
         .insert(
           MediaItemsCompanion.insert(
-            privatePath: newFile.path,
-            internalName: 'new.png',
+            privatePath: Value(newFile.path),
+            internalName: Value('new.png'),
             importedAt: DateTime(2026),
             capturedAt: Value(DateTime(2025)),
             sourceMode: 'photoPicker',

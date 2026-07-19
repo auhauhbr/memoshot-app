@@ -267,8 +267,16 @@ class DriftProcessingJobStore implements ProcessingJobStore {
     }
     return domain_media.MediaItem(
       id: row.id,
-      privatePath: row.privatePath,
-      internalName: row.internalName,
+      location: domain_media.mediaItemLocationFromStorage(
+        storageKind: row.storageKind,
+        privatePath: row.privatePath,
+        internalName: row.internalName,
+        sourceKey: row.sourceKey,
+        mediaStoreId: row.mediaStoreId,
+        volumeName: row.volumeName,
+        contentUri: row.contentUri,
+        sourceDateModified: row.sourceDateModified,
+      ),
       mimeType: row.mimeType,
       mediaHash: row.mediaHash,
       importedAt: row.importedAt,

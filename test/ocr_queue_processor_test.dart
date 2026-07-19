@@ -458,7 +458,7 @@ void main() {
 
   test('arquivo ausente resulta em falha controlada', () async {
     final item = await createMediaItem(mediaStore, temporaryDirectory, 10);
-    File(item.privatePath).deleteSync();
+    File(item.privatePath!).deleteSync();
     await scheduler.schedule(item.id);
     final service = FakeRecognitionService(texts: ['não deve executar']);
     final queue = createQueue(jobStore, resultStore, service);

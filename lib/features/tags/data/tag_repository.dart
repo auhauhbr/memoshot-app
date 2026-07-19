@@ -155,7 +155,10 @@ class LocalTagRepository implements TagRepository {
   Future<List<MediaItem>> loadMediaForTag(int tagId) async {
     final items = await _store.listMediaForTag(tagId);
     return items
-        .where((item) => File(item.privatePath).existsSync())
+        .where((item) {
+          final path = item.privatePath;
+          return path == null || File(path).existsSync();
+        })
         .toList(growable: false);
   }
 

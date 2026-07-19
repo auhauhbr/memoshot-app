@@ -1,9 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
+import '../../../core/media_store/media_store_content.dart';
 import '../../processing/domain/processing_job.dart';
 import '../domain/media_item.dart';
+import 'media_item_thumbnail.dart';
 
 class ScreenshotGrid extends StatelessWidget {
   const ScreenshotGrid({
@@ -12,6 +12,7 @@ class ScreenshotGrid extends StatelessWidget {
     required this.onItemTap,
     this.snippets = const {},
     this.showStorageNote = true,
+    this.thumbnailGateway = const MethodChannelMediaStoreContentGateway(),
     super.key,
   });
 
@@ -20,6 +21,7 @@ class ScreenshotGrid extends StatelessWidget {
   final Map<int, String> snippets;
   final ValueChanged<MediaItem> onItemTap;
   final bool showStorageNote;
+  final MediaStoreContentGateway thumbnailGateway;
 
   @override
   Widget build(BuildContext context) {
@@ -74,18 +76,11 @@ class ScreenshotGrid extends StatelessWidget {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          Image.file(
-                            File(item.privatePath),
+                          MediaItemThumbnail(
+                            mediaItem: item,
                             key: ValueKey(item.id),
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                ColoredBox(
-                                  color: colors.surfaceContainerLow,
-                                  child: Icon(
-                                    Icons.broken_image_outlined,
-                                    color: colors.onSurfaceVariant,
-                                  ),
-                                ),
+                            gateway: thumbnailGateway,
                           ),
                           Positioned(
                             top: 5,

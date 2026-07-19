@@ -387,7 +387,10 @@ class LocalCategoryRepository implements CategoryRepository {
   Future<List<MediaItem>> loadMediaForCategory(int categoryId) async {
     final items = await _store.listMediaForCategory(categoryId);
     return items
-        .where((item) => File(item.privatePath).existsSync())
+        .where((item) {
+          final path = item.privatePath;
+          return path == null || File(path).existsSync();
+        })
         .toList(growable: false);
   }
 

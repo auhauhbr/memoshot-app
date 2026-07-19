@@ -9,6 +9,7 @@ import '../../../core/media/image_picker_screenshot_picker.dart';
 import '../../../core/media/screenshot_picker.dart';
 import '../../../core/media/screenshot_storage.dart';
 import '../../../core/media_store/existing_screenshot_scanner.dart';
+import '../../../core/media_store/media_store_content.dart';
 import '../../../core/navigation/review_navigation_source.dart';
 import '../../../core/notifications/method_channel_review_notification_gateway.dart';
 import '../../../core/ocr/ml_kit_text_recognition_service.dart';
@@ -72,6 +73,7 @@ class HomePage extends StatefulWidget {
     this.reviewNotificationCoordinator,
     this.reviewNavigationSource,
     this.existingScreenshotInventoryCoordinator,
+    this.mediaStoreContentGateway,
   });
 
   final ScreenshotPicker? screenshotPicker;
@@ -90,6 +92,7 @@ class HomePage extends StatefulWidget {
   final ReviewNavigationSource? reviewNavigationSource;
   final ExistingScreenshotInventoryCoordinator?
   existingScreenshotInventoryCoordinator;
+  final MediaStoreContentGateway? mediaStoreContentGateway;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -930,6 +933,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ocrQueue: _ocrQueue,
           categoryRepository: _categoryRepository,
           tagRepository: _tagRepository,
+          thumbnailGateway:
+              widget.mediaStoreContentGateway ??
+              const MethodChannelMediaStoreContentGateway(),
         ),
       ),
     );
@@ -1149,6 +1155,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             result.mediaItem.id: result.snippet,
                         },
                         onItemTap: _openDetails,
+                        thumbnailGateway:
+                            widget.mediaStoreContentGateway ??
+                            const MethodChannelMediaStoreContentGateway(),
                       ),
                     ],
                   ] else if (_mediaItems.isNotEmpty) ...[
@@ -1157,6 +1166,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       mediaItems: _mediaItems,
                       ocrStates: _ocrStates,
                       onItemTap: _openDetails,
+                      thumbnailGateway:
+                          widget.mediaStoreContentGateway ??
+                          const MethodChannelMediaStoreContentGateway(),
                     ),
                   ] else if (!_isLoading && !_isFiltering) ...[
                     const SizedBox(height: 10),

@@ -383,8 +383,16 @@ class DriftCategoryStore implements CategoryStore {
   media_domain.MediaItem _mediaToDomain(MediaItem row) {
     return media_domain.MediaItem(
       id: row.id,
-      privatePath: row.privatePath,
-      internalName: row.internalName,
+      location: media_domain.mediaItemLocationFromStorage(
+        storageKind: row.storageKind,
+        privatePath: row.privatePath,
+        internalName: row.internalName,
+        sourceKey: row.sourceKey,
+        mediaStoreId: row.mediaStoreId,
+        volumeName: row.volumeName,
+        contentUri: row.contentUri,
+        sourceDateModified: row.sourceDateModified,
+      ),
       mimeType: row.mimeType,
       mediaHash: row.mediaHash,
       importedAt: row.importedAt,

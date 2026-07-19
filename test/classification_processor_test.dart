@@ -410,8 +410,8 @@ Future<MediaItem> _insertMedia(
       .into(database.mediaItems)
       .insert(
         MediaItemsCompanion.insert(
-          privatePath: '/tmp/$name',
-          internalName: name,
+          privatePath: Value('/tmp/$name'),
+          internalName: Value(name),
           mimeType: const Value('image/png'),
           importedAt: importedAt,
           capturedAt: Value(importedAt),

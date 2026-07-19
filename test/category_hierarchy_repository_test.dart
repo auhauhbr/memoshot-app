@@ -19,8 +19,8 @@ void main() {
         .into(database.mediaItems)
         .insert(
           MediaItemsCompanion.insert(
-            privatePath: '/tmp/hierarquia.png',
-            internalName: 'hierarquia.png',
+            privatePath: Value('/tmp/hierarquia.png'),
+            internalName: Value('hierarquia.png'),
             importedAt: DateTime(2026),
             sourceMode: 'photoPicker',
             status: 'ready',
