@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import '../../../core/text/text_normalizer.dart';
 import '../../../core/visual/local_visual_analyzer.dart';
+import '../../library/domain/capture_app_context.dart';
 import 'classification_models.dart';
 
 const contextualExistingDestinationThreshold = 0.82;
@@ -8,6 +11,610 @@ const contextualDestinationMargin = 0.15;
 const contextualTagThreshold = 0.75;
 const maximumContextualTags = 4;
 
+enum SemanticSubject {
+  books,
+  career,
+  studies,
+  products,
+  sports,
+  conversations,
+  documents,
+  development,
+  quotes,
+  other,
+  uncertain,
+}
+
+enum ContentForm {
+  bookCover,
+  bookExcerpt,
+  quotation,
+  productPage,
+  socialMediaPost,
+  chatList,
+  chatMessage,
+  jobPosting,
+  article,
+  scoreboard,
+  sourceCode,
+  errorScreen,
+  receipt,
+  document,
+  genericImage,
+  unknown,
+}
+
+enum ContentOrigin {
+  conversation,
+  amazon,
+  reddit,
+  instagram,
+  linkedIn,
+  gitHub,
+  mercadoLivre,
+  mercadoPago,
+  web,
+  localDocument,
+  unknown,
+}
+
+enum ProbableIntent {
+  read,
+  learn,
+  buy,
+  apply,
+  interview,
+  reply,
+  remember,
+  prove,
+  reference,
+  unknown,
+}
+
+enum BookOrganization { singleFolder, detailed }
+
+final class SemanticOrganizationPreferences {
+  const SemanticOrganizationPreferences({
+    this.bookOrganization = BookOrganization.singleFolder,
+    this.quotesEnabled = false,
+  });
+
+  final BookOrganization bookOrganization;
+  final bool quotesEnabled;
+}
+
+final class SemanticDestinationCandidate {
+  const SemanticDestinationCandidate({
+    required this.subject,
+    required this.confidence,
+  });
+
+  final SemanticSubject subject;
+  final double confidence;
+}
+
+final class SemanticScreenshotAnalysis {
+  SemanticScreenshotAnalysis({
+    required this.captureApp,
+    required this.contentOrigin,
+    required this.semanticSubject,
+    required this.contentForm,
+    required this.probableIntent,
+    required List<SemanticDestinationCandidate> destinationCandidates,
+    required this.semanticConfidence,
+    required this.modelSource,
+  }) : destinationCandidates = List.unmodifiable(destinationCandidates);
+
+  final NormalizedCaptureAppKey? captureApp;
+  final ContentOrigin contentOrigin;
+  final SemanticSubject semanticSubject;
+  final ContentForm contentForm;
+  final ProbableIntent probableIntent;
+  final List<SemanticDestinationCandidate> destinationCandidates;
+  final double semanticConfidence;
+  final String modelSource;
+
+  /// Payload mínimo preparado para persistência futura. OCR, imagem, prompts e
+  /// explicações deliberadamente não fazem parte deste contrato.
+  Map<String, Object?> toPersistenceFields() => {
+    'captureApp': captureApp?.name,
+    'contentOrigin': contentOrigin.name,
+    'semanticSubject': semanticSubject.name,
+    'contentForm': contentForm.name,
+    'probableIntent': probableIntent.name,
+    'semanticConfidence': semanticConfidence,
+    'modelSource': modelSource,
+  };
+}
+
+final class SemanticClassificationCorrection {
+  const SemanticClassificationCorrection({
+    required this.previousCategory,
+    required this.manualCategory,
+    required this.correctedSubject,
+    required this.correctedForm,
+  });
+
+  final String? previousCategory;
+  final String manualCategory;
+  final SemanticSubject correctedSubject;
+  final ContentForm correctedForm;
+}
+
+final class SemanticScreenshotInput {
+  const SemanticScreenshotInput({
+    required this.normalizedOcr,
+    required this.visualAnalysis,
+    required this.captureAppContext,
+    required this.allowedCatalog,
+    required this.preferences,
+  });
+
+  final String normalizedOcr;
+  final VisualAnalysisResult? visualAnalysis;
+  final CaptureAppContext? captureAppContext;
+  final Set<String> allowedCatalog;
+  final SemanticOrganizationPreferences preferences;
+}
+
+abstract interface class SemanticScreenshotAnalyzer {
+  SemanticScreenshotAnalysis analyze(SemanticScreenshotInput input);
+}
+
+abstract interface class LocalTextEmbeddingModel {
+  List<double> encode(String normalizedText);
+
+  String get modelSource;
+}
+
+/// Baseline pequeno da prova A. Ele transforma texto em um vetor de n-gramas e
+/// compara o vetor completo com exemplos semânticos. Não soma palavras nem usa
+/// o aplicativo capturado como classe de destino.
+final class FeatureHashingTextEmbeddingModel
+    implements LocalTextEmbeddingModel {
+  const FeatureHashingTextEmbeddingModel({this.dimensions = 1024});
+
+  final int dimensions;
+
+  @override
+  String get modelSource => 'local-feature-embedding-v1+mlkit-aux';
+
+  @override
+  List<double> encode(String normalizedText) {
+    final result = List<double>.filled(dimensions, 0);
+    final tokens = normalizedText
+        .split(RegExp(r'\s+'))
+        .where((token) => token.length > 1)
+        .toList(growable: false);
+    for (var index = 0; index < tokens.length; index++) {
+      _add(result, tokens[index], 1);
+      if (index + 1 < tokens.length) {
+        _add(result, '${tokens[index]} ${tokens[index + 1]}', 0.65);
+      }
+      final padded = '^${tokens[index]}\$';
+      for (var offset = 0; offset + 3 <= padded.length; offset++) {
+        _add(result, padded.substring(offset, offset + 3), 0.18);
+      }
+    }
+    final magnitude = math.sqrt(
+      result.fold<double>(0, (sum, v) => sum + v * v),
+    );
+    if (magnitude > 0) {
+      for (var index = 0; index < result.length; index++) {
+        result[index] /= magnitude;
+      }
+    }
+    return result;
+  }
+
+  void _add(List<double> vector, String feature, double weight) {
+    var hash = 0x811c9dc5;
+    for (final unit in feature.codeUnits) {
+      hash = ((hash ^ unit) * 0x01000193) & 0x7fffffff;
+    }
+    vector[hash % vector.length] += weight;
+  }
+}
+
+final class LocalSemanticScreenshotAnalyzer
+    implements SemanticScreenshotAnalyzer {
+  LocalSemanticScreenshotAnalyzer({
+    this.normalizer = const TextNormalizer(),
+    this.embeddingModel = const FeatureHashingTextEmbeddingModel(),
+  });
+
+  final TextNormalizer normalizer;
+  final LocalTextEmbeddingModel embeddingModel;
+
+  late final Map<SemanticSubject, List<double>> _subjectVectors = {
+    for (final entry in _subjectPrototypes.entries)
+      entry.key: embeddingModel.encode(normalizer.normalize(entry.value)),
+  };
+  late final Map<ContentForm, List<double>> _formVectors = {
+    for (final entry in _formPrototypes.entries)
+      entry.key: embeddingModel.encode(normalizer.normalize(entry.value)),
+  };
+
+  @override
+  SemanticScreenshotAnalysis analyze(SemanticScreenshotInput input) {
+    final text = normalizer.normalize(input.normalizedOcr);
+    final visualText =
+        input.visualAnalysis?.labels
+            .where((label) => label.confidence >= 0.55)
+            .map((label) => label.key)
+            .join(' ') ??
+        '';
+    final textVector = embeddingModel.encode(text);
+    final visualVector = embeddingModel.encode(visualText);
+    final subjectScores = <SemanticSubject, double>{
+      for (final entry in _subjectVectors.entries)
+        entry.key: _fusedSimilarity(textVector, visualVector, entry.value),
+    };
+    final ranked = subjectScores.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final best = ranked.first;
+    final understood = text.isNotEmpty && best.value >= 0.04;
+    var subject = understood ? best.key : SemanticSubject.uncertain;
+    var confidence = understood
+        ? (0.78 + best.value * 0.32).clamp(0, 0.99).toDouble()
+        : 0.25;
+    var form = _classifyForm(
+      text: text,
+      textVector: textVector,
+      visualVector: visualVector,
+      subject: subject,
+      captureApp: input.captureAppContext?.normalizedAppKey,
+    );
+    final quoteSimilarity = subjectScores[SemanticSubject.quotes] ?? 0;
+    if (understood &&
+        (best.key == SemanticSubject.quotes ||
+            (best.key == SemanticSubject.books && quoteSimilarity >= 0.04))) {
+      form = ContentForm.quotation;
+    }
+    final origin = _contentOrigin(
+      text,
+      form: form,
+      captureApp: input.captureAppContext?.normalizedAppKey,
+    );
+
+    // Uma citação só é Livro quando o texto também se aproxima do conceito de
+    // obra/autoria. A conversa é apenas o meio pelo qual ela chegou.
+    if (form == ContentForm.quotation) {
+      final bookSimilarity = subjectScores[SemanticSubject.books] ?? 0;
+      if (bookSimilarity >= 0.07 && bookSimilarity >= quoteSimilarity * 0.55) {
+        subject = SemanticSubject.books;
+        confidence = math.max(confidence, 0.86);
+      } else {
+        subject = SemanticSubject.quotes;
+        confidence = math.max(confidence, 0.84);
+      }
+    }
+    if (subject == SemanticSubject.career &&
+        (form == ContentForm.chatList || form == ContentForm.chatMessage)) {
+      form = ContentForm.jobPosting;
+    }
+
+    final candidates = understood
+        ? ranked
+              .where((entry) => entry.value >= 0.12)
+              .take(3)
+              .map(
+                (entry) => SemanticDestinationCandidate(
+                  subject: entry.key,
+                  confidence: (0.45 + entry.value * 0.40)
+                      .clamp(0, 0.99)
+                      .toDouble(),
+                ),
+              )
+              .toList(growable: false)
+        : const <SemanticDestinationCandidate>[];
+    final adjustedCandidates = <SemanticDestinationCandidate>[
+      if (subject != SemanticSubject.uncertain)
+        SemanticDestinationCandidate(subject: subject, confidence: confidence),
+      for (final candidate in candidates)
+        if (candidate.subject != subject) candidate,
+    ].take(3).toList(growable: false);
+    return SemanticScreenshotAnalysis(
+      captureApp: input.captureAppContext?.normalizedAppKey,
+      contentOrigin: origin,
+      semanticSubject: subject,
+      contentForm: form,
+      probableIntent: _intent(subject, form, textVector),
+      destinationCandidates: adjustedCandidates,
+      semanticConfidence: confidence,
+      modelSource: embeddingModel.modelSource,
+    );
+  }
+
+  ContentForm _classifyForm({
+    required String text,
+    required List<double> textVector,
+    required List<double> visualVector,
+    required SemanticSubject subject,
+    required NormalizedCaptureAppKey? captureApp,
+  }) {
+    if (text.isEmpty) return ContentForm.unknown;
+    final ranked =
+        _formVectors.entries
+            .map(
+              (entry) => MapEntry(
+                entry.key,
+                _fusedSimilarity(textVector, visualVector, entry.value),
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
+    final semanticForm = ranked.first.value >= 0.15
+        ? ranked.first.key
+        : ContentForm.unknown;
+    if (subject == SemanticSubject.books) {
+      if (semanticForm == ContentForm.quotation) return semanticForm;
+      if (semanticForm == ContentForm.bookCover ||
+          captureApp == NormalizedCaptureAppKey.amazon) {
+        return ContentForm.bookCover;
+      }
+      return ContentForm.bookExcerpt;
+    }
+    if (subject == SemanticSubject.products) {
+      if (captureApp == NormalizedCaptureAppKey.instagram) {
+        return ContentForm.socialMediaPost;
+      }
+      return ContentForm.productPage;
+    }
+    if (subject == SemanticSubject.career) return ContentForm.jobPosting;
+    if (subject == SemanticSubject.sports) return ContentForm.scoreboard;
+    if (subject == SemanticSubject.development) {
+      return semanticForm == ContentForm.errorScreen
+          ? ContentForm.errorScreen
+          : ContentForm.sourceCode;
+    }
+    if (subject == SemanticSubject.documents) {
+      return semanticForm == ContentForm.receipt
+          ? ContentForm.receipt
+          : ContentForm.document;
+    }
+    if (semanticForm == ContentForm.quotation) return semanticForm;
+    if (captureApp == NormalizedCaptureAppKey.whatsapp) {
+      return semanticForm == ContentForm.chatList
+          ? ContentForm.chatList
+          : ContentForm.chatMessage;
+    }
+    return semanticForm;
+  }
+
+  double _fusedSimilarity(
+    List<double> text,
+    List<double> visual,
+    List<double> prototype,
+  ) => _cosine(text, prototype) * 0.88 + _cosine(visual, prototype) * 0.12;
+
+  double _cosine(List<double> first, List<double> second) {
+    var dot = 0.0;
+    for (var index = 0; index < first.length; index++) {
+      dot += first[index] * second[index];
+    }
+    return dot.clamp(0, 1).toDouble();
+  }
+
+  ContentOrigin _contentOrigin(
+    String text, {
+    required ContentForm form,
+    required NormalizedCaptureAppKey? captureApp,
+  }) {
+    if (text.contains('amazon.com') || text.contains('amazonbrasil')) {
+      return ContentOrigin.amazon;
+    }
+    if (text.contains('reddit.com') || text.contains(' r/')) {
+      return ContentOrigin.reddit;
+    }
+    if (text.contains('linkedin.com')) return ContentOrigin.linkedIn;
+    if (text.contains('github.com')) return ContentOrigin.gitHub;
+    if (text.contains('mercadolivre.com')) return ContentOrigin.mercadoLivre;
+    if (text.contains('mercadopago.com')) return ContentOrigin.mercadoPago;
+    if (text.contains('whatsapp')) return ContentOrigin.conversation;
+    if (captureApp == NormalizedCaptureAppKey.amazon) {
+      return ContentOrigin.amazon;
+    }
+    if (captureApp == NormalizedCaptureAppKey.whatsapp) {
+      return ContentOrigin.conversation;
+    }
+    if (form == ContentForm.chatList ||
+        form == ContentForm.chatMessage ||
+        (captureApp == NormalizedCaptureAppKey.whatsapp &&
+            form == ContentForm.jobPosting)) {
+      return ContentOrigin.conversation;
+    }
+    if (captureApp == NormalizedCaptureAppKey.instagram) {
+      return ContentOrigin.instagram;
+    }
+    if (captureApp?.isBrowser == true) return ContentOrigin.web;
+    return ContentOrigin.unknown;
+  }
+
+  ProbableIntent _intent(
+    SemanticSubject subject,
+    ContentForm form,
+    List<double> textVector,
+  ) {
+    if (form == ContentForm.receipt) return ProbableIntent.prove;
+    if (form == ContentForm.jobPosting) {
+      final interview = _cosine(
+        textVector,
+        embeddingModel.encode(
+          normalizer.normalize(
+            'entrevista entrevistador recrutadora reunião entrevista técnica',
+          ),
+        ),
+      );
+      final vacancy = _cosine(
+        textVector,
+        embeddingModel.encode(
+          normalizer.normalize(
+            'discussão mercado trabalho recrutamento vagas oportunidade emprego requisitos',
+          ),
+        ),
+      );
+      return interview > vacancy + 0.03
+          ? ProbableIntent.interview
+          : ProbableIntent.apply;
+    }
+    if (form == ContentForm.productPage ||
+        form == ContentForm.socialMediaPost &&
+            subject == SemanticSubject.products) {
+      return ProbableIntent.buy;
+    }
+    if (form == ContentForm.chatMessage || form == ContentForm.chatList) {
+      return ProbableIntent.reply;
+    }
+    return switch (subject) {
+      SemanticSubject.books => ProbableIntent.read,
+      SemanticSubject.studies => ProbableIntent.learn,
+      SemanticSubject.development ||
+      SemanticSubject.documents => ProbableIntent.reference,
+      SemanticSubject.uncertain => ProbableIntent.unknown,
+      _ => ProbableIntent.remember,
+    };
+  }
+}
+
+const _subjectPrototypes = <SemanticSubject, String>{
+  SemanticSubject.books:
+      'obra literária livro romance autor editora capítulo página trecho leitura capa sinopse isbn',
+  SemanticSubject.career:
+      'emprego trabalho oportunidade profissional recrutamento candidatura seleção currículo entrevista vaga',
+  SemanticSubject.studies:
+      'estudo aprendizado aula curso exercício matéria prova professor conteúdo didático',
+  SemanticSubject.products:
+      'produto oferta loja preço comprar carrinho entrega promoção marca modelo venda',
+  SemanticSubject.sports:
+      'esporte jogo partida campeonato time placar resultado classificação futebol',
+  SemanticSubject.conversations:
+      'conversa contato mensagem grupo áudio responder chamada bate papo',
+  SemanticSubject.documents:
+      'documento recibo comprovante pagamento contrato protocolo nota fiscal transação',
+  SemanticSubject.development:
+      'programação código fonte terminal erro exception stack trace compilação github flutter',
+  SemanticSubject.quotes:
+      'citação frase reflexão pensamento aforismo mensagem inspiradora aspas',
+};
+
+const _formPrototypes = <ContentForm, String>{
+  ContentForm.bookCover: 'capa título autor editora isbn edição livro',
+  ContentForm.bookExcerpt:
+      'página capítulo parágrafo trecho texto leitura livro',
+  ContentForm.quotation:
+      'frase entre aspas citação autoria reflexão trecho citado',
+  ContentForm.productPage:
+      'página produto preço comprar carrinho frete entrega',
+  ContentForm.socialMediaPost:
+      'publicação perfil seguidores curtir comentar compartilhar instagram',
+  ContentForm.chatList: 'lista conversas grupos contatos mensagens recentes',
+  ContentForm.chatMessage: 'mensagem conversa responder áudio online contato',
+  ContentForm.jobPosting:
+      'anúncio vaga candidatura requisitos emprego processo seletivo',
+  ContentForm.article: 'artigo notícia título matéria publicação leitura',
+  ContentForm.scoreboard: 'placar resultado partida time campeonato tabela',
+  ContentForm.sourceCode: 'código função classe variável terminal programação',
+  ContentForm.errorScreen:
+      'erro exception stack trace falha terminal compilação',
+  ContentForm.receipt:
+      'comprovante pagamento transação valor favorecido autenticação pix',
+  ContentForm.document: 'documento contrato protocolo formulário identificação',
+};
+
+final class SemanticDestination {
+  const SemanticDestination({
+    required this.root,
+    this.subfolder,
+    required this.confidence,
+    required this.margin,
+  });
+
+  final String? root;
+  final String? subfolder;
+  final double confidence;
+  final double margin;
+
+  String? get persistedName => root == null
+      ? null
+      : subfolder == null
+      ? root
+      : '$root / $subfolder';
+}
+
+final class SemanticDestinationPolicy {
+  const SemanticDestinationPolicy();
+
+  SemanticDestination resolve({
+    required SemanticScreenshotAnalysis analysis,
+    required Set<String> allowedCatalog,
+    required SemanticOrganizationPreferences preferences,
+  }) {
+    if (analysis.semanticSubject == SemanticSubject.uncertain) {
+      return const SemanticDestination(root: null, confidence: 0.25, margin: 0);
+    }
+    var root = switch (analysis.semanticSubject) {
+      SemanticSubject.books => 'Livros',
+      SemanticSubject.career => 'Carreira',
+      SemanticSubject.studies => 'Estudos',
+      SemanticSubject.products => 'Produtos',
+      SemanticSubject.sports => 'Esportes',
+      SemanticSubject.conversations => 'Conversas',
+      SemanticSubject.documents => 'Documentos',
+      SemanticSubject.development => 'Desenvolvimento',
+      SemanticSubject.quotes when preferences.quotesEnabled => 'Citações',
+      SemanticSubject.other => 'Outros',
+      _ => null,
+    };
+    if (root == null || !allowedCatalog.contains(root)) {
+      return SemanticDestination(
+        root: null,
+        confidence: analysis.semanticConfidence,
+        margin: 0,
+      );
+    }
+    String? child;
+    if (root == 'Livros' &&
+        preferences.bookOrganization == BookOrganization.detailed) {
+      child = switch (analysis.contentForm) {
+        ContentForm.bookCover => 'Capas',
+        ContentForm.bookExcerpt => 'Trechos',
+        ContentForm.quotation => 'Citações',
+        _ => null,
+      };
+    } else if (root == 'Carreira' &&
+        analysis.contentForm == ContentForm.jobPosting) {
+      child = analysis.probableIntent == ProbableIntent.interview
+          ? 'Entrevistas'
+          : 'Vagas';
+    } else if (root == 'Documentos' &&
+        analysis.contentForm == ContentForm.receipt) {
+      child = 'Comprovantes';
+    } else if (root == 'Desenvolvimento') {
+      child = analysis.contentForm == ContentForm.errorScreen
+          ? 'Erros'
+          : 'Código';
+    }
+    if (child != null && !allowedCatalog.contains('$root / $child')) {
+      child = null;
+    }
+    final second = analysis.destinationCandidates
+        .where((candidate) => candidate.subject != analysis.semanticSubject)
+        .map((candidate) => candidate.confidence)
+        .firstOrNull;
+    return SemanticDestination(
+      root: root,
+      subfolder: child,
+      confidence: analysis.semanticConfidence,
+      margin: (analysis.semanticConfidence - (second ?? 0))
+          .clamp(0, 1)
+          .toDouble(),
+    );
+  }
+}
+
+// Tipos legados mantidos na borda enquanto sugestões persistidas ainda usam o
+// contrato anterior. O decisor, porém, é exclusivamente a análise semântica.
 enum ProbableOrigin {
   whatsapp,
   amazon,
@@ -17,6 +624,7 @@ enum ProbableOrigin {
   instagram,
   gitHub,
   browser,
+  reddit,
   unknown,
 }
 
@@ -25,8 +633,10 @@ enum VisualContentType {
   productPage,
   bookCover,
   bookExcerpt,
+  quotation,
   resultTable,
   code,
+  error,
   document,
   receipt,
   post,
@@ -42,14 +652,13 @@ enum ContentSubject {
   sports,
   development,
   documents,
-  finance,
   conversations,
+  quotes,
   unknown,
 }
 
 final class ContextualDimension<T> {
   const ContextualDimension({required this.value, required this.confidence});
-
   final T value;
   final double confidence;
 }
@@ -70,7 +679,6 @@ final class ContextualSignals {
     required this.hasProbableApp,
     required this.hasStrongNegative,
   });
-
   final bool hasCurrencyValue;
   final bool hasProductPrice;
   final bool hasPaymentEvidence;
@@ -94,15 +702,12 @@ final class ContextualDestination {
     required this.margin,
     required List<SuggestedTag> tags,
   }) : tags = List.unmodifiable(tags);
-
   final String? root;
   final String? subfolder;
   final double confidence;
   final double margin;
   final List<SuggestedTag> tags;
-
   bool get isCatalogued => root != null;
-
   String? get persistedName => root == null
       ? null
       : subfolder == null
@@ -112,21 +717,23 @@ final class ContextualDestination {
 
 final class ContextualClassificationResult {
   ContextualClassificationResult({
+    required this.analysis,
     required this.origin,
     required this.visualType,
     required this.subject,
     required this.destination,
     required this.signals,
+    required this.captureAppContext,
     required List<ClassificationEvidence> evidence,
   }) : evidence = List.unmodifiable(evidence);
-
+  final SemanticScreenshotAnalysis analysis;
   final ContextualDimension<ProbableOrigin> origin;
   final ContextualDimension<VisualContentType> visualType;
   final ContextualDimension<ContentSubject> subject;
   final ContextualDestination destination;
   final ContextualSignals signals;
+  final CaptureAppContext? captureAppContext;
   final List<ClassificationEvidence> evidence;
-
   ClassificationSuggestion toSuggestion() => ClassificationSuggestion(
     suggestedCategoryName: destination.persistedName,
     suggestedTags: destination.tags,
@@ -137,7 +744,6 @@ final class ContextualClassificationResult {
 
 class ContextualFolderCatalog {
   const ContextualFolderCatalog._();
-
   static const roots = <String>{
     'Livros',
     'Carreira',
@@ -149,9 +755,8 @@ class ContextualFolderCatalog {
     'Conversas',
     'Outros',
   };
-
   static const children = <String, Set<String>>{
-    'Livros': {'Capas', 'Trechos'},
+    'Livros': {'Capas', 'Trechos', 'Citações'},
     'Carreira': {'Vagas', 'Entrevistas'},
     'Estudos': {'Cursos', 'Materiais'},
     'Documentos': {'Comprovantes'},
@@ -161,12 +766,14 @@ class ContextualFolderCatalog {
     'Conversas': {},
     'Outros': {},
   };
-
-  static bool accepts(String root, String? child) {
-    if (!roots.contains(root)) return false;
-    return child == null || children[root]!.contains(child);
-  }
-
+  static Set<String> get paths => {
+    ...roots,
+    for (final entry in children.entries)
+      for (final child in entry.value) '${entry.key} / $child',
+  };
+  static bool accepts(String root, String? child) =>
+      roots.contains(root) &&
+      (child == null || children[root]!.contains(child));
   static (String, String?)? parse(String? value) {
     if (value == null) return null;
     final parts = value.split('/').map((part) => part.trim()).toList();
@@ -182,15 +789,14 @@ class ContextualFolderCatalog {
 
   static String? _official(Iterable<String> values, String candidate) {
     final normalized = const TextNormalizer().normalize(candidate);
-    return values.where((value) {
-      return const TextNormalizer().normalize(value) == normalized;
-    }).firstOrNull;
+    return values
+        .where((value) => const TextNormalizer().normalize(value) == normalized)
+        .firstOrNull;
   }
 }
 
 class ContextualTagCatalog {
   const ContextualTagCatalog._();
-
   static const names = <String>{
     'WhatsApp',
     'Amazon',
@@ -200,6 +806,7 @@ class ContextualTagCatalog {
     'Instagram',
     'GitHub',
     'Navegador',
+    'Reddit',
     'Produto',
     'Livro',
     'Conversa',
@@ -207,17 +814,16 @@ class ContextualTagCatalog {
     'Documento',
     'Comprovante',
     'Pagamento',
-    'Horário',
     'Tabela',
     'Vaga',
     'Curso',
+    'Futebol',
+    'Citação',
     'Carro',
     'Notebook',
     'Teclado',
     'Peça mecânica',
-    'Futebol',
   };
-
   static bool contains(String value) {
     final normalized = const TextNormalizer().normalize(value);
     return names.any(
@@ -229,668 +835,211 @@ class ContextualTagCatalog {
 class ContextualClassificationEngine {
   const ContextualClassificationEngine({
     this.normalizer = const TextNormalizer(),
+    this.analyzer,
+    this.destinationPolicy = const SemanticDestinationPolicy(),
+    this.preferences = const SemanticOrganizationPreferences(),
   });
 
   final TextNormalizer normalizer;
+  final SemanticScreenshotAnalyzer? analyzer;
+  final SemanticDestinationPolicy destinationPolicy;
+  final SemanticOrganizationPreferences preferences;
 
   ContextualClassificationResult classify({
     required String ocrText,
     VisualAnalysisResult? visualAnalysis,
+    CaptureAppContext? captureAppContext,
   }) {
-    final text = ' ${normalizer.normalize(ocrText)} ';
-    final visual = <String, double>{
-      for (final label in visualAnalysis?.labels ?? const <VisualLabel>[])
-        label.key: label.confidence,
-    };
-    final origin = _detectOrigin(text);
-    final currency = _currencyPattern.hasMatch(ocrText);
-    final productContext =
-        _hasAny(text, _productTerms) ||
-        _isMarketplace(origin.value) ||
-        _hasVisual(visual, _productVisualLabels);
-    final paymentEvidence = _hasAny(text, _paymentTerms);
-    final transactionEvidence =
-        paymentEvidence && _hasAny(text, _transactionTerms);
-    final hasTime = _timePattern.hasMatch(ocrText);
-    final contextualTime = hasTime && _hasAny(text, _timeContextTerms);
-    final hasScore =
-        _scorePattern.hasMatch(ocrText) && _hasAny(text, _sportsTerms);
-    final signals = ContextualSignals(
-      hasCurrencyValue: currency,
-      hasProductPrice: currency && productContext && !transactionEvidence,
-      hasPaymentEvidence: paymentEvidence,
-      hasTransactionEvidence: transactionEvidence,
-      hasDate: _datePattern.hasMatch(ocrText),
-      hasTime: hasTime,
-      hasContextualTime: contextualTime,
-      hasScore: hasScore,
-      hasTitle: _hasAny(text, const [' titulo ', ' autor ', ' modelo ']),
-      hasBrand: origin.value != ProbableOrigin.unknown,
-      hasDomain: _domainPattern.hasMatch(ocrText),
-      hasProbableApp: origin.value != ProbableOrigin.unknown,
-      hasStrongNegative:
-          (currency && productContext && !transactionEvidence) ||
-          (hasTime && !contextualTime),
+    final normalized = normalizer.normalize(ocrText);
+    final analysis =
+        (analyzer ?? LocalSemanticScreenshotAnalyzer(normalizer: normalizer))
+            .analyze(
+              SemanticScreenshotInput(
+                normalizedOcr: normalized,
+                visualAnalysis: visualAnalysis,
+                captureAppContext: captureAppContext,
+                allowedCatalog: ContextualFolderCatalog.paths,
+                preferences: preferences,
+              ),
+            );
+    final resolved = destinationPolicy.resolve(
+      analysis: analysis,
+      allowedCatalog: ContextualFolderCatalog.paths,
+      preferences: preferences,
     );
-
-    final scores = <_DestinationScore>[];
-    void score(String root, String? child, Iterable<double> weights) {
-      final confidence = _combine(weights);
-      if (confidence > 0) {
-        scores.add(_DestinationScore(root, child, confidence));
-      }
-    }
-
-    final bookWeights = <double>[
-      for (final term in _bookTerms)
-        if (text.contains(term.$1)) term.$2,
-      if (_hasVisual(visual, _bookVisualLabels)) 0.68,
-    ];
-    final isExcerpt = _hasAny(text, const [
-      ' trecho ',
-      ' capitulo ',
-      ' pagina ',
-      ' paragrafo ',
-    ]);
-    score('Livros', isExcerpt ? 'Trechos' : 'Capas', bookWeights);
-
-    final careerWeights = <double>[
-      for (final term in _careerTerms)
-        if (text.contains(term.$1)) term.$2,
-      if (origin.value == ProbableOrigin.linkedIn) 0.38,
-    ];
-    score(
-      'Carreira',
-      text.contains(' entrevista ') ? 'Entrevistas' : 'Vagas',
-      careerWeights,
-    );
-
-    final studiesWeights = <double>[
-      for (final term in _studyTerms)
-        if (text.contains(term.$1)) term.$2,
-    ];
-    score(
-      'Estudos',
-      _hasAny(text, const [' curso ', ' aula ', ' modulo ', ' videoaula '])
-          ? 'Cursos'
-          : 'Materiais',
-      studiesWeights,
-    );
-
-    final documentWeights = <double>[
-      for (final term in _documentTerms)
-        if (text.contains(term.$1)) term.$2,
-      if (_hasVisual(visual, const {'receipt'})) 0.70,
-      if (transactionEvidence) 0.62,
-    ];
-    score(
-      'Documentos',
-      transactionEvidence || text.contains(' comprovante ')
-          ? 'Comprovantes'
-          : null,
-      documentWeights,
-    );
-
-    final developmentWeights = <double>[
-      for (final term in _developmentTerms)
-        if (text.contains(term.$1)) term.$2,
-    ];
-    score(
-      'Desenvolvimento',
-      _hasAny(text, const [' erro ', ' exception ', ' stack trace ', ' falha '])
-          ? 'Erros'
-          : 'Código',
-      developmentWeights,
-    );
-
-    final productWeights = <double>[
-      for (final term in _weightedProductTerms)
-        if (text.contains(term.$1)) term.$2,
-      if (_isMarketplace(origin.value)) 0.48,
-      if (_hasVisual(visual, _productVisualLabels)) 0.62,
-      if (currency && productContext) 0.34,
-    ];
-    score('Produtos', null, productWeights);
-
-    final sportsWeights = <double>[
-      for (final term in _weightedSportsTerms)
-        if (text.contains(term.$1)) term.$2,
-      if (hasScore) 0.72,
-      if (_hasVisual(visual, _sportsVisualLabels)) 0.58,
-    ];
-    score('Esportes', null, sportsWeights);
-
-    final conversationWeights = <double>[
-      if (origin.value == ProbableOrigin.whatsapp) 0.48,
-      for (final term in _conversationTerms)
-        if (text.contains(term.$1)) term.$2,
-    ];
-    score('Conversas', null, conversationWeights);
-
-    scores.sort((first, second) {
-      final confidence = second.confidence.compareTo(first.confidence);
-      return confidence != 0
-          ? confidence
-          : first.persistedName.compareTo(second.persistedName);
-    });
-    final best = scores.firstOrNull;
-    final second = scores.length > 1 ? scores[1] : null;
-    final margin = best == null
-        ? 0.0
-        : (best.confidence - (second?.confidence ?? 0)).clamp(0, 1).toDouble();
-
-    final subject = _subjectFor(best?.root);
-    final type = _typeFor(
-      text: text,
-      visual: visual,
-      origin: origin.value,
-      destination: best,
-      transactionEvidence: transactionEvidence,
-      hasScore: hasScore,
-    );
-    final tags = _tagsFor(
-      text: text,
-      visual: visual,
-      origin: origin,
-      type: type,
-      transactionEvidence: transactionEvidence,
-      contextualTime: contextualTime,
-      hasScore: hasScore,
-    );
+    final tags = _tagsFor(analysis);
     final evidence = <ClassificationEvidence>[
-      if (best != null)
-        ClassificationEvidence(
-          ruleId: 'context.destination.${_key(best.root)}',
-          type: ClassificationEvidenceType.pattern,
-          description: 'Destino pertence ao catálogo contextual.',
-          weight: best.confidence,
-        ),
-      if (best?.child case final child?)
-        ClassificationEvidence(
-          ruleId: 'context.destination.${_key(best!.root)}.${_key(child)}',
-          type: ClassificationEvidenceType.pattern,
-          description: 'Subpasta pertence ao catálogo contextual.',
-          weight: best.confidence,
-        ),
+      ClassificationEvidence(
+        ruleId: 'semantic.model.${analysis.modelSource}',
+        type: ClassificationEvidenceType.pattern,
+        description: 'Análise semântica multimodal executada localmente.',
+        weight: analysis.semanticConfidence,
+      ),
       ClassificationEvidence(
         ruleId: 'context.destination.margin',
         type: ClassificationEvidenceType.pattern,
-        description: 'Margem técnica entre os destinos candidatos.',
-        weight: margin,
+        description: 'Margem entre candidatos semânticos.',
+        weight: resolved.margin,
       ),
-      if (currency && productContext && !transactionEvidence)
-        ClassificationEvidence(
-          ruleId: 'context.negative.price_not_payment',
-          type: ClassificationEvidenceType.pattern,
-          description: 'Preço de produto não representa pagamento.',
-          weight: 1,
-        ),
-      if (hasTime && !contextualTime)
-        ClassificationEvidence(
-          ruleId: 'context.negative.isolated_time',
-          type: ClassificationEvidenceType.pattern,
-          description: 'Horário isolado não influencia a organização.',
-          weight: 1,
-        ),
-      if (origin.value != ProbableOrigin.unknown)
-        ClassificationEvidence(
-          ruleId: 'context.origin.${origin.value.name}',
-          type: ClassificationEvidenceType.pattern,
-          description: 'Origem provável detectada por assinatura controlada.',
-          weight: origin.confidence,
-        ),
     ];
+    final signals = _signals(ocrText, normalized, analysis);
     return ContextualClassificationResult(
-      origin: origin,
-      visualType: type,
+      analysis: analysis,
+      origin: ContextualDimension(
+        value: _legacyOrigin(analysis),
+        confidence: analysis.contentOrigin == ContentOrigin.unknown ? 0 : 0.9,
+      ),
+      visualType: ContextualDimension(
+        value: _legacyForm(analysis.contentForm),
+        confidence: analysis.semanticConfidence,
+      ),
       subject: ContextualDimension(
-        value: subject,
-        confidence: best?.confidence ?? 0,
+        value: _legacySubject(analysis.semanticSubject),
+        confidence: analysis.semanticConfidence,
       ),
       destination: ContextualDestination(
-        root: best?.root,
-        subfolder: best?.child,
-        confidence: best?.confidence ?? 0,
-        margin: margin,
+        root: resolved.root,
+        subfolder: resolved.subfolder,
+        confidence: resolved.confidence,
+        margin: resolved.margin,
         tags: tags,
       ),
       signals: signals,
+      captureAppContext: captureAppContext,
       evidence: evidence,
     );
   }
 
-  ContextualDimension<ProbableOrigin> _detectOrigin(String text) {
-    final candidates = <ContextualDimension<ProbableOrigin>>[];
-    void add(ProbableOrigin origin, double confidence) {
-      candidates.add(
-        ContextualDimension(value: origin, confidence: confidence),
-      );
-    }
-
-    if (text.contains(' amazon.com') || text.contains(' amazon.com.br')) {
-      add(ProbableOrigin.amazon, 0.98);
-    } else if (text.contains(' amazon ') && _hasAny(text, _productTerms)) {
-      add(ProbableOrigin.amazon, 0.86);
-    }
-    if (text.contains(' mercadolivre.com') ||
-        text.contains(' mercado livre ') && _hasAny(text, _productTerms)) {
-      add(ProbableOrigin.mercadoLivre, 0.94);
-    }
-    if (text.contains(' mercadopago.com') ||
-        text.contains(' mercado pago ') && _hasAny(text, _paymentTerms)) {
-      add(ProbableOrigin.mercadoPago, 0.95);
-    }
-    if (text.contains(' linkedin.com') ||
-        text.contains(' linkedin ') && _hasAny(text, _careerContextTerms)) {
-      add(ProbableOrigin.linkedIn, 0.94);
-    }
-    if (text.contains(' github.com') ||
-        text.contains(' github ') && _hasAny(text, _developmentContextTerms)) {
-      add(ProbableOrigin.gitHub, 0.95);
-    }
-    if (text.contains(' instagram.com') ||
-        text.contains(' instagram ') &&
-            _hasAny(text, const [
-              ' seguir ',
-              ' seguidores ',
-              ' publicacao ',
-              ' reels ',
-            ])) {
-      add(ProbableOrigin.instagram, 0.92);
-    }
-    if (text.contains(' whatsapp ') &&
-        _hasAny(text, const [
-          ' mensagem ',
-          ' online ',
-          ' visto por ultimo ',
-          ' audio ',
-          ' digite uma mensagem ',
-          ' responder ',
-        ])) {
-      add(ProbableOrigin.whatsapp, 0.93);
-    }
-    if (text.contains(' google.com/search') ||
-        text.contains(' resultados da pesquisa ') ||
-        _hasAny(text, const [' brave ', ' chrome ']) &&
-            _domainPattern.hasMatch(text)) {
-      add(ProbableOrigin.browser, 0.86);
-    }
-    if (candidates.isEmpty) {
-      return const ContextualDimension(
-        value: ProbableOrigin.unknown,
-        confidence: 0,
-      );
-    }
-    candidates.sort((a, b) => b.confidence.compareTo(a.confidence));
-    return candidates.first;
-  }
-
-  ContextualDimension<VisualContentType> _typeFor({
-    required String text,
-    required Map<String, double> visual,
-    required ProbableOrigin origin,
-    required _DestinationScore? destination,
-    required bool transactionEvidence,
-    required bool hasScore,
-  }) {
-    if (transactionEvidence || destination?.child == 'Comprovantes') {
-      return const ContextualDimension(
-        value: VisualContentType.receipt,
-        confidence: 0.90,
-      );
-    }
-    if (destination?.child == 'Capas') {
-      return ContextualDimension(
-        value: VisualContentType.bookCover,
-        confidence: destination!.confidence,
-      );
-    }
-    if (destination?.child == 'Trechos') {
-      return ContextualDimension(
-        value: VisualContentType.bookExcerpt,
-        confidence: destination!.confidence,
-      );
-    }
-    if (hasScore || destination?.root == 'Esportes') {
-      return ContextualDimension(
-        value: VisualContentType.resultTable,
-        confidence: destination?.confidence ?? 0.75,
-      );
-    }
-    if (destination?.root == 'Produtos') {
-      return ContextualDimension(
-        value: _isMarketplace(origin)
-            ? VisualContentType.productPage
-            : VisualContentType.productImage,
-        confidence: destination!.confidence,
-      );
-    }
-    if (destination?.root == 'Desenvolvimento') {
-      return ContextualDimension(
-        value: VisualContentType.code,
-        confidence: destination!.confidence,
-      );
-    }
-    if (destination?.root == 'Documentos') {
-      return ContextualDimension(
-        value: VisualContentType.document,
-        confidence: destination!.confidence,
-      );
-    }
-    if (origin == ProbableOrigin.whatsapp &&
-        _hasAny(text, _conversationTerms.map((term) => term.$1))) {
-      return const ContextualDimension(
-        value: VisualContentType.conversation,
-        confidence: 0.82,
-      );
-    }
-    if (origin == ProbableOrigin.instagram) {
-      return const ContextualDimension(
-        value: VisualContentType.post,
-        confidence: 0.80,
-      );
-    }
-    return ContextualDimension(
-      value: VisualContentType.genericInterface,
-      confidence: _hasVisual(visual, const {'text', 'font', 'screenshot'})
-          ? 0.40
-          : 0,
-    );
-  }
-
-  List<SuggestedTag> _tagsFor({
-    required String text,
-    required Map<String, double> visual,
-    required ContextualDimension<ProbableOrigin> origin,
-    required ContextualDimension<VisualContentType> type,
-    required bool transactionEvidence,
-    required bool contextualTime,
-    required bool hasScore,
-  }) {
-    final values = <String, double>{};
-    void add(String name, double confidence) {
-      if (!ContextualTagCatalog.contains(name) ||
-          confidence < contextualTagThreshold) {
-        return;
-      }
-      final previous = values[name];
-      if (previous == null || confidence > previous) values[name] = confidence;
-    }
-
-    final originName = switch (origin.value) {
-      ProbableOrigin.whatsapp => 'WhatsApp',
-      ProbableOrigin.amazon => 'Amazon',
-      ProbableOrigin.mercadoLivre => 'Mercado Livre',
-      ProbableOrigin.mercadoPago => 'Mercado Pago',
-      ProbableOrigin.linkedIn => 'LinkedIn',
-      ProbableOrigin.instagram => 'Instagram',
-      ProbableOrigin.gitHub => 'GitHub',
-      ProbableOrigin.browser => 'Navegador',
-      ProbableOrigin.unknown => null,
-    };
-    if (originName != null) add(originName, origin.confidence);
-    final typeName = switch (type.value) {
-      VisualContentType.conversation => 'Conversa',
-      VisualContentType.productPage ||
-      VisualContentType.productImage => 'Produto',
-      VisualContentType.bookCover || VisualContentType.bookExcerpt => 'Livro',
-      VisualContentType.resultTable => 'Tabela',
-      VisualContentType.code => 'Código',
-      VisualContentType.document => 'Documento',
-      VisualContentType.receipt => 'Comprovante',
+  List<SuggestedTag> _tagsFor(SemanticScreenshotAnalysis analysis) {
+    final values = <String>{};
+    final originTag = switch (analysis.contentOrigin) {
+      ContentOrigin.amazon => 'Amazon',
+      ContentOrigin.reddit => 'Reddit',
+      ContentOrigin.instagram => 'Instagram',
+      ContentOrigin.linkedIn => 'LinkedIn',
+      ContentOrigin.gitHub => 'GitHub',
+      ContentOrigin.mercadoLivre => 'Mercado Livre',
+      ContentOrigin.mercadoPago => 'Mercado Pago',
+      ContentOrigin.web => 'Navegador',
+      ContentOrigin.conversation => 'WhatsApp',
       _ => null,
     };
-    if (typeName != null) add(typeName, type.confidence);
-    if (transactionEvidence) add('Pagamento', 0.90);
-    if (contextualTime) add('Horário', 0.78);
-    if (_hasAny(text, _careerContextTerms)) add('Vaga', 0.82);
-    if (_hasAny(text, const [' curso ', ' aula ', ' modulo ', ' videoaula '])) {
-      add('Curso', 0.82);
-    }
-    if (hasScore || _hasVisual(visual, const {'soccer', 'football'})) {
-      add('Futebol', hasScore ? 0.88 : 0.76);
-    }
-    if (_hasAny(text, const [' teclado ', ' keyboard ']) ||
-        _hasVisual(visual, const {'computer keyboard', 'keyboard'})) {
-      add('Teclado', 0.88);
-    }
-    if (_hasAny(text, const [' notebook ', ' laptop ']) ||
-        _hasVisual(visual, const {'laptop'})) {
-      add('Notebook', 0.86);
-    }
-    if (_hasAny(text, const [' carro ', ' veiculo ', ' automovel ']) ||
-        _hasVisual(visual, const {'car', 'vehicle'})) {
-      add('Carro', 0.84);
-    }
-    final sorted = values.entries.toList()
-      ..sort((a, b) {
-        final confidence = b.value.compareTo(a.value);
-        return confidence != 0 ? confidence : a.key.compareTo(b.key);
-      });
-    return sorted
+    if (originTag != null) values.add(originTag);
+    final subjectTag = switch (analysis.semanticSubject) {
+      SemanticSubject.books => 'Livro',
+      SemanticSubject.products => 'Produto',
+      SemanticSubject.career => 'Vaga',
+      SemanticSubject.sports => 'Futebol',
+      SemanticSubject.conversations => 'Conversa',
+      SemanticSubject.documents => 'Documento',
+      SemanticSubject.development => 'Código',
+      SemanticSubject.quotes => 'Citação',
+      SemanticSubject.studies => 'Curso',
+      _ => null,
+    };
+    if (subjectTag != null) values.add(subjectTag);
+    if (analysis.contentForm == ContentForm.receipt) values.add('Comprovante');
+    if (analysis.contentForm == ContentForm.scoreboard) values.add('Tabela');
+    return values
         .take(maximumContextualTags)
-        .map((entry) {
+        .map((name) {
           final evidence = ClassificationEvidence(
-            ruleId: 'context.tag.${_key(entry.key)}',
+            ruleId:
+                'semantic.tag.${normalizer.normalize(name).replaceAll(' ', '_')}',
             type: ClassificationEvidenceType.pattern,
-            description: 'Etiqueta pertence ao catálogo contextual.',
-            weight: entry.value,
+            description: 'Etiqueta derivada da análise estruturada.',
+            weight: analysis.semanticConfidence,
           );
           return SuggestedTag(
-            name: entry.key,
-            confidence: entry.value,
+            name: name,
+            confidence: analysis.semanticConfidence,
             evidence: [evidence],
           );
         })
         .toList(growable: false);
   }
 
-  ContentSubject _subjectFor(String? root) => switch (root) {
-    'Livros' => ContentSubject.books,
-    'Produtos' => ContentSubject.products,
-    'Carreira' => ContentSubject.career,
-    'Estudos' => ContentSubject.studies,
-    'Esportes' => ContentSubject.sports,
-    'Desenvolvimento' => ContentSubject.development,
-    'Documentos' => ContentSubject.documents,
-    'Conversas' => ContentSubject.conversations,
-    _ => ContentSubject.unknown,
-  };
-
-  bool _hasAny(String text, Iterable<String> terms) => terms.any(text.contains);
-
-  bool _hasVisual(Map<String, double> labels, Set<String> allowlist) => labels
-      .entries
-      .any((entry) => allowlist.contains(entry.key) && entry.value >= 0.55);
-
-  bool _isMarketplace(ProbableOrigin origin) =>
-      origin == ProbableOrigin.amazon || origin == ProbableOrigin.mercadoLivre;
-
-  double _combine(Iterable<double> weights) {
-    var remaining = 1.0;
-    for (final weight in weights) {
-      remaining *= 1 - weight.clamp(0, 1);
-    }
-    return (1 - remaining).clamp(0, 1).toDouble();
+  ContextualSignals _signals(
+    String raw,
+    String normalized,
+    SemanticScreenshotAnalysis analysis,
+  ) {
+    final currency = RegExp(r'(?:R\$|US\$|€)\s*\d').hasMatch(raw);
+    final time = RegExp(r'\b(?:[01]?\d|2[0-3]):[0-5]\d\b').hasMatch(raw);
+    final date = RegExp(
+      r'\b\d{1,2}[/.-]\d{1,2}(?:[/.-]\d{2,4})?\b',
+    ).hasMatch(raw);
+    final score = RegExp(
+      r'\b\d{1,2}\s*(?:x|-)\s*\d{1,2}\b',
+      caseSensitive: false,
+    ).hasMatch(raw);
+    final transaction = analysis.contentForm == ContentForm.receipt;
+    final product = analysis.semanticSubject == SemanticSubject.products;
+    return ContextualSignals(
+      hasCurrencyValue: currency,
+      hasProductPrice: currency && product && !transaction,
+      hasPaymentEvidence: transaction,
+      hasTransactionEvidence: transaction,
+      hasDate: date,
+      hasTime: time,
+      hasContextualTime:
+          time &&
+          (analysis.contentForm == ContentForm.jobPosting ||
+              analysis.contentForm == ContentForm.scoreboard),
+      hasScore: score && analysis.semanticSubject == SemanticSubject.sports,
+      hasTitle: analysis.contentForm == ContentForm.bookCover,
+      hasBrand: analysis.contentOrigin != ContentOrigin.unknown,
+      hasDomain: normalized.contains('.com'),
+      hasProbableApp: analysis.captureApp != null,
+      hasStrongNegative:
+          (currency && product && !transaction) ||
+          (time && analysis.probableIntent == ProbableIntent.unknown),
+    );
   }
 
-  String _key(String value) => normalizer.normalize(value).replaceAll(' ', '_');
+  ProbableOrigin _legacyOrigin(SemanticScreenshotAnalysis analysis) {
+    return switch (analysis.contentOrigin) {
+      ContentOrigin.conversation => ProbableOrigin.whatsapp,
+      ContentOrigin.amazon => ProbableOrigin.amazon,
+      ContentOrigin.reddit => ProbableOrigin.reddit,
+      ContentOrigin.instagram => ProbableOrigin.instagram,
+      ContentOrigin.linkedIn => ProbableOrigin.linkedIn,
+      ContentOrigin.gitHub => ProbableOrigin.gitHub,
+      ContentOrigin.mercadoLivre => ProbableOrigin.mercadoLivre,
+      ContentOrigin.mercadoPago => ProbableOrigin.mercadoPago,
+      ContentOrigin.web => ProbableOrigin.browser,
+      ContentOrigin.localDocument ||
+      ContentOrigin.unknown => ProbableOrigin.unknown,
+    };
+  }
+
+  VisualContentType _legacyForm(ContentForm form) => switch (form) {
+    ContentForm.bookCover => VisualContentType.bookCover,
+    ContentForm.bookExcerpt => VisualContentType.bookExcerpt,
+    ContentForm.quotation => VisualContentType.quotation,
+    ContentForm.productPage => VisualContentType.productPage,
+    ContentForm.socialMediaPost => VisualContentType.post,
+    ContentForm.chatList ||
+    ContentForm.chatMessage ||
+    ContentForm.jobPosting => VisualContentType.conversation,
+    ContentForm.scoreboard => VisualContentType.resultTable,
+    ContentForm.sourceCode => VisualContentType.code,
+    ContentForm.errorScreen => VisualContentType.error,
+    ContentForm.receipt => VisualContentType.receipt,
+    ContentForm.document => VisualContentType.document,
+    _ => VisualContentType.genericInterface,
+  };
+
+  ContentSubject _legacySubject(SemanticSubject subject) => switch (subject) {
+    SemanticSubject.books => ContentSubject.books,
+    SemanticSubject.products => ContentSubject.products,
+    SemanticSubject.career => ContentSubject.career,
+    SemanticSubject.studies => ContentSubject.studies,
+    SemanticSubject.sports => ContentSubject.sports,
+    SemanticSubject.development => ContentSubject.development,
+    SemanticSubject.documents => ContentSubject.documents,
+    SemanticSubject.conversations => ContentSubject.conversations,
+    SemanticSubject.quotes => ContentSubject.quotes,
+    _ => ContentSubject.unknown,
+  };
 }
-
-final class _DestinationScore {
-  const _DestinationScore(this.root, this.child, this.confidence);
-
-  final String root;
-  final String? child;
-  final double confidence;
-
-  String get persistedName => child == null ? root : '$root / $child';
-}
-
-const _bookTerms = <(String, double)>[
-  (' livro ', 0.62),
-  (' capa comum ', 0.72),
-  (' autor ', 0.42),
-  (' editora ', 0.44),
-  (' isbn ', 0.72),
-  (' capitulo ', 0.46),
-  (' trecho ', 0.62),
-];
-const _careerTerms = <(String, double)>[
-  (' vaga ', 0.68),
-  (' entrevista ', 0.72),
-  (' recrutador ', 0.52),
-  (' recrutadora ', 0.52),
-  (' candidatura ', 0.52),
-  (' processo seletivo ', 0.66),
-];
-const _studyTerms = <(String, double)>[
-  (' curso ', 0.68),
-  (' aula ', 0.56),
-  (' modulo ', 0.58),
-  (' videoaula ', 0.68),
-  (' material didatico ', 0.62),
-  (' exercicio ', 0.48),
-];
-const _documentTerms = <(String, double)>[
-  (' comprovante ', 0.76),
-  (' documento ', 0.62),
-  (' contrato ', 0.64),
-  (' protocolo ', 0.56),
-  (' cpf ', 0.54),
-  (' cnpj ', 0.54),
-];
-const _developmentTerms = <(String, double)>[
-  (' codigo ', 0.68),
-  (' exception ', 0.72),
-  (' stack trace ', 0.78),
-  (' github ', 0.54),
-  (' pull request ', 0.62),
-  (' flutter ', 0.58),
-  (' terminal ', 0.52),
-  (' sql ', 0.60),
-];
-const _weightedProductTerms = <(String, double)>[
-  (' produto ', 0.62),
-  (' comprar ', 0.58),
-  (' carrinho ', 0.62),
-  (' preco ', 0.54),
-  (' frete ', 0.48),
-  (' teclado ', 0.70),
-  (' notebook ', 0.70),
-  (' carro ', 0.62),
-  (' modelo ', 0.36),
-];
-const _weightedSportsTerms = <(String, double)>[
-  (' futebol ', 0.68),
-  (' partida ', 0.56),
-  (' campeonato ', 0.58),
-  (' copa ', 0.52),
-  (' placar ', 0.68),
-  (' classificacao ', 0.42),
-  (' tabela ', 0.36),
-  (' time ', 0.32),
-];
-const _conversationTerms = <(String, double)>[
-  (' mensagem ', 0.52),
-  (' conversa ', 0.58),
-  (' responder ', 0.50),
-  (' audio ', 0.42),
-  (' online ', 0.34),
-];
-const _productTerms = <String>[
-  ' produto ',
-  ' comprar ',
-  ' carrinho ',
-  ' preco ',
-  ' frete ',
-  ' oferta ',
-  ' teclado ',
-  ' notebook ',
-  ' carro ',
-];
-const _paymentTerms = <String>[
-  ' pago ',
-  ' pagamento realizado ',
-  ' comprovante ',
-  ' pix enviado ',
-  ' pix recebido ',
-  ' transferencia ',
-  ' transacao ',
-  ' favorecido ',
-  ' autenticacao ',
-  ' codigo de operacao ',
-  ' debito concluido ',
-];
-const _transactionTerms = <String>[
-  ' realizado ',
-  ' concluido ',
-  ' enviado ',
-  ' recebido ',
-  ' comprovante ',
-  ' favorecido ',
-  ' autenticacao ',
-  ' operacao ',
-  ' transacao ',
-];
-const _timeContextTerms = <String>[
-  ' reuniao ',
-  ' entrevista ',
-  ' aula ',
-  ' partida ',
-  ' evento ',
-  ' agendamento ',
-  ' horario de atendimento ',
-  ' saida ',
-  ' chegada ',
-];
-const _sportsTerms = <String>[
-  ' futebol ',
-  ' partida ',
-  ' campeonato ',
-  ' copa ',
-  ' placar ',
-  ' time ',
-  ' selecao ',
-];
-const _careerContextTerms = <String>[
-  ' vaga ',
-  ' entrevista ',
-  ' candidatura ',
-  ' recrutador ',
-  ' emprego ',
-];
-const _developmentContextTerms = <String>[
-  ' codigo ',
-  ' commit ',
-  ' pull request ',
-  ' repository ',
-  ' issue ',
-];
-const _bookVisualLabels = <String>{'book', 'book cover'};
-const _productVisualLabels = <String>{
-  'product',
-  'car',
-  'vehicle',
-  'laptop',
-  'computer keyboard',
-  'keyboard',
-  'electronics',
-};
-const _sportsVisualLabels = <String>{'sports', 'soccer', 'football', 'stadium'};
-final _currencyPattern = RegExp(
-  r'(?:R\$\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\b\d+(?:,\d{2})?\s*reais\b)',
-  caseSensitive: false,
-);
-final _timePattern = RegExp(
-  r'\b(?:[01]?\d|2[0-3])(?:h(?:[0-5]\d)?|:[0-5]\d)\b',
-  caseSensitive: false,
-);
-final _datePattern = RegExp(
-  r'\b(?:0?[1-9]|[12]\d|3[01])[/.-](?:0?[1-9]|1[0-2])(?:[/.-](?:\d{2}|\d{4}))?\b',
-);
-final _scorePattern = RegExp(r'\b\d{1,2}\s*[-x×]\s*\d{1,2}\b');
-final _domainPattern = RegExp(
-  r'\b(?:[a-z0-9-]+\.)+(?:com|com\.br|org|net|dev|io)\b',
-  caseSensitive: false,
-);

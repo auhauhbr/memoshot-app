@@ -57,7 +57,7 @@ void main() {
       ocrResult: _ocr(item.id, 'livro capa comum autor'),
     );
 
-    expect(result.suggestedCategoryName, 'Livros / Capas');
+    expect(result.suggestedCategoryName, 'Livros');
     expect(analyzer.paths, [file.path]);
     expect(file.existsSync(), isTrue);
     await processor.close();
@@ -107,7 +107,7 @@ void main() {
       ocrResult: _ocr(item.id, 'curso aula módulo videoaula'),
     );
 
-    expect(result.suggestedCategoryName, 'Estudos / Cursos');
+    expect(result.suggestedCategoryName, 'Estudos');
     expect(bridge.releasedTokens, ['visual-token']);
     await processor.close();
   });
