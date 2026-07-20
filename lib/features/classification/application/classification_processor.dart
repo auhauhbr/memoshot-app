@@ -2,6 +2,8 @@ import '../../../core/ocr/media_ocr_input.dart';
 import '../../../core/visual/local_visual_analyzer.dart';
 import '../../categories/data/category_repository.dart';
 import '../../library/domain/media_item.dart';
+import '../../library/domain/capture_app_context.dart';
+import '../../library/data/capture_app_context_repository.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../../ocr/domain/ocr_result.dart';
 import '../data/classification_suggestion_repository.dart';
@@ -149,6 +151,7 @@ class ContextualClassificationProcessor
     required DateTime Function() now,
     required int engineVersion,
     AutomaticClassificationApplier? automaticApplier,
+    CaptureAppContextRepository? captureAppContextRepository,
   }) : this._(
          engine,
          visualAnalyzer,
@@ -159,6 +162,7 @@ class ContextualClassificationProcessor
          now,
          engineVersion,
          automaticApplier,
+         captureAppContextRepository,
        );
 
   ContextualClassificationProcessor._(
@@ -171,6 +175,7 @@ class ContextualClassificationProcessor
     this._now,
     this._engineVersion,
     this._automaticApplier,
+    this._captureAppContextRepository,
   );
 
   final ContextualClassificationEngine _engine;
@@ -182,6 +187,7 @@ class ContextualClassificationProcessor
   final DateTime Function() _now;
   final int _engineVersion;
   final AutomaticClassificationApplier? _automaticApplier;
+  final CaptureAppContextRepository? _captureAppContextRepository;
   final Map<int, Future<StoredClassificationSuggestion>> _inFlight = {};
   bool _closed = false;
 
@@ -251,9 +257,11 @@ class ContextualClassificationProcessor
     }
 
     final visual = await _analyzeSafely(mediaItem);
+    final captureAppContext = await _loadCaptureContextSafely(mediaItem.id);
     final result = _engine.classify(
       ocrText: ocrResult.fullText,
       visualAnalysis: visual,
+      captureAppContext: captureAppContext,
     );
     final suggestion = result.toSuggestion();
     final now = _now();
@@ -271,6 +279,14 @@ class ContextualClassificationProcessor
             ocrProcessedAt: ocrResult.processedAt,
           );
     return _autoApplySafely(saved);
+  }
+
+  Future<CaptureAppContext?> _loadCaptureContextSafely(int mediaItemId) async {
+    try {
+      return await _captureAppContextRepository?.loadFor(mediaItemId);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<VisualAnalysisResult?> _analyzeSafely(MediaItem mediaItem) async {

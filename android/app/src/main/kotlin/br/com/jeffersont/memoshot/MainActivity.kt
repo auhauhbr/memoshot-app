@@ -23,7 +23,7 @@ class MainActivity : FlutterActivity() {
             messenger = flutterEngine.dartExecutor.binaryMessenger,
         )
         preferencesBridge = AppPreferencesBridge(
-            context = this,
+            hostContext = this,
             messenger = flutterEngine.dartExecutor.binaryMessenger,
         )
         cancelLegacyReviewNotification()

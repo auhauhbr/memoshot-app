@@ -6599,6 +6599,554 @@ class HistoricalMediaImportJobsCompanion
   }
 }
 
+class $MediaCaptureContextsTable extends MediaCaptureContexts
+    with TableInfo<$MediaCaptureContextsTable, MediaCaptureContext> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MediaCaptureContextsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _mediaItemIdMeta = const VerificationMeta(
+    'mediaItemId',
+  );
+  @override
+  late final GeneratedColumn<int> mediaItemId = GeneratedColumn<int>(
+    'media_item_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES media_items (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _packageNameMeta = const VerificationMeta(
+    'packageName',
+  );
+  @override
+  late final GeneratedColumn<String> packageName = GeneratedColumn<String>(
+    'package_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _normalizedAppKeyMeta = const VerificationMeta(
+    'normalizedAppKey',
+  );
+  @override
+  late final GeneratedColumn<String> normalizedAppKey = GeneratedColumn<String>(
+    'normalized_app_key',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _eventTimestampMeta = const VerificationMeta(
+    'eventTimestamp',
+  );
+  @override
+  late final GeneratedColumn<DateTime> eventTimestamp =
+      GeneratedColumn<DateTime>(
+        'event_timestamp',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _captureTimestampMeta = const VerificationMeta(
+    'captureTimestamp',
+  );
+  @override
+  late final GeneratedColumn<DateTime> captureTimestamp =
+      GeneratedColumn<DateTime>(
+        'capture_timestamp',
+        aliasedName,
+        false,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _deltaMillisecondsMeta = const VerificationMeta(
+    'deltaMilliseconds',
+  );
+  @override
+  late final GeneratedColumn<int> deltaMilliseconds = GeneratedColumn<int>(
+    'delta_milliseconds',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _confidenceLevelMeta = const VerificationMeta(
+    'confidenceLevel',
+  );
+  @override
+  late final GeneratedColumn<String> confidenceLevel = GeneratedColumn<String>(
+    'confidence_level',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    mediaItemId,
+    packageName,
+    normalizedAppKey,
+    eventTimestamp,
+    captureTimestamp,
+    deltaMilliseconds,
+    confidenceLevel,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'media_capture_contexts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MediaCaptureContext> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('media_item_id')) {
+      context.handle(
+        _mediaItemIdMeta,
+        mediaItemId.isAcceptableOrUnknown(
+          data['media_item_id']!,
+          _mediaItemIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('package_name')) {
+      context.handle(
+        _packageNameMeta,
+        packageName.isAcceptableOrUnknown(
+          data['package_name']!,
+          _packageNameMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_packageNameMeta);
+    }
+    if (data.containsKey('normalized_app_key')) {
+      context.handle(
+        _normalizedAppKeyMeta,
+        normalizedAppKey.isAcceptableOrUnknown(
+          data['normalized_app_key']!,
+          _normalizedAppKeyMeta,
+        ),
+      );
+    }
+    if (data.containsKey('event_timestamp')) {
+      context.handle(
+        _eventTimestampMeta,
+        eventTimestamp.isAcceptableOrUnknown(
+          data['event_timestamp']!,
+          _eventTimestampMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_eventTimestampMeta);
+    }
+    if (data.containsKey('capture_timestamp')) {
+      context.handle(
+        _captureTimestampMeta,
+        captureTimestamp.isAcceptableOrUnknown(
+          data['capture_timestamp']!,
+          _captureTimestampMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_captureTimestampMeta);
+    }
+    if (data.containsKey('delta_milliseconds')) {
+      context.handle(
+        _deltaMillisecondsMeta,
+        deltaMilliseconds.isAcceptableOrUnknown(
+          data['delta_milliseconds']!,
+          _deltaMillisecondsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_deltaMillisecondsMeta);
+    }
+    if (data.containsKey('confidence_level')) {
+      context.handle(
+        _confidenceLevelMeta,
+        confidenceLevel.isAcceptableOrUnknown(
+          data['confidence_level']!,
+          _confidenceLevelMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_confidenceLevelMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {mediaItemId};
+  @override
+  MediaCaptureContext map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MediaCaptureContext(
+      mediaItemId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}media_item_id'],
+      )!,
+      packageName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}package_name'],
+      )!,
+      normalizedAppKey: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}normalized_app_key'],
+      ),
+      eventTimestamp: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}event_timestamp'],
+      )!,
+      captureTimestamp: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}capture_timestamp'],
+      )!,
+      deltaMilliseconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}delta_milliseconds'],
+      )!,
+      confidenceLevel: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}confidence_level'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $MediaCaptureContextsTable createAlias(String alias) {
+    return $MediaCaptureContextsTable(attachedDatabase, alias);
+  }
+}
+
+class MediaCaptureContext extends DataClass
+    implements Insertable<MediaCaptureContext> {
+  final int mediaItemId;
+  final String packageName;
+  final String? normalizedAppKey;
+  final DateTime eventTimestamp;
+  final DateTime captureTimestamp;
+  final int deltaMilliseconds;
+  final String confidenceLevel;
+  final DateTime createdAt;
+  const MediaCaptureContext({
+    required this.mediaItemId,
+    required this.packageName,
+    this.normalizedAppKey,
+    required this.eventTimestamp,
+    required this.captureTimestamp,
+    required this.deltaMilliseconds,
+    required this.confidenceLevel,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['media_item_id'] = Variable<int>(mediaItemId);
+    map['package_name'] = Variable<String>(packageName);
+    if (!nullToAbsent || normalizedAppKey != null) {
+      map['normalized_app_key'] = Variable<String>(normalizedAppKey);
+    }
+    map['event_timestamp'] = Variable<DateTime>(eventTimestamp);
+    map['capture_timestamp'] = Variable<DateTime>(captureTimestamp);
+    map['delta_milliseconds'] = Variable<int>(deltaMilliseconds);
+    map['confidence_level'] = Variable<String>(confidenceLevel);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  MediaCaptureContextsCompanion toCompanion(bool nullToAbsent) {
+    return MediaCaptureContextsCompanion(
+      mediaItemId: Value(mediaItemId),
+      packageName: Value(packageName),
+      normalizedAppKey: normalizedAppKey == null && nullToAbsent
+          ? const Value.absent()
+          : Value(normalizedAppKey),
+      eventTimestamp: Value(eventTimestamp),
+      captureTimestamp: Value(captureTimestamp),
+      deltaMilliseconds: Value(deltaMilliseconds),
+      confidenceLevel: Value(confidenceLevel),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory MediaCaptureContext.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MediaCaptureContext(
+      mediaItemId: serializer.fromJson<int>(json['mediaItemId']),
+      packageName: serializer.fromJson<String>(json['packageName']),
+      normalizedAppKey: serializer.fromJson<String?>(json['normalizedAppKey']),
+      eventTimestamp: serializer.fromJson<DateTime>(json['eventTimestamp']),
+      captureTimestamp: serializer.fromJson<DateTime>(json['captureTimestamp']),
+      deltaMilliseconds: serializer.fromJson<int>(json['deltaMilliseconds']),
+      confidenceLevel: serializer.fromJson<String>(json['confidenceLevel']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'mediaItemId': serializer.toJson<int>(mediaItemId),
+      'packageName': serializer.toJson<String>(packageName),
+      'normalizedAppKey': serializer.toJson<String?>(normalizedAppKey),
+      'eventTimestamp': serializer.toJson<DateTime>(eventTimestamp),
+      'captureTimestamp': serializer.toJson<DateTime>(captureTimestamp),
+      'deltaMilliseconds': serializer.toJson<int>(deltaMilliseconds),
+      'confidenceLevel': serializer.toJson<String>(confidenceLevel),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  MediaCaptureContext copyWith({
+    int? mediaItemId,
+    String? packageName,
+    Value<String?> normalizedAppKey = const Value.absent(),
+    DateTime? eventTimestamp,
+    DateTime? captureTimestamp,
+    int? deltaMilliseconds,
+    String? confidenceLevel,
+    DateTime? createdAt,
+  }) => MediaCaptureContext(
+    mediaItemId: mediaItemId ?? this.mediaItemId,
+    packageName: packageName ?? this.packageName,
+    normalizedAppKey: normalizedAppKey.present
+        ? normalizedAppKey.value
+        : this.normalizedAppKey,
+    eventTimestamp: eventTimestamp ?? this.eventTimestamp,
+    captureTimestamp: captureTimestamp ?? this.captureTimestamp,
+    deltaMilliseconds: deltaMilliseconds ?? this.deltaMilliseconds,
+    confidenceLevel: confidenceLevel ?? this.confidenceLevel,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  MediaCaptureContext copyWithCompanion(MediaCaptureContextsCompanion data) {
+    return MediaCaptureContext(
+      mediaItemId: data.mediaItemId.present
+          ? data.mediaItemId.value
+          : this.mediaItemId,
+      packageName: data.packageName.present
+          ? data.packageName.value
+          : this.packageName,
+      normalizedAppKey: data.normalizedAppKey.present
+          ? data.normalizedAppKey.value
+          : this.normalizedAppKey,
+      eventTimestamp: data.eventTimestamp.present
+          ? data.eventTimestamp.value
+          : this.eventTimestamp,
+      captureTimestamp: data.captureTimestamp.present
+          ? data.captureTimestamp.value
+          : this.captureTimestamp,
+      deltaMilliseconds: data.deltaMilliseconds.present
+          ? data.deltaMilliseconds.value
+          : this.deltaMilliseconds,
+      confidenceLevel: data.confidenceLevel.present
+          ? data.confidenceLevel.value
+          : this.confidenceLevel,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MediaCaptureContext(')
+          ..write('mediaItemId: $mediaItemId, ')
+          ..write('packageName: $packageName, ')
+          ..write('normalizedAppKey: $normalizedAppKey, ')
+          ..write('eventTimestamp: $eventTimestamp, ')
+          ..write('captureTimestamp: $captureTimestamp, ')
+          ..write('deltaMilliseconds: $deltaMilliseconds, ')
+          ..write('confidenceLevel: $confidenceLevel, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    mediaItemId,
+    packageName,
+    normalizedAppKey,
+    eventTimestamp,
+    captureTimestamp,
+    deltaMilliseconds,
+    confidenceLevel,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MediaCaptureContext &&
+          other.mediaItemId == this.mediaItemId &&
+          other.packageName == this.packageName &&
+          other.normalizedAppKey == this.normalizedAppKey &&
+          other.eventTimestamp == this.eventTimestamp &&
+          other.captureTimestamp == this.captureTimestamp &&
+          other.deltaMilliseconds == this.deltaMilliseconds &&
+          other.confidenceLevel == this.confidenceLevel &&
+          other.createdAt == this.createdAt);
+}
+
+class MediaCaptureContextsCompanion
+    extends UpdateCompanion<MediaCaptureContext> {
+  final Value<int> mediaItemId;
+  final Value<String> packageName;
+  final Value<String?> normalizedAppKey;
+  final Value<DateTime> eventTimestamp;
+  final Value<DateTime> captureTimestamp;
+  final Value<int> deltaMilliseconds;
+  final Value<String> confidenceLevel;
+  final Value<DateTime> createdAt;
+  const MediaCaptureContextsCompanion({
+    this.mediaItemId = const Value.absent(),
+    this.packageName = const Value.absent(),
+    this.normalizedAppKey = const Value.absent(),
+    this.eventTimestamp = const Value.absent(),
+    this.captureTimestamp = const Value.absent(),
+    this.deltaMilliseconds = const Value.absent(),
+    this.confidenceLevel = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  MediaCaptureContextsCompanion.insert({
+    this.mediaItemId = const Value.absent(),
+    required String packageName,
+    this.normalizedAppKey = const Value.absent(),
+    required DateTime eventTimestamp,
+    required DateTime captureTimestamp,
+    required int deltaMilliseconds,
+    required String confidenceLevel,
+    required DateTime createdAt,
+  }) : packageName = Value(packageName),
+       eventTimestamp = Value(eventTimestamp),
+       captureTimestamp = Value(captureTimestamp),
+       deltaMilliseconds = Value(deltaMilliseconds),
+       confidenceLevel = Value(confidenceLevel),
+       createdAt = Value(createdAt);
+  static Insertable<MediaCaptureContext> custom({
+    Expression<int>? mediaItemId,
+    Expression<String>? packageName,
+    Expression<String>? normalizedAppKey,
+    Expression<DateTime>? eventTimestamp,
+    Expression<DateTime>? captureTimestamp,
+    Expression<int>? deltaMilliseconds,
+    Expression<String>? confidenceLevel,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (mediaItemId != null) 'media_item_id': mediaItemId,
+      if (packageName != null) 'package_name': packageName,
+      if (normalizedAppKey != null) 'normalized_app_key': normalizedAppKey,
+      if (eventTimestamp != null) 'event_timestamp': eventTimestamp,
+      if (captureTimestamp != null) 'capture_timestamp': captureTimestamp,
+      if (deltaMilliseconds != null) 'delta_milliseconds': deltaMilliseconds,
+      if (confidenceLevel != null) 'confidence_level': confidenceLevel,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  MediaCaptureContextsCompanion copyWith({
+    Value<int>? mediaItemId,
+    Value<String>? packageName,
+    Value<String?>? normalizedAppKey,
+    Value<DateTime>? eventTimestamp,
+    Value<DateTime>? captureTimestamp,
+    Value<int>? deltaMilliseconds,
+    Value<String>? confidenceLevel,
+    Value<DateTime>? createdAt,
+  }) {
+    return MediaCaptureContextsCompanion(
+      mediaItemId: mediaItemId ?? this.mediaItemId,
+      packageName: packageName ?? this.packageName,
+      normalizedAppKey: normalizedAppKey ?? this.normalizedAppKey,
+      eventTimestamp: eventTimestamp ?? this.eventTimestamp,
+      captureTimestamp: captureTimestamp ?? this.captureTimestamp,
+      deltaMilliseconds: deltaMilliseconds ?? this.deltaMilliseconds,
+      confidenceLevel: confidenceLevel ?? this.confidenceLevel,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (mediaItemId.present) {
+      map['media_item_id'] = Variable<int>(mediaItemId.value);
+    }
+    if (packageName.present) {
+      map['package_name'] = Variable<String>(packageName.value);
+    }
+    if (normalizedAppKey.present) {
+      map['normalized_app_key'] = Variable<String>(normalizedAppKey.value);
+    }
+    if (eventTimestamp.present) {
+      map['event_timestamp'] = Variable<DateTime>(eventTimestamp.value);
+    }
+    if (captureTimestamp.present) {
+      map['capture_timestamp'] = Variable<DateTime>(captureTimestamp.value);
+    }
+    if (deltaMilliseconds.present) {
+      map['delta_milliseconds'] = Variable<int>(deltaMilliseconds.value);
+    }
+    if (confidenceLevel.present) {
+      map['confidence_level'] = Variable<String>(confidenceLevel.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MediaCaptureContextsCompanion(')
+          ..write('mediaItemId: $mediaItemId, ')
+          ..write('packageName: $packageName, ')
+          ..write('normalizedAppKey: $normalizedAppKey, ')
+          ..write('eventTimestamp: $eventTimestamp, ')
+          ..write('captureTimestamp: $captureTimestamp, ')
+          ..write('deltaMilliseconds: $deltaMilliseconds, ')
+          ..write('confidenceLevel: $confidenceLevel, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ContextoDatabase extends GeneratedDatabase {
   _$ContextoDatabase(QueryExecutor e) : super(e);
   $ContextoDatabaseManager get managers => $ContextoDatabaseManager(this);
@@ -6625,6 +7173,8 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
   );
   late final $HistoricalMediaImportJobsTable historicalMediaImportJobs =
       $HistoricalMediaImportJobsTable(this);
+  late final $MediaCaptureContextsTable mediaCaptureContexts =
+      $MediaCaptureContextsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -6643,6 +7193,7 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
     existingScreenshotCandidates,
     existingScreenshotInventoryStates,
     historicalMediaImportJobs,
+    mediaCaptureContexts,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -6703,6 +7254,13 @@ abstract class _$ContextoDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('classification_jobs', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'media_items',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('media_capture_contexts', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -6866,6 +7424,31 @@ final class $$MediaItemsTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _classificationJobsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<
+    $MediaCaptureContextsTable,
+    List<MediaCaptureContext>
+  >
+  _mediaCaptureContextsRefsTable(_$ContextoDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.mediaCaptureContexts,
+        aliasName: 'media_items__id__media_capture_contexts__media_item_id',
+      );
+
+  $$MediaCaptureContextsTableProcessedTableManager
+  get mediaCaptureContextsRefs {
+    final manager = $$MediaCaptureContextsTableTableManager(
+      $_db,
+      $_db.mediaCaptureContexts,
+    ).filter((f) => f.mediaItemId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _mediaCaptureContextsRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -7105,6 +7688,31 @@ class $$MediaItemsTableFilterComposer
           }) => $$ClassificationJobsTableFilterComposer(
             $db: $db,
             $table: $db.classificationJobs,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> mediaCaptureContextsRefs(
+    Expression<bool> Function($$MediaCaptureContextsTableFilterComposer f) f,
+  ) {
+    final $$MediaCaptureContextsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.mediaCaptureContexts,
+      getReferencedColumn: (t) => t.mediaItemId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaCaptureContextsTableFilterComposer(
+            $db: $db,
+            $table: $db.mediaCaptureContexts,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -7436,6 +8044,32 @@ class $$MediaItemsTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> mediaCaptureContextsRefs<T extends Object>(
+    Expression<T> Function($$MediaCaptureContextsTableAnnotationComposer a) f,
+  ) {
+    final $$MediaCaptureContextsTableAnnotationComposer composer =
+        $composerBuilder(
+          composer: this,
+          getCurrentColumn: (t) => t.id,
+          referencedTable: $db.mediaCaptureContexts,
+          getReferencedColumn: (t) => t.mediaItemId,
+          builder:
+              (
+                joinBuilder, {
+                $addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer,
+              }) => $$MediaCaptureContextsTableAnnotationComposer(
+                $db: $db,
+                $table: $db.mediaCaptureContexts,
+                $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+                joinBuilder: joinBuilder,
+                $removeJoinBuilderFromRootComposer:
+                    $removeJoinBuilderFromRootComposer,
+              ),
+        );
+    return f(composer);
+  }
 }
 
 class $$MediaItemsTableTableManager
@@ -7458,6 +8092,7 @@ class $$MediaItemsTableTableManager
             bool mediaTagsRefs,
             bool classificationSuggestionsRefs,
             bool classificationJobsRefs,
+            bool mediaCaptureContextsRefs,
           })
         > {
   $$MediaItemsTableTableManager(_$ContextoDatabase db, $MediaItemsTable table)
@@ -7559,6 +8194,7 @@ class $$MediaItemsTableTableManager
                 mediaTagsRefs = false,
                 classificationSuggestionsRefs = false,
                 classificationJobsRefs = false,
+                mediaCaptureContextsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -7570,6 +8206,7 @@ class $$MediaItemsTableTableManager
                     if (classificationSuggestionsRefs)
                       db.classificationSuggestions,
                     if (classificationJobsRefs) db.classificationJobs,
+                    if (mediaCaptureContextsRefs) db.mediaCaptureContexts,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -7700,6 +8337,27 @@ class $$MediaItemsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (mediaCaptureContextsRefs)
+                        await $_getPrefetchedData<
+                          MediaItem,
+                          $MediaItemsTable,
+                          MediaCaptureContext
+                        >(
+                          currentTable: table,
+                          referencedTable: $$MediaItemsTableReferences
+                              ._mediaCaptureContextsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$MediaItemsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).mediaCaptureContextsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.mediaItemId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -7727,6 +8385,7 @@ typedef $$MediaItemsTableProcessedTableManager =
         bool mediaTagsRefs,
         bool classificationSuggestionsRefs,
         bool classificationJobsRefs,
+        bool mediaCaptureContextsRefs,
       })
     >;
 typedef $$OcrResultsTableCreateCompanionBuilder =
@@ -12157,6 +12816,406 @@ typedef $$HistoricalMediaImportJobsTableProcessedTableManager =
       HistoricalMediaImportJob,
       PrefetchHooks Function({bool sourceKey})
     >;
+typedef $$MediaCaptureContextsTableCreateCompanionBuilder =
+    MediaCaptureContextsCompanion Function({
+      Value<int> mediaItemId,
+      required String packageName,
+      Value<String?> normalizedAppKey,
+      required DateTime eventTimestamp,
+      required DateTime captureTimestamp,
+      required int deltaMilliseconds,
+      required String confidenceLevel,
+      required DateTime createdAt,
+    });
+typedef $$MediaCaptureContextsTableUpdateCompanionBuilder =
+    MediaCaptureContextsCompanion Function({
+      Value<int> mediaItemId,
+      Value<String> packageName,
+      Value<String?> normalizedAppKey,
+      Value<DateTime> eventTimestamp,
+      Value<DateTime> captureTimestamp,
+      Value<int> deltaMilliseconds,
+      Value<String> confidenceLevel,
+      Value<DateTime> createdAt,
+    });
+
+final class $$MediaCaptureContextsTableReferences
+    extends
+        BaseReferences<
+          _$ContextoDatabase,
+          $MediaCaptureContextsTable,
+          MediaCaptureContext
+        > {
+  $$MediaCaptureContextsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $MediaItemsTable _mediaItemIdTable(_$ContextoDatabase db) => db
+      .mediaItems
+      .createAlias('media_capture_contexts__media_item_id__media_items__id');
+
+  $$MediaItemsTableProcessedTableManager get mediaItemId {
+    final $_column = $_itemColumn<int>('media_item_id')!;
+
+    final manager = $$MediaItemsTableTableManager(
+      $_db,
+      $_db.mediaItems,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_mediaItemIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$MediaCaptureContextsTableFilterComposer
+    extends Composer<_$ContextoDatabase, $MediaCaptureContextsTable> {
+  $$MediaCaptureContextsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get packageName => $composableBuilder(
+    column: $table.packageName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get normalizedAppKey => $composableBuilder(
+    column: $table.normalizedAppKey,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get eventTimestamp => $composableBuilder(
+    column: $table.eventTimestamp,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get captureTimestamp => $composableBuilder(
+    column: $table.captureTimestamp,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deltaMilliseconds => $composableBuilder(
+    column: $table.deltaMilliseconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get confidenceLevel => $composableBuilder(
+    column: $table.confidenceLevel,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$MediaItemsTableFilterComposer get mediaItemId {
+    final $$MediaItemsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableFilterComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$MediaCaptureContextsTableOrderingComposer
+    extends Composer<_$ContextoDatabase, $MediaCaptureContextsTable> {
+  $$MediaCaptureContextsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get packageName => $composableBuilder(
+    column: $table.packageName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get normalizedAppKey => $composableBuilder(
+    column: $table.normalizedAppKey,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get eventTimestamp => $composableBuilder(
+    column: $table.eventTimestamp,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get captureTimestamp => $composableBuilder(
+    column: $table.captureTimestamp,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deltaMilliseconds => $composableBuilder(
+    column: $table.deltaMilliseconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get confidenceLevel => $composableBuilder(
+    column: $table.confidenceLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$MediaItemsTableOrderingComposer get mediaItemId {
+    final $$MediaItemsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableOrderingComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$MediaCaptureContextsTableAnnotationComposer
+    extends Composer<_$ContextoDatabase, $MediaCaptureContextsTable> {
+  $$MediaCaptureContextsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get packageName => $composableBuilder(
+    column: $table.packageName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get normalizedAppKey => $composableBuilder(
+    column: $table.normalizedAppKey,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get eventTimestamp => $composableBuilder(
+    column: $table.eventTimestamp,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get captureTimestamp => $composableBuilder(
+    column: $table.captureTimestamp,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get deltaMilliseconds => $composableBuilder(
+    column: $table.deltaMilliseconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get confidenceLevel => $composableBuilder(
+    column: $table.confidenceLevel,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$MediaItemsTableAnnotationComposer get mediaItemId {
+    final $$MediaItemsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.mediaItemId,
+      referencedTable: $db.mediaItems,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$MediaItemsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.mediaItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$MediaCaptureContextsTableTableManager
+    extends
+        RootTableManager<
+          _$ContextoDatabase,
+          $MediaCaptureContextsTable,
+          MediaCaptureContext,
+          $$MediaCaptureContextsTableFilterComposer,
+          $$MediaCaptureContextsTableOrderingComposer,
+          $$MediaCaptureContextsTableAnnotationComposer,
+          $$MediaCaptureContextsTableCreateCompanionBuilder,
+          $$MediaCaptureContextsTableUpdateCompanionBuilder,
+          (MediaCaptureContext, $$MediaCaptureContextsTableReferences),
+          MediaCaptureContext,
+          PrefetchHooks Function({bool mediaItemId})
+        > {
+  $$MediaCaptureContextsTableTableManager(
+    _$ContextoDatabase db,
+    $MediaCaptureContextsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MediaCaptureContextsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MediaCaptureContextsTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$MediaCaptureContextsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<int> mediaItemId = const Value.absent(),
+                Value<String> packageName = const Value.absent(),
+                Value<String?> normalizedAppKey = const Value.absent(),
+                Value<DateTime> eventTimestamp = const Value.absent(),
+                Value<DateTime> captureTimestamp = const Value.absent(),
+                Value<int> deltaMilliseconds = const Value.absent(),
+                Value<String> confidenceLevel = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => MediaCaptureContextsCompanion(
+                mediaItemId: mediaItemId,
+                packageName: packageName,
+                normalizedAppKey: normalizedAppKey,
+                eventTimestamp: eventTimestamp,
+                captureTimestamp: captureTimestamp,
+                deltaMilliseconds: deltaMilliseconds,
+                confidenceLevel: confidenceLevel,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> mediaItemId = const Value.absent(),
+                required String packageName,
+                Value<String?> normalizedAppKey = const Value.absent(),
+                required DateTime eventTimestamp,
+                required DateTime captureTimestamp,
+                required int deltaMilliseconds,
+                required String confidenceLevel,
+                required DateTime createdAt,
+              }) => MediaCaptureContextsCompanion.insert(
+                mediaItemId: mediaItemId,
+                packageName: packageName,
+                normalizedAppKey: normalizedAppKey,
+                eventTimestamp: eventTimestamp,
+                captureTimestamp: captureTimestamp,
+                deltaMilliseconds: deltaMilliseconds,
+                confidenceLevel: confidenceLevel,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$MediaCaptureContextsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({mediaItemId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (mediaItemId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.mediaItemId,
+                                referencedTable:
+                                    $$MediaCaptureContextsTableReferences
+                                        ._mediaItemIdTable(db),
+                                referencedColumn:
+                                    $$MediaCaptureContextsTableReferences
+                                        ._mediaItemIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$MediaCaptureContextsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ContextoDatabase,
+      $MediaCaptureContextsTable,
+      MediaCaptureContext,
+      $$MediaCaptureContextsTableFilterComposer,
+      $$MediaCaptureContextsTableOrderingComposer,
+      $$MediaCaptureContextsTableAnnotationComposer,
+      $$MediaCaptureContextsTableCreateCompanionBuilder,
+      $$MediaCaptureContextsTableUpdateCompanionBuilder,
+      (MediaCaptureContext, $$MediaCaptureContextsTableReferences),
+      MediaCaptureContext,
+      PrefetchHooks Function({bool mediaItemId})
+    >;
 
 class $ContextoDatabaseManager {
   final _$ContextoDatabase _db;
@@ -12203,4 +13262,6 @@ class $ContextoDatabaseManager {
         _db,
         _db.historicalMediaImportJobs,
       );
+  $$MediaCaptureContextsTableTableManager get mediaCaptureContexts =>
+      $$MediaCaptureContextsTableTableManager(_db, _db.mediaCaptureContexts);
 }

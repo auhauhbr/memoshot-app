@@ -262,6 +262,7 @@ class AutomaticScreenshotImportCoordinator {
               path: entry.privatePath,
               mimeType: entry.mimeType,
               capturedAt: entry.capturedAt,
+              captureAppContext: entry.captureAppContext,
             ),
           ], origin: ImportOrigin.automatic);
           importedItems.addAll(result.importedItems);
@@ -347,6 +348,7 @@ class AutomaticScreenshotImportCoordinator {
                     path: item.temporaryPath,
                     mimeType: item.mimeType,
                     capturedAt: item.capturedAt,
+                    captureAppContext: item.captureAppContext,
                   ),
                 )
                 .toList(growable: false),

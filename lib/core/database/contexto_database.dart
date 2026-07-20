@@ -309,6 +309,34 @@ class HistoricalMediaImportJobs extends Table {
   ];
 }
 
+class MediaCaptureContexts extends Table {
+  IntColumn get mediaItemId =>
+      integer().references(MediaItems, #id, onDelete: KeyAction.cascade)();
+
+  TextColumn get packageName => text()();
+
+  TextColumn get normalizedAppKey => text().nullable()();
+
+  DateTimeColumn get eventTimestamp => dateTime()();
+
+  DateTimeColumn get captureTimestamp => dateTime()();
+
+  IntColumn get deltaMilliseconds => integer()();
+
+  TextColumn get confidenceLevel => text()();
+
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {mediaItemId};
+
+  @override
+  List<String> get customConstraints => const [
+    'CHECK (delta_milliseconds >= 0 AND delta_milliseconds <= 10000)',
+    "CHECK (confidence_level IN ('high', 'medium', 'low'))",
+  ];
+}
+
 @DriftDatabase(
   tables: [
     MediaItems,
@@ -324,6 +352,7 @@ class HistoricalMediaImportJobs extends Table {
     ExistingScreenshotCandidates,
     ExistingScreenshotInventoryStates,
     HistoricalMediaImportJobs,
+    MediaCaptureContexts,
   ],
 )
 class ContextoDatabase extends _$ContextoDatabase {
@@ -332,7 +361,7 @@ class ContextoDatabase extends _$ContextoDatabase {
   ContextoDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -422,6 +451,9 @@ class ContextoDatabase extends _$ContextoDatabase {
       if (from < 16) {
         await migrator.createTable(historicalMediaImportJobs);
         await _createHistoricalMediaImportJobIndexes();
+      }
+      if (from < 17) {
+        await migrator.createTable(mediaCaptureContexts);
       }
     },
     beforeOpen: (details) async {

@@ -6,7 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('migra schema 8 para 16 preservando dados e hierarquia', () async {
+  test('migra schema 8 para 17 preservando dados e hierarquia', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_test_',
     );
@@ -100,7 +100,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
 
-    expect(version.read<int>('user_version'), 16);
+    expect(version.read<int>('user_version'), 17);
     expect(rows, hasLength(2));
     expect(rows.first.internalName, 'copia.png');
     expect(rows.first.mediaHash, isNull);
@@ -225,7 +225,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 10 para 16 preservando IDs e associações', () async {
+  test('migra schema 10 para 17 preservando IDs e associações', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_10_test_',
     );
@@ -282,7 +282,7 @@ void main() {
         .select(migrated.mediaCategories)
         .getSingle();
 
-    expect(version.read<int>('user_version'), 16);
+    expect(version.read<int>('user_version'), 17);
     expect(category.id, 7);
     expect(category.name, 'Livros');
     expect(category.parentId, isNull);
@@ -299,7 +299,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 11 para 16 e cria estruturas novas vazias', () async {
+  test('migra schema 11 para 17 e cria estruturas novas vazias', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_11_test_',
     );
@@ -362,7 +362,7 @@ void main() {
     expect(
       (await migrated.customSelect('PRAGMA user_version').getSingle())
           .read<int>('user_version'),
-      16,
+      17,
     );
     expect((await migrated.select(migrated.mediaItems).getSingle()).id, 4);
     expect((await migrated.select(migrated.categories).getSingle()).id, 9);
@@ -384,7 +384,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 12 para 16 preservando sugestões e organização', () async {
+  test('migra schema 12 para 17 preservando sugestões e organização', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_12_test_',
     );
@@ -498,7 +498,7 @@ void main() {
     expect(
       (await database.customSelect('PRAGMA user_version').getSingle())
           .read<int>('user_version'),
-      16,
+      17,
     );
     expect(await database.select(database.mediaItems).get(), hasLength(4));
     expect(await database.select(database.ocrResults).get(), hasLength(4));
@@ -530,7 +530,7 @@ void main() {
     directory.deleteSync(recursive: true);
   });
 
-  test('migra schema 13 para 16 preservando todo o estado anterior', () async {
+  test('migra schema 13 para 17 preservando todo o estado anterior', () async {
     final directory = Directory.systemTemp.createTempSync(
       'memoshot_migration_13_test_',
     );
@@ -649,7 +649,7 @@ void main() {
     expect(
       (await database.customSelect('PRAGMA user_version').getSingle())
           .read<int>('user_version'),
-      16,
+      17,
     );
     expect(
       (await database.select(database.mediaItems).getSingle()).mediaHash,
@@ -683,7 +683,7 @@ void main() {
   });
 
   test(
-    'migra schema 14 para 16 tornando itens antigos arquivos privados',
+    'migra schema 14 para 17 tornando itens antigos arquivos privados',
     () async {
       final directory = Directory.systemTemp.createTempSync(
         'memoshot_migration_14_test_',
@@ -850,7 +850,7 @@ void main() {
       expect(
         (await database.customSelect('PRAGMA user_version').getSingle())
             .read<int>('user_version'),
-        16,
+        17,
       );
       await database.close();
       directory.deleteSync(recursive: true);
@@ -858,7 +858,7 @@ void main() {
   );
 
   test(
-    'migra schema 15 para 16 criando somente a fila histórica vazia',
+    'migra schema 15 para 17 criando somente a fila histórica vazia',
     () async {
       final directory = Directory.systemTemp.createTempSync(
         'memoshot_migration_15_test_',
@@ -917,7 +917,7 @@ void main() {
       expect(
         (await database.customSelect('PRAGMA user_version').getSingle())
             .read<int>('user_version'),
-        16,
+        17,
       );
       expect(await database.select(database.mediaItems).get(), hasLength(2));
       expect(
@@ -938,6 +938,47 @@ void main() {
       directory.deleteSync(recursive: true);
     },
   );
+
+  test('migra schema 16 para 17 sem preencher itens históricos', () async {
+    final directory = Directory.systemTemp.createTempSync(
+      'memoshot_migration_16_test_',
+    );
+    final databaseFile = File('${directory.path}/contexto.sqlite');
+    final timestamp = DateTime.utc(2026, 7, 19);
+    var database = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
+    final mediaId = await database
+        .into(database.mediaItems)
+        .insert(
+          MediaItemsCompanion.insert(
+            privatePath: const Value('/privado/historico.png'),
+            internalName: const Value('historico.png'),
+            importedAt: timestamp,
+            capturedAt: Value(timestamp),
+            sourceMode: 'photoPicker',
+            status: 'ready',
+          ),
+        );
+    await database.close();
+
+    final editor = _SchemaEditorDatabase(NativeDatabase(databaseFile));
+    await editor.customStatement('DROP TABLE media_capture_contexts');
+    await editor.customStatement('PRAGMA user_version = 16');
+    await editor.close();
+
+    database = ContextoDatabase.forTesting(NativeDatabase(databaseFile));
+    expect(
+      (await database.customSelect('PRAGMA user_version').getSingle())
+          .read<int>('user_version'),
+      17,
+    );
+    expect(
+      (await database.select(database.mediaItems).getSingle()).id,
+      mediaId,
+    );
+    expect(await database.select(database.mediaCaptureContexts).get(), isEmpty);
+    await database.close();
+    directory.deleteSync(recursive: true);
+  });
 }
 
 Future<void> _downgradeMediaItemsTo14(GeneratedDatabase database) async {
@@ -1069,5 +1110,5 @@ class _SchemaEditorDatabase extends GeneratedDatabase {
   final List<TableInfo> allTables = const [];
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 }

@@ -35,6 +35,7 @@ import '../../existing_screenshots/data/existing_screenshot_candidate_store.dart
 import '../../existing_screenshots/data/historical_media_import_job_store.dart';
 import '../../existing_screenshots/data/historical_preparation_settings_repository.dart';
 import '../../library/data/media_item_repository.dart';
+import '../../library/data/capture_app_context_repository.dart';
 import '../../library/data/media_item_store.dart';
 import '../../library/domain/media_item.dart';
 import '../../library/domain/media_page.dart';
@@ -197,6 +198,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           store: DriftMediaItemStore(database!),
           storage: PrivateScreenshotStorage(),
           ocrJobScheduler: LocalOcrJobScheduler(jobStore!),
+          captureAppContextRepository: DriftCaptureAppContextRepository(
+            database,
+          ),
         );
     _ocrRepository =
         widget.ocrRepository ??

@@ -245,6 +245,7 @@ class BackgroundProcessingRunner {
             path: entry.privatePath,
             mimeType: entry.mimeType,
             capturedAt: entry.capturedAt,
+            captureAppContext: entry.captureAppContext,
           ),
         ], origin: ImportOrigin.automatic);
         imported += result.importedItems.length;

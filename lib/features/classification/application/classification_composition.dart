@@ -3,6 +3,7 @@ import '../../../core/ocr/media_ocr_input.dart';
 import '../../../core/visual/local_visual_analyzer.dart';
 import '../../categories/data/category_repository.dart';
 import '../../library/data/media_item_repository.dart';
+import '../../library/data/capture_app_context_repository.dart';
 import '../../ocr/data/ocr_repository.dart';
 import '../data/classification_job_store.dart';
 import '../data/classification_suggestion_repository.dart';
@@ -89,6 +90,7 @@ LocalClassificationQueueProcessor createLocalClassificationQueue({
     now: DateTime.now,
     engineVersion: currentClassificationEngineVersion,
     automaticApplier: createContextualAutomaticClassificationApplier(database),
+    captureAppContextRepository: DriftCaptureAppContextRepository(database),
   );
   return LocalClassificationQueueProcessor(
     jobStore: DriftClassificationJobStore(database),

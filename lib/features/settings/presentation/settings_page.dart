@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/automatic_import/automatic_screenshot_source.dart';
 import '../../automatic_import/automatic_screenshot_import_coordinator.dart';
@@ -9,6 +10,45 @@ import '../../existing_screenshots/application/existing_screenshot_inventory_coo
 import '../../existing_screenshots/application/historical_archive_preparation_coordinator.dart';
 import '../../existing_screenshots/presentation/existing_screenshot_inventory_page.dart';
 
+enum UsageContextStatus { enabled, disabled, accessRequired, unavailable }
+
+abstract interface class UsageContextSettings {
+  Future<UsageContextStatus> status();
+
+  Future<UsageContextStatus> setEnabled(bool enabled);
+
+  Future<void> openAccessSettings();
+}
+
+class MethodChannelUsageContextSettings implements UsageContextSettings {
+  const MethodChannelUsageContextSettings();
+
+  static const _channel = MethodChannel(
+    'br.com.jeffersont.memoshot/preferences',
+  );
+
+  @override
+  Future<UsageContextStatus> status() async =>
+      _decode(await _channel.invokeMethod<String>('usageContextStatus'));
+
+  @override
+  Future<UsageContextStatus> setEnabled(bool enabled) async => _decode(
+    await _channel.invokeMethod<String>('setUsageContextEnabled', {
+      'enabled': enabled,
+    }),
+  );
+
+  @override
+  Future<void> openAccessSettings() =>
+      _channel.invokeMethod<void>('openUsageAccessSettings');
+
+  UsageContextStatus _decode(String? value) =>
+      UsageContextStatus.values
+          .where((status) => status.name == value)
+          .firstOrNull ??
+      UsageContextStatus.unavailable;
+}
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
@@ -16,6 +56,7 @@ class SettingsPage extends StatefulWidget {
     required this.settingsRepository,
     required this.existingScreenshotInventoryCoordinator,
     this.historicalArchivePreparationCoordinator,
+    this.usageContextSettings = const MethodChannelUsageContextSettings(),
   });
 
   final AutomaticScreenshotImportCoordinator coordinator;
@@ -24,6 +65,7 @@ class SettingsPage extends StatefulWidget {
   existingScreenshotInventoryCoordinator;
   final HistoricalArchivePreparationCoordinator?
   historicalArchivePreparationCoordinator;
+  final UsageContextSettings usageContextSettings;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -37,6 +79,8 @@ class _SettingsPageState extends State<SettingsPage>
   bool _isRefreshing = false;
   MediaPermissionStatus _permission = MediaPermissionStatus.unsupported;
   int _generation = 0;
+  UsageContextStatus _usageContextStatus = UsageContextStatus.disabled;
+  bool _isChangingUsageContext = false;
 
   @override
   void initState() {
@@ -68,10 +112,19 @@ class _SettingsPageState extends State<SettingsPage>
       if (reconcile) await widget.coordinator.resume();
       final settings = await widget.settingsRepository.load();
       final permission = await widget.coordinator.permissionStatus();
+      UsageContextStatus usageContextStatus;
+      try {
+        usageContextStatus = await widget.usageContextSettings.status().timeout(
+          const Duration(milliseconds: 500),
+        );
+      } catch (_) {
+        usageContextStatus = UsageContextStatus.unavailable;
+      }
       if (!mounted || generation != _generation) return;
       setState(() {
         _enabled = settings.enabled;
         _permission = permission;
+        _usageContextStatus = usageContextStatus;
         _isLoading = false;
       });
     } catch (_) {
@@ -80,6 +133,49 @@ class _SettingsPageState extends State<SettingsPage>
       _showMessage('Não foi possível atualizar a configuração.');
     } finally {
       _isRefreshing = false;
+    }
+  }
+
+  Future<void> _toggleUsageContext(bool value) async {
+    if (_isChangingUsageContext) return;
+    if (value) {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Identificar aplicativo da captura'),
+          content: const Text(
+            'O Android permite consultar qual aplicativo estava em uso perto do momento do print. '
+            'O MemoShot consulta apenas uma janela curta por nova captura e não armazena o histórico completo.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Continuar'),
+            ),
+          ],
+        ),
+      );
+      if (accepted != true || !mounted) return;
+    }
+    setState(() => _isChangingUsageContext = true);
+    try {
+      final status = await widget.usageContextSettings.setEnabled(value);
+      if (!mounted) return;
+      setState(() => _usageContextStatus = status);
+      if (value && status == UsageContextStatus.accessRequired) {
+        await widget.usageContextSettings.openAccessSettings();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _usageContextStatus = UsageContextStatus.unavailable);
+        _showMessage('Não foi possível abrir o acesso de uso.');
+      }
+    } finally {
+      if (mounted) setState(() => _isChangingUsageContext = false);
     }
   }
 
@@ -191,6 +287,13 @@ class _SettingsPageState extends State<SettingsPage>
     MediaPermissionStatus.fullAccess => null,
   };
 
+  String get _usageContextLabel => switch (_usageContextStatus) {
+    UsageContextStatus.enabled => 'Ativado',
+    UsageContextStatus.disabled => 'Desativado',
+    UsageContextStatus.accessRequired => 'Acesso necessário',
+    UsageContextStatus.unavailable => 'Indisponível',
+  };
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -239,6 +342,28 @@ class _SettingsPageState extends State<SettingsPage>
                       ),
                     ),
                 ],
+              ),
+            ),
+            const _SectionTitle('Reconhecimento de origem'),
+            Card(
+              child: SwitchListTile(
+                key: const Key('usage-context-switch'),
+                secondary: const Icon(Icons.apps_outlined),
+                title: const Text('Identificar o aplicativo usado na captura'),
+                subtitle: Text(
+                  'Ajuda o MemoShot a distinguir prints do WhatsApp, Instagram, lojas e navegadores. '
+                  'O histórico completo de uso não é armazenado.\n$_usageContextLabel',
+                ),
+                value:
+                    _usageContextStatus == UsageContextStatus.enabled ||
+                    _usageContextStatus == UsageContextStatus.accessRequired,
+                onChanged:
+                    _isLoading ||
+                        _isChanging ||
+                        _isChangingUsageContext ||
+                        _usageContextStatus == UsageContextStatus.unavailable
+                    ? null
+                    : _toggleUsageContext,
               ),
             ),
             const _SectionTitle('Acervo existente'),

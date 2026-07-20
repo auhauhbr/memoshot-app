@@ -1,14 +1,19 @@
 package br.com.jeffersont.memoshot
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
+import android.provider.Settings
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 internal class AppPreferencesBridge(
-    private val context: Context,
+    hostContext: Context,
     messenger: BinaryMessenger,
 ) : MethodChannel.MethodCallHandler {
+    private val context = hostContext.applicationContext
+    private val activity = hostContext as? Activity
     private val channel = MethodChannel(messenger, CHANNEL)
     private val preferences = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
 
@@ -71,6 +76,22 @@ internal class AppPreferencesBridge(
                 BackgroundProcessingScheduler(context).enqueueHistoricalPreparation()
                 result.success(null)
             }
+            "usageContextStatus" -> result.success(usageContextStatus())
+            "setUsageContextEnabled" -> {
+                preferences.edit()
+                    .putBoolean(KEY_USAGE_CONTEXT_ENABLED, call.argument<Boolean>("enabled") == true)
+                    .apply()
+                result.success(usageContextStatus())
+            }
+            "openUsageAccessSettings" -> {
+                val currentActivity = activity
+                if (currentActivity == null) {
+                    result.error("activity_unavailable", "Tela indisponível.", null)
+                    return
+                }
+                currentActivity.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -86,6 +107,7 @@ internal class AppPreferencesBridge(
         private const val KEY_HISTORICAL_PREPARATION_STATE =
             "historical_preparation_state"
         private const val KEY_RECENT_FOLDER_IDS = "recent_folder_ids"
+        private const val KEY_USAGE_CONTEXT_ENABLED = "usage_context_enabled"
         private const val RECENT_FOLDER_SEPARATOR = ":"
         private const val MAXIMUM_RECENT_FOLDERS = 6
         private const val HISTORICAL_NOT_STARTED = "notStarted"
@@ -96,5 +118,20 @@ internal class AppPreferencesBridge(
             context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
                 .getString(KEY_HISTORICAL_PREPARATION_STATE, HISTORICAL_NOT_STARTED) ==
                 "active"
+
+        fun isUsageContextEnabled(context: Context): Boolean =
+            context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+                .getBoolean(KEY_USAGE_CONTEXT_ENABLED, false)
+    }
+
+    private fun usageContextStatus(): String {
+        if (!preferences.getBoolean(KEY_USAGE_CONTEXT_ENABLED, false)) return "disabled"
+        val bridge = ForegroundAppAtCaptureBridge(context)
+        if (!bridge.isAvailable()) return "unavailable"
+        return if (bridge.checkUsageAccess()) {
+            "enabled"
+        } else {
+            "accessRequired"
+        }
     }
 }

@@ -14,6 +14,7 @@ import '../existing_screenshots/data/historical_media_import_job_store.dart';
 import '../existing_screenshots/data/historical_preparation_settings_repository.dart';
 import '../library/data/media_item_repository.dart';
 import '../library/data/media_item_store.dart';
+import '../library/data/capture_app_context_repository.dart';
 import '../ocr/data/ocr_repository.dart';
 import '../ocr/data/ocr_result_store.dart';
 import '../processing/data/ocr_job_scheduler.dart';
@@ -53,6 +54,7 @@ class BackgroundProcessingComposition {
       store: DriftMediaItemStore(database),
       storage: PrivateScreenshotStorage(),
       ocrJobScheduler: LocalOcrJobScheduler(processingStore),
+      captureAppContextRepository: DriftCaptureAppContextRepository(database),
     );
     const historicalSettings =
         MethodChannelHistoricalPreparationSettingsRepository();

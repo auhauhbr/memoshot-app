@@ -13,6 +13,7 @@ internal data class BackgroundInboxEntry(
     val imagePath: String,
     val mimeType: String?,
     val capturedAt: Long?,
+    val captureAppContext: CaptureAppContextData?,
 )
 
 internal class BackgroundScreenshotInbox(context: Context) {
@@ -28,6 +29,7 @@ internal class BackgroundScreenshotInbox(context: Context) {
         mediaStoreId: Long,
         mimeType: String?,
         capturedAt: Long?,
+        captureAppContext: CaptureAppContextData?,
         input: InputStream,
     ): BackgroundInboxEntry? = synchronized(lock) {
         directory.mkdirs()
@@ -58,6 +60,17 @@ internal class BackgroundScreenshotInbox(context: Context) {
                     "captured_at",
                     MediaStoreCaptureTime.validate(capturedAt) ?: JSONObject.NULL,
                 )
+                .apply {
+                    captureAppContext?.let { context ->
+                        put("capture_app_context", JSONObject()
+                            .put("package_name", context.packageName)
+                            .put("normalized_app_key", context.normalizedAppKey ?: JSONObject.NULL)
+                            .put("event_timestamp", context.eventTimestamp)
+                            .put("capture_timestamp", context.captureTimestamp)
+                            .put("delta_milliseconds", context.deltaMilliseconds)
+                            .put("confidence_level", context.confidenceLevel))
+                    }
+                }
             syncBytes(metadata.toString().toByteArray(Charsets.UTF_8), metadataPart)
             if (!metadataPart.renameTo(metadataFinal)) error("metadata_commit_failed")
             BackgroundInboxEntry(
@@ -66,6 +79,7 @@ internal class BackgroundScreenshotInbox(context: Context) {
                 imageFinal.absolutePath,
                 mimeType,
                 MediaStoreCaptureTime.validate(capturedAt),
+                captureAppContext,
             )
         } catch (_: Exception) {
             imagePart.delete()
@@ -119,10 +133,26 @@ internal class BackgroundScreenshotInbox(context: Context) {
                         json.optLong("captured_at")
                     },
                 ),
+                captureAppContext = readCaptureAppContext(json),
             )
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun readCaptureAppContext(json: JSONObject): CaptureAppContextData? {
+        val value = json.optJSONObject("capture_app_context") ?: return null
+        return runCatching {
+            CaptureAppContextData(
+                packageName = value.getString("package_name"),
+                normalizedAppKey = value.optString("normalized_app_key")
+                    .takeIf { it.isNotBlank() && it != "null" },
+                eventTimestamp = value.getLong("event_timestamp"),
+                captureTimestamp = value.getLong("capture_timestamp"),
+                deltaMilliseconds = value.getLong("delta_milliseconds"),
+                confidenceLevel = value.getString("confidence_level"),
+            )
+        }.getOrNull()
     }
 
     private fun cleanupIncompleteFiles(

@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 
+import '../../features/library/domain/capture_app_context.dart';
 import 'automatic_screenshot_source.dart';
 
 class MethodChannelAutomaticScreenshotSource
@@ -50,6 +51,7 @@ class MethodChannelAutomaticScreenshotSource
               temporaryPath: item['temporaryPath']! as String,
               mimeType: item['mimeType'] as String?,
               capturedAt: _dateFromMilliseconds(item['capturedAt'] as int?),
+              captureAppContext: _captureContext(item['captureAppContext']),
             );
           })
           .toList(growable: false),
@@ -104,6 +106,7 @@ class MethodChannelAutomaticScreenshotSource
             privatePath: value['privatePath']! as String,
             mimeType: value['mimeType'] as String?,
             capturedAt: _dateFromMilliseconds(value['capturedAt'] as int?),
+            captureAppContext: _captureContext(value['captureAppContext']),
           );
         })
         .toList(growable: false);
@@ -136,5 +139,41 @@ class MethodChannelAutomaticScreenshotSource
   DateTime? _dateFromMilliseconds(int? value) {
     if (value == null || value <= 0) return null;
     return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+
+  CaptureAppContext? _captureContext(Object? raw) {
+    if (raw is! Map) return null;
+    final value = Map<Object?, Object?>.from(raw);
+    final packageName = value['packageName'] as String?;
+    final eventTimestamp = _dateFromMilliseconds(
+      value['eventTimestamp'] as int?,
+    );
+    final captureTimestamp = _dateFromMilliseconds(
+      value['captureTimestamp'] as int?,
+    );
+    final confidence = CaptureAppConfidence.fromDatabase(
+      value['confidenceLevel'] as String? ?? '',
+    );
+    final delta = value['deltaMilliseconds'] as int?;
+    if (packageName == null ||
+        packageName.isEmpty ||
+        eventTimestamp == null ||
+        captureTimestamp == null ||
+        confidence == null ||
+        delta == null ||
+        delta < 0) {
+      return null;
+    }
+    return CaptureAppContext(
+      packageName: packageName,
+      normalizedAppKey: NormalizedCaptureAppKey.fromDatabase(
+        value['normalizedAppKey'] as String?,
+      ),
+      eventTimestamp: eventTimestamp,
+      captureTimestamp: captureTimestamp,
+      deltaMilliseconds: delta,
+      confidenceLevel: confidence,
+      createdAt: DateTime.now(),
+    );
   }
 }

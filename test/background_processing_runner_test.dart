@@ -22,6 +22,8 @@ import 'package:memoshot/features/existing_screenshots/data/historical_preparati
 import 'package:memoshot/features/existing_screenshots/domain/historical_media_import_job.dart';
 import 'package:memoshot/features/library/data/media_item_repository.dart';
 import 'package:memoshot/features/library/data/media_item_store.dart';
+import 'package:memoshot/features/library/data/capture_app_context_repository.dart';
+import 'package:memoshot/features/library/domain/capture_app_context.dart';
 import 'package:memoshot/features/library/domain/media_item.dart';
 import 'package:memoshot/features/library/domain/screenshot_search_result.dart';
 import 'package:memoshot/features/library/domain/selected_screenshot.dart';
@@ -307,13 +309,25 @@ void main() {
       await settings.enable(baselineMediaId: 0);
       final sourceFile = File('${temporaryDirectory.path}/strong.png');
       await sourceFile.writeAsBytes([7, 8, 9]);
-      final source = _FakeSource(entries: [_entry('strong', sourceFile.path)]);
+      final captureContexts = DriftCaptureAppContextRepository(database);
+      final source = _FakeSource(
+        entries: [
+          _entry(
+            'strong',
+            sourceFile.path,
+            captureAppContext: _captureContext(
+              NormalizedCaptureAppKey.whatsapp,
+            ),
+          ),
+        ],
+      );
       final mediaRepository = LocalMediaItemRepository(
         store: DriftMediaItemStore(database),
         storage: PrivateScreenshotStorage(
           documentsDirectory: () async => temporaryDirectory,
         ),
         ocrJobScheduler: LocalOcrJobScheduler(processingStore),
+        captureAppContextRepository: captureContexts,
       );
       final recognition = _StrongRecognitionService();
       final ocrRepository = LocalOcrRepository(
@@ -362,12 +376,26 @@ void main() {
       expect(summary.classificationProcessedCount, 1);
       expect(recognition.callCount, 1);
       expect(items, hasLength(1));
+      expect(
+        (await captureContexts.loadFor(items.single.id))?.normalizedAppKey,
+        NormalizedCaptureAppKey.whatsapp,
+      );
       expect(await ocrRepository.loadFor(items.single.id), isNotNull);
       expect(
         (await suggestions.loadByMediaItemId(items.single.id))?.status,
         ClassificationSuggestionStatus.autoApplied,
       );
-      expect((await categories.loadRootCategories()).single.name, 'Carreira');
+      expect(
+        (await categories.loadForMedia(items.single.id)).single.name,
+        'Entrevistas',
+      );
+      expect(
+        (await categories.loadRootCategories()).map(
+          (category) => category.name,
+        ),
+        containsAll(['Carreira', 'Outros']),
+      );
+      expect(await database.select(database.classificationJobs).get(), isEmpty);
       expect(source.entries, isEmpty);
     },
   );
@@ -455,15 +483,31 @@ BackgroundProcessingRunner _runner({
   );
 }
 
-BackgroundScreenshotEntry _entry(String id, String path) {
+BackgroundScreenshotEntry _entry(
+  String id,
+  String path, {
+  CaptureAppContext? captureAppContext,
+}) {
   return BackgroundScreenshotEntry(
     entryId: id,
     mediaId: id.hashCode,
     privatePath: path,
     mimeType: 'image/png',
     capturedAt: DateTime.utc(2026, 7, 19),
+    captureAppContext: captureAppContext,
   );
 }
+
+CaptureAppContext _captureContext(NormalizedCaptureAppKey key) =>
+    CaptureAppContext(
+      packageName: 'technical.package',
+      normalizedAppKey: key,
+      eventTimestamp: DateTime.utc(2026, 7, 19, 9, 59, 59),
+      captureTimestamp: DateTime.utc(2026, 7, 19, 10),
+      deltaMilliseconds: 1000,
+      confidenceLevel: CaptureAppConfidence.high,
+      createdAt: DateTime.utc(2026, 7, 19, 10),
+    );
 
 class _FakeSettings implements AutomaticImportSettingsRepository {
   _FakeSettings({required this.enabled});

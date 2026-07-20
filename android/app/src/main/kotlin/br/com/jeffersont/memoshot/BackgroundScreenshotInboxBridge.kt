@@ -26,6 +26,16 @@ internal class BackgroundScreenshotInboxHandler(context: Context) {
                         "privatePath" to entry.imagePath,
                         "mimeType" to entry.mimeType,
                         "capturedAt" to entry.capturedAt,
+                        "captureAppContext" to entry.captureAppContext?.let { context ->
+                            mapOf(
+                                "packageName" to context.packageName,
+                                "normalizedAppKey" to context.normalizedAppKey,
+                                "eventTimestamp" to context.eventTimestamp,
+                                "captureTimestamp" to context.captureTimestamp,
+                                "deltaMilliseconds" to context.deltaMilliseconds,
+                                "confidenceLevel" to context.confidenceLevel,
+                            )
+                        },
                     )
                 }
             }

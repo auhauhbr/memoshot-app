@@ -36,6 +36,7 @@ internal class ScreenshotMediaStoreBridge(
     private val monitorState = NativeScreenshotMonitorState(activity)
     private val backgroundScheduler = ScreenshotBackgroundScheduler(activity)
     private val backgroundInboxHandler = BackgroundScreenshotInboxHandler(activity)
+    private val foregroundAppBridge = ForegroundAppAtCaptureBridge(activity.applicationContext)
     private var permissionResult: MethodChannel.Result? = null
     private var eventSink: EventChannel.EventSink? = null
     private var observer: ContentObserver? = null
@@ -271,14 +272,19 @@ internal class ScreenshotMediaStoreBridge(
                     rejectedCount++
                     continue
                 }
+                val capturedAt = MediaStoreCaptureTime.resolve(
+                    cursor.getLong(takenIndex),
+                    cursor.getLong(addedIndex),
+                )
+                val captureAppContext = capturedAt?.let {
+                    foregroundAppBridge.findForegroundAppAt(it)
+                }
                 items += mapOf(
                     "mediaId" to id,
                     "temporaryPath" to temporary.absolutePath,
                     "mimeType" to mimeType,
-                    "capturedAt" to MediaStoreCaptureTime.resolve(
-                        cursor.getLong(takenIndex),
-                        cursor.getLong(addedIndex),
-                    ),
+                    "capturedAt" to capturedAt,
+                    "captureAppContext" to captureAppContext?.toChannelMap(),
                 )
             }
         }
@@ -390,3 +396,12 @@ internal class ScreenshotMediaStoreBridge(
         private const val STALE_TEMPORARY_MS = 24L * 60 * 60 * 1000
     }
 }
+
+private fun CaptureAppContextData.toChannelMap(): Map<String, Any?> = mapOf(
+    "packageName" to packageName,
+    "normalizedAppKey" to normalizedAppKey,
+    "eventTimestamp" to eventTimestamp,
+    "captureTimestamp" to captureTimestamp,
+    "deltaMilliseconds" to deltaMilliseconds,
+    "confidenceLevel" to confidenceLevel,
+)

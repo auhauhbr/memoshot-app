@@ -18,6 +18,7 @@ internal class ScreenshotMediaWorker(
     private val scheduler = ScreenshotBackgroundScheduler(appContext)
     private val processingScheduler = BackgroundProcessingScheduler(appContext)
     private val inbox = BackgroundScreenshotInbox(appContext)
+    private val foregroundAppBridge = ForegroundAppAtCaptureBridge(appContext)
 
     override fun doWork(): Result {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N || !state.isEnabled()) {
@@ -121,9 +122,12 @@ internal class ScreenshotMediaWorker(
                         cursor.getLong(takenIndex),
                         cursor.getLong(addedIndex),
                     )
+                    val captureAppContext = capturedAt?.let {
+                        foregroundAppBridge.findForegroundAppAt(it)
+                    }
                     examined = try {
                         applicationContext.contentResolver.openInputStream(uri)?.use { input ->
-                            inbox.write(id, mimeType, capturedAt, input) != null
+                            inbox.write(id, mimeType, capturedAt, captureAppContext, input) != null
                         } ?: false
                     } catch (_: Exception) {
                         false

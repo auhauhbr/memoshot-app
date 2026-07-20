@@ -1,3 +1,5 @@
+import '../../features/library/domain/capture_app_context.dart';
+
 enum MediaPermissionStatus {
   notRequested,
   fullAccess,
@@ -13,12 +15,14 @@ class AutomaticScreenshotCandidate {
     required this.temporaryPath,
     this.mimeType,
     this.capturedAt,
+    this.captureAppContext,
   });
 
   final int mediaId;
   final String temporaryPath;
   final String? mimeType;
   final DateTime? capturedAt;
+  final CaptureAppContext? captureAppContext;
 }
 
 class AutomaticScreenshotBatch {
@@ -40,6 +44,7 @@ class BackgroundScreenshotEntry {
     required this.privatePath,
     this.mimeType,
     this.capturedAt,
+    this.captureAppContext,
   });
 
   final String entryId;
@@ -47,6 +52,7 @@ class BackgroundScreenshotEntry {
   final String privatePath;
   final String? mimeType;
   final DateTime? capturedAt;
+  final CaptureAppContext? captureAppContext;
 }
 
 class BackgroundMonitorStatus {

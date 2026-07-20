@@ -10,6 +10,7 @@ import '../domain/selected_screenshot.dart';
 import '../domain/screenshot_search_result.dart';
 import '../../processing/data/ocr_job_scheduler.dart';
 import 'media_item_store.dart';
+import 'capture_app_context_repository.dart';
 
 class ImportResult {
   const ImportResult({
@@ -96,6 +97,7 @@ class LocalMediaItemRepository
     OcrJobScheduler? ocrJobScheduler,
     TextNormalizer normalizer = const TextNormalizer(),
     SearchSnippetBuilder snippetBuilder = const SearchSnippetBuilder(),
+    CaptureAppContextRepository? captureAppContextRepository,
   }) : this._(
          store,
          storage,
@@ -103,6 +105,7 @@ class LocalMediaItemRepository
          ocrJobScheduler,
          normalizer,
          snippetBuilder,
+         captureAppContextRepository,
        );
 
   LocalMediaItemRepository._(
@@ -112,6 +115,7 @@ class LocalMediaItemRepository
     this._ocrJobScheduler,
     this._normalizer,
     this._snippetBuilder,
+    this._captureAppContextRepository,
   );
 
   final MediaItemStore _store;
@@ -120,6 +124,7 @@ class LocalMediaItemRepository
   final OcrJobScheduler? _ocrJobScheduler;
   final TextNormalizer _normalizer;
   final SearchSnippetBuilder _snippetBuilder;
+  final CaptureAppContextRepository? _captureAppContextRepository;
 
   @override
   Future<List<MediaItem>> loadRecentItems({
@@ -405,6 +410,14 @@ class LocalMediaItemRepository
             importOrigin: origin,
           );
           imported.add(item);
+          final captureContext = screenshot.captureAppContext;
+          if (origin == ImportOrigin.automatic && captureContext != null) {
+            try {
+              await _captureAppContextRepository?.save(id, captureContext);
+            } catch (_) {
+              // O contexto opcional nunca impede importação, OCR ou classificação.
+            }
+          }
           try {
             await _ocrJobScheduler?.schedule(item.id);
           } catch (_) {
