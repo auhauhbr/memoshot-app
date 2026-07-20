@@ -235,16 +235,16 @@ para abrir o arquivo original.
 
 | Tecnologia | Uso atual |
 |---|---|
-| Flutter e Dart | Interface, regras de aplicação e coordenação dos fluxos |
-| Kotlin | Integrações nativas e processamento Android |
-| Android MediaStore | Detecção e referência aos screenshots |
-| WorkManager | Agendamento e retomada do trabalho persistente |
-| Drift e SQLite | Persistência local, inventário, OCR e organização |
-| ML Kit Text Recognition | Reconhecimento local de texto |
-| ML Kit Image Labeling | Evidência visual auxiliar, sem decidir sozinho a pasta |
-| UsageStatsManager | Identificação opcional do aplicativo próximo à captura |
-| FileProvider e Content URI | Acesso controlado e abertura do arquivo original |
-| SHA-256 | Deduplicação de itens importados |
+| <img src="https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white" alt="Flutter"> <img src="https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white" alt="Dart"> | Interface, regras de aplicação e coordenação dos fluxos |
+| <img src="https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin"> | Integrações nativas e processamento Android |
+| <img src="https://img.shields.io/badge/MediaStore-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android MediaStore"> | Detecção e referência aos screenshots |
+| <img src="https://img.shields.io/badge/WorkManager-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android WorkManager"> | Agendamento e retomada do trabalho persistente |
+| <img src="https://img.shields.io/badge/Drift-ORM-315C78?style=for-the-badge" alt="Drift"> <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite"> | Persistência local, inventário, OCR e organização |
+| <img src="https://img.shields.io/badge/ML_Kit-Text_Recognition-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="ML Kit Text Recognition"> | Reconhecimento local de texto |
+| <img src="https://img.shields.io/badge/ML_Kit-Image_Labeling-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="ML Kit Image Labeling"> | Evidência visual auxiliar, sem decidir sozinho a pasta |
+| <img src="https://img.shields.io/badge/UsageStatsManager-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android UsageStatsManager"> | Identificação opcional do aplicativo próximo à captura |
+| <img src="https://img.shields.io/badge/FileProvider-Content_URI-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android FileProvider e Content URI"> | Acesso controlado e abertura do arquivo original |
+| <img src="https://img.shields.io/badge/SHA--256-deduplicação-5C6C69?style=for-the-badge" alt="SHA-256"> | Deduplicação de itens importados |
 
 ## Screenshots novos e antigos
 
