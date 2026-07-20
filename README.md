@@ -5,7 +5,7 @@
     <img
       src="imagens/capa-readme.png"
       alt="Capa de apresentação do projeto MemoShot"
-      width="760"
+      width="380"
     >
   </a>
 
