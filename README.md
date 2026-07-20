@@ -1,11 +1,11 @@
 <a id="readme-top"></a>
 
 <div align="center">
-  <a href="imagens/home-com-prints.jpg">
+  <a href="imagens/capa-readme.png">
     <img
-      src="imagens/home-com-prints.jpg"
-      alt="Tela inicial do MemoShot com os screenshots recentes e as pastas"
-      width="340"
+      src="imagens/capa-readme.png"
+      alt="Capa de apresentação do projeto MemoShot"
+      width="760"
     >
   </a>
 
