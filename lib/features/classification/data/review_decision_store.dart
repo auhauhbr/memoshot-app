@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../../core/database/contexto_database.dart';
 import '../../../core/text/text_normalizer.dart';
 import '../../categories/domain/category.dart' as category_domain;
+import '../../library/domain/media_item.dart';
 import '../application/automatic_classification.dart';
 import '../application/review_decision.dart';
 import '../data/classification_suggestion_codec.dart';
@@ -51,13 +52,14 @@ class DriftReviewDecisionStore
           (margin ?? 0) < contextualDestinationMargin) {
         return current;
       }
-      final mediaExists =
-          await (_database.selectOnly(_database.mediaItems)
-                ..addColumns([_database.mediaItems.id])
-                ..where(_database.mediaItems.id.equals(suggestion.mediaItemId)))
-              .getSingleOrNull() !=
-          null;
-      if (!mediaExists) return current;
+      final mediaItem =
+          await (_database.select(_database.mediaItems)
+                ..where((item) => item.id.equals(suggestion.mediaItemId)))
+              .getSingleOrNull();
+      if (mediaItem == null ||
+          mediaItem.importOrigin != ImportOrigin.automatic.databaseValue) {
+        return current;
+      }
 
       final priorAssociation =
           await (_database.selectOnly(_database.mediaCategories)
@@ -85,6 +87,8 @@ class DriftReviewDecisionStore
           current.confidence < contextualNewDestinationThreshold) {
         return current;
       }
+      await _ensureControlledRoots(resolvedAt);
+      root ??= await _findCategory(rootName, null);
       root ??= await _createCategory(rootName, null, resolvedAt);
       if (childName != null) {
         child ??= await _createCategory(childName, root.id, resolvedAt);
@@ -178,6 +182,27 @@ class DriftReviewDecisionStore
     if (await _findCategory('Produtos', null) != null) return 'Produtos';
     if (await _findCategory('Compras', null) != null) return 'Compras';
     return 'Produtos';
+  }
+
+  Future<void> _ensureControlledRoots(DateTime createdAt) async {
+    for (final name in const [
+      'Conversas',
+      'Carreira',
+      'Estudos',
+      'Livros',
+      'Documentos',
+      'Desenvolvimento',
+      'Produtos',
+      'Esportes',
+      'Outros',
+    ]) {
+      if (name == 'Produtos' && await _findCategory('Compras', null) != null) {
+        continue;
+      }
+      if (await _findCategory(name, null) == null) {
+        await _createCategory(name, null, createdAt);
+      }
+    }
   }
 
   Future<Category?> _findCategory(String name, int? parentId) {

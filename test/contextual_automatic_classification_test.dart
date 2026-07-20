@@ -38,6 +38,7 @@ void main() {
             importedAt: now,
             sourceMode: 'photoPicker',
             status: 'ready',
+            importOrigin: const Value('automatic'),
           ),
         );
   });
@@ -83,8 +84,19 @@ void main() {
 
     expect(result.status, ClassificationSuggestionStatus.autoApplied);
     final roots = await categories.loadRootCategories();
-    expect(roots.single.name, 'Livros');
-    final children = await categories.loadChildCategories(roots.single.id);
+    expect(roots.map((category) => category.name).toSet(), {
+      'Conversas',
+      'Carreira',
+      'Estudos',
+      'Livros',
+      'Documentos',
+      'Desenvolvimento',
+      'Produtos',
+      'Esportes',
+      'Outros',
+    });
+    final livros = roots.singleWhere((category) => category.name == 'Livros');
+    final children = await categories.loadChildCategories(livros.id);
     expect(children.single.name, 'Capas');
     expect(
       (await categories.loadForMedia(mediaItemId)).single.id,
@@ -149,9 +161,9 @@ void main() {
         (await categories.loadForMedia(mediaItemId)).single.id,
         compras.id,
       );
-      expect((await categories.loadRootCategories()).map((item) => item.name), [
-        'Compras',
-      ]);
+      final roots = await categories.loadRootCategories();
+      expect(roots.map((item) => item.name), contains('Compras'));
+      expect(roots.map((item) => item.name), isNot(contains('Produtos')));
     },
   );
 
@@ -177,5 +189,17 @@ void main() {
       (await database.select(database.tags).get()).map((tag) => tag.name),
       isNot(contains('Label crua')),
     );
+  });
+
+  test('item não automático permanece sem organização aplicada', () async {
+    await (database.update(database.mediaItems)
+          ..where((item) => item.id.equals(mediaItemId)))
+        .write(const MediaItemsCompanion(importOrigin: Value('picker')));
+
+    final result = await applier.apply(await save());
+
+    expect(result.status, ClassificationSuggestionStatus.pendingReview);
+    expect(await categories.loadForMedia(mediaItemId), isEmpty);
+    expect(await categories.loadRootCategories(), isEmpty);
   });
 }
